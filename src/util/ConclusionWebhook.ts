@@ -1,7 +1,6 @@
 import axios from 'axios'
 import { Config } from '../interface/Config'
 import { Ntfy } from './Ntfy'
-import { DISCORD } from '../constants'
 import { log } from './Logger'
 
 interface DiscordField {
@@ -16,6 +15,9 @@ interface DiscordEmbed {
     color?: number
     fields?: DiscordField[]
     timestamp?: string
+    thumbnail?: {
+        url: string
+    }
     footer?: {
         text: string
         icon_url?: string
@@ -47,7 +49,10 @@ export async function ConclusionWebhook(
         title,
         description,
         color: color || 0x0078D4,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        thumbnail: {
+            url: 'https://media.discordapp.net/attachments/1430643658788438144/1430644205344133290/rewi-v1.png'
+        }
     }
 
     if (fields && fields.length > 0) {
@@ -55,8 +60,8 @@ export async function ConclusionWebhook(
     }
 
     const payload: WebhookPayload = {
-        username: 'Microsoft Rewards',
-        avatar_url: DISCORD.AVATAR_URL,
+        username: 'MS Rewi 🎮',
+        avatar_url: 'https://media.discordapp.net/attachments/1430643658788438144/1430644205344133290/rewi-v1.png',
         embeds: [embed]
     }
 
