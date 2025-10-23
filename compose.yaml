@@ -1,0 +1,30 @@
+services:
+  microsoft-rewards-script:
+    build: .
+    container_name: microsoft-rewards-script
+    restart: unless-stopped
+
+    # Volume mounts: Specify a location where you want to save the files on your local machine.
+    volumes:
+      - ./src/accounts.json:/usr/src/microsoft-rewards-script/accounts.json:ro
+      - ./src/config.jsonc:/usr/src/microsoft-rewards-script/config.json:ro
+      - ./sessions:/usr/src/microsoft-rewards-script/sessions # Optional, saves your login session
+
+    environment:
+      TZ: "America/Toronto" # Set your timezone for proper scheduling (used by image and scheduler)
+      NODE_ENV: "production"
+      # Force headless when running in Docker (uses Chromium Headless Shell only)
+      FORCE_HEADLESS: "1"
+      #SCHEDULER_DAILY_JITTER_MINUTES_MIN: "2"
+      #SCHEDULER_DAILY_JITTER_MINUTES_MAX: "10"
+      # Watchdog timeout per pass (minutes, default 180)
+      #SCHEDULER_PASS_TIMEOUT_MINUTES: "180"
+      # Run pass in child process (default true). Set to "false" to disable for debugging.
+      #SCHEDULER_FORK_PER_PASS: "true"
+
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+
+    # Use the built-in scheduler by default; override with `command:` for one-shot runs
+    command: ["npm", "run", "start:schedule"]
