@@ -72,6 +72,8 @@ export class Login {
   private passkeyHandled = false
   private noPromptIterations = 0
   private lastNoPromptLog = 0
+  private lastTotpSubmit = 0
+  private totpAttempts = 0
 
   constructor(bot: MicrosoftRewardsBot) { this.bot = bot }
 
@@ -85,7 +87,9 @@ export class Login {
       }
       
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Starting login process')
-      this.currentTotpSecret = (totpSecret && totpSecret.trim()) || undefined
+  this.currentTotpSecret = (totpSecret && totpSecret.trim()) || undefined
+  this.lastTotpSubmit = 0
+  this.totpAttempts = 0
 
       await page.goto('https://rewards.bing.com/signin')
       await this.disableFido(page)
@@ -219,15 +223,10 @@ export class Login {
       await this.bot.browser.utils.tryDismissAllMessages(page)
       await this.bot.utils.wait(500)
 
-      if (this.currentTotpSecret) {
-        const totpSelector = await this.ensureTotpInput(page)
-        if (totpSelector) {
-          await this.submitTotpCode(page, totpSelector)
-          return
-        }
-      }
+  const usedTotp = await this.tryAutoTotp(page, '2FA initial step')
+      if (usedTotp) return
 
-      const number = await this.fetchAuthenticatorNumber(page)
+  const number = await this.fetchAuthenticatorNumber(page)
       if (number) { await this.approveAuthenticator(page, number); return }
       await this.handleSMSOrTotp(page)
     } catch (e) {
@@ -280,15 +279,8 @@ export class Login {
 
   private async handleSMSOrTotp(page: Page) {
     // TOTP auto entry (second chance if ensureTotpInput needed longer)
-    if (this.currentTotpSecret) {
-      try {
-        const totpSelector = await this.ensureTotpInput(page)
-        if (totpSelector) {
-          await this.submitTotpCode(page, totpSelector)
-          return
-        }
-      } catch {/* ignore */}
-    }
+    const usedTotp = await this.tryAutoTotp(page, 'manual 2FA entry')
+    if (usedTotp) return
 
     // Manual prompt with periodic page check
     this.bot.log(this.bot.isMobile, 'LOGIN', 'Waiting for user 2FA code (SMS / Email / App fallback)')
@@ -498,6 +490,9 @@ export class Login {
     const start = Date.now()
     while (Date.now() - start < DEFAULT_TIMEOUTS.loginMaxMs) {
       await this.handlePasskeyPrompts(page, 'main')
+      if (await this.tryAutoTotp(page, 'post-password wait')) {
+        continue
+      }
       const u = new URL(page.url())
       const isRewardsHost = u.hostname === LOGIN_TARGET.host
       const isKnownPath = u.pathname === LOGIN_TARGET.path
@@ -524,6 +519,28 @@ export class Login {
     }
 
     this.bot.log(this.bot.isMobile, 'LOGIN', `Reached rewards portal (${portalSelector})`)
+  }
+
+  private async tryAutoTotp(page: Page, context: string): Promise<boolean> {
+    if (!this.currentTotpSecret) return false
+    const throttleMs = 5000
+    if (Date.now() - this.lastTotpSubmit < throttleMs) return false
+
+    const selector = await this.ensureTotpInput(page)
+    if (!selector) return false
+
+    if (this.totpAttempts >= 3) {
+      const errMsg = 'TOTP challenge still present after multiple attempts; verify authenticator secret or approvals.'
+      this.bot.log(this.bot.isMobile, 'LOGIN', errMsg, 'error')
+      throw new Error(errMsg)
+    }
+
+    this.bot.log(this.bot.isMobile, 'LOGIN', `Detected TOTP challenge during ${context}; submitting code automatically`)
+    await this.submitTotpCode(page, selector)
+    this.totpAttempts += 1
+    this.lastTotpSubmit = Date.now()
+    await this.bot.utils.wait(1200)
+    return true
   }
 
   private async verifyBingContext(page: Page) {
