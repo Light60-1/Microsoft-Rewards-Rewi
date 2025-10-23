@@ -10,6 +10,7 @@ import { saveSessionData } from '../util/Load'
 import { MicrosoftRewardsBot } from '../index'
 import { captureDiagnostics } from '../util/Diagnostics'
 import { OAuth } from '../interface/OAuth'
+import { Retry } from '../util/Retry'
 
 // -------------------------------
 // Constants / Tunables
@@ -147,11 +148,42 @@ export class Login {
     form.append('code', code)
     form.append('redirect_uri', this.redirectUrl)
 
-    const req: AxiosRequestConfig = { url: this.tokenUrl, method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, data: form.toString() }
-    const resp = await this.bot.axios.request(req)
-    const data: OAuth = resp.data
-    this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Authorized in ${Math.round((Date.now()-start)/1000)}s`)
-    return data.access_token
+    // Token exchange with retry logic for transient errors (502, 503, network issues)
+    const req: AxiosRequestConfig = { 
+      url: this.tokenUrl, 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, 
+      data: form.toString() 
+    }
+    
+    const isRetryable = (e: unknown): boolean => {
+      if (!e || typeof e !== 'object') return false
+      const status = (e as any).response?.status
+      // Retry on 502, 503, 504 (gateway errors) and network errors
+      return status === 502 || status === 503 || status === 504 || 
+             (e as any).code === 'ECONNRESET' || 
+             (e as any).code === 'ETIMEDOUT'
+    }
+
+    const retry = new Retry(this.bot.config.retryPolicy)
+    try {
+      const resp = await retry.run(
+        () => this.bot.axios.request(req),
+        isRetryable
+      )
+      const data: OAuth = resp.data
+      this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Authorized in ${Math.round((Date.now()-start)/1000)}s`)
+      return data.access_token
+    } catch (error) {
+      const statusCode = (error as any).response?.status
+      const errMsg = error instanceof Error ? error.message : String(error)
+      if (statusCode) {
+        this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Token exchange failed with status ${statusCode}: ${errMsg}`, 'error')
+      } else {
+        this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Token exchange failed (network error): ${errMsg}`, 'error')
+      }
+      throw error
+    }
   }
 
   // --------------- Main Flow ---------------
@@ -195,6 +227,15 @@ export class Login {
     // Some flows require switching to password first
     const switchBtn = await page.waitForSelector('#idA_PWD_SwitchToPassword', { timeout: 1500 }).catch(()=>null)
     if (switchBtn) { await switchBtn.click().catch(()=>{}); await this.bot.utils.wait(1000) }
+
+    // Early TOTP check - if totpSecret is configured, check for TOTP challenge before password
+    if (this.currentTotpSecret) {
+      const totpDetected = await this.tryAutoTotp(page, 'pre-password TOTP check')
+      if (totpDetected) {
+        this.bot.log(this.bot.isMobile, 'LOGIN', 'TOTP challenge appeared before password entry')
+        return
+      }
+    }
 
     // Rare flow: list of methods -> choose password
     const passwordField = await page.waitForSelector(SELECTORS.passwordInput, { timeout: 4000 }).catch(()=>null)
@@ -282,51 +323,30 @@ export class Login {
     const usedTotp = await this.tryAutoTotp(page, 'manual 2FA entry')
     if (usedTotp) return
 
-    // Manual prompt with periodic page check
+    // Manual prompt - simplified without interval checking
     this.bot.log(this.bot.isMobile, 'LOGIN', 'Waiting for user 2FA code (SMS / Email / App fallback)')
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
     
-    // Monitor page changes while waiting for user input
-    let userInput: string | null = null
-    let checkInterval: NodeJS.Timeout | null = null
-    
     try {
-      const inputPromise = new Promise<string>(res => {
+      const code = await new Promise<string>(res => {
         rl.question('Enter 2FA code:\n', ans => {
-          if (checkInterval) clearInterval(checkInterval)
           rl.close()
           res(ans.trim())
         })
       })
 
-      // Check every 2 seconds if user manually progressed past the dialog
-      checkInterval = setInterval(async () => {
-        try {
-          await this.bot.browser.utils.tryDismissAllMessages(page)
-          // Check if we're no longer on 2FA page
-          const still2FA = await page.locator('input[name="otc"]').first().isVisible({ timeout: 500 }).catch(() => false)
-          if (!still2FA) {
-            this.bot.log(this.bot.isMobile, 'LOGIN', 'Page changed during 2FA wait (user may have clicked Next)', 'warn')
-            if (checkInterval) clearInterval(checkInterval)
-            rl.close()
-            userInput = 'skip' // Signal to skip submission
-          }
-        } catch {/* ignore */}
-      }, 2000)
-
-      const code = await inputPromise
-      
-      if (code === 'skip' || userInput === 'skip') {
-        this.bot.log(this.bot.isMobile, 'LOGIN', 'Skipping 2FA code submission (page progressed)')
+      // Check if input field still exists before trying to fill
+      const inputExists = await page.locator('input[name="otc"]').first().isVisible({ timeout: 1000 }).catch(() => false)
+      if (!inputExists) {
+        this.bot.log(this.bot.isMobile, 'LOGIN', 'Page changed while waiting for code (user progressed manually)', 'warn')
         return
       }
 
+      // Fill code and submit
       await page.fill('input[name="otc"]', code)
       await page.keyboard.press('Enter')
       this.bot.log(this.bot.isMobile, 'LOGIN', '2FA code submitted')
     } finally {
-      // Ensure cleanup happens even if errors occur
-      if (checkInterval) clearInterval(checkInterval)
       try { rl.close() } catch {/* ignore */}
     }
   }
