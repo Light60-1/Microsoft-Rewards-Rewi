@@ -64,5 +64,5 @@ export const DISCORD = {
   COLOR_ORANGE: 0xFFA500,
   COLOR_BLUE: 0x3498DB,
   COLOR_GREEN: 0x00D26A,
-  AVATAR_URL: 'https://media.discordapp.net/attachments/1421163952972369931/1421929950377939125/Gc.png'
+  AVATAR_URL: 'https://media.discordapp.net/attachments/1430643658788438144/1430644205344133290/rewi-v1.png?ex=68fbd83e&is=68fa86be&hm=ccddee9430de1fff90c1c3750907c13a60d1da29f13617a5dbbdc642f243f5b9&=&format=png&quality=lossless&width=968&height=968'
 } as const
