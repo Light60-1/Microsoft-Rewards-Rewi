@@ -210,8 +210,22 @@ export class Login {
 
   // --------------- Input Steps ---------------
   private async inputEmail(page: Page, email: string) {
+    // Check for passkey prompts first
+    await this.handlePasskeyPrompts(page, 'main')
+    await this.bot.utils.wait(500)
+    
     const field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 5000 }).catch(()=>null)
-    if (!field) { this.bot.log(this.bot.isMobile, 'LOGIN', 'Email field not present', 'warn'); return }
+    if (!field) { 
+      // Try one more time after handling possible passkey prompts
+      await this.handlePasskeyPrompts(page, 'main')
+      await this.bot.utils.wait(500)
+      const retry = await page.waitForSelector(SELECTORS.emailInput, { timeout: 3000 }).catch(()=>null)
+      if (!retry) {
+        this.bot.log(this.bot.isMobile, 'LOGIN', 'Email field not present', 'warn')
+        return
+      }
+    }
+    
     const prefilled = await page.waitForSelector('#userDisplayName', { timeout: 1500 }).catch(()=>null)
     if (!prefilled) {
       await page.fill(SELECTORS.emailInput, '')
@@ -224,6 +238,10 @@ export class Login {
   }
 
   private async inputPasswordOr2FA(page: Page, password: string) {
+    // Check for passkey prompts that might be blocking the password field
+    await this.handlePasskeyPrompts(page, 'main')
+    await this.bot.utils.wait(500)
+    
     // Some flows require switching to password first
     const switchBtn = await page.waitForSelector('#idA_PWD_SwitchToPassword', { timeout: 1500 }).catch(()=>null)
     if (switchBtn) { await switchBtn.click().catch(()=>{}); await this.bot.utils.wait(1000) }
@@ -238,7 +256,14 @@ export class Login {
     }
 
     // Rare flow: list of methods -> choose password
-    const passwordField = await page.waitForSelector(SELECTORS.passwordInput, { timeout: 4000 }).catch(()=>null)
+    let passwordField = await page.waitForSelector(SELECTORS.passwordInput, { timeout: 4000 }).catch(()=>null)
+    if (!passwordField) {
+      // Maybe passkey prompt appeared - try handling it again
+      await this.handlePasskeyPrompts(page, 'main')
+      await this.bot.utils.wait(800)
+      passwordField = await page.waitForSelector(SELECTORS.passwordInput, { timeout: 3000 }).catch(()=>null)
+    }
+    
     if (!passwordField) {
       const blocked = await this.detectSignInBlocked(page)
       if (blocked) return
@@ -589,31 +614,54 @@ export class Login {
   // --------------- Passkey / Dialog Handling ---------------
   private async handlePasskeyPrompts(page: Page, context: 'main' | 'oauth') {
     let did = false
-    // Video heuristic
-    const biometric = await page.waitForSelector(SELECTORS.biometricVideo, { timeout: 500 }).catch(()=>null)
-    if (biometric) {
-      const btn = await page.$(SELECTORS.passkeySecondary)
-      if (btn) { await btn.click().catch(()=>{}); did = true; this.logPasskeyOnce('video heuristic') }
+    
+    // Priority 1: Direct detection of "Skip for now" button by data-testid
+    const skipBtn = await page.waitForSelector('button[data-testid="secondaryButton"]', { timeout: 500 }).catch(()=>null)
+    if (skipBtn) {
+      const text = (await skipBtn.textContent() || '').trim()
+      // Check if it's actually a skip button (could be other secondary buttons)
+      if (/skip|later|not now|non merci|pas maintenant/i.test(text)) {
+        await skipBtn.click().catch(()=>{})
+        did = true
+        this.logPasskeyOnce('data-testid secondaryButton')
+      }
     }
+    
+    // Priority 2: Video heuristic (biometric prompt)
+    if (!did) {
+      const biometric = await page.waitForSelector(SELECTORS.biometricVideo, { timeout: 500 }).catch(()=>null)
+      if (biometric) {
+        const btn = await page.$(SELECTORS.passkeySecondary)
+        if (btn) { await btn.click().catch(()=>{}); did = true; this.logPasskeyOnce('video heuristic') }
+      }
+    }
+    
+    // Priority 3: Title + secondary button detection
     if (!did) {
       const titleEl = await page.waitForSelector(SELECTORS.passkeyTitle, { timeout: 500 }).catch(()=>null)
       const secBtn = await page.waitForSelector(SELECTORS.passkeySecondary, { timeout: 500 }).catch(()=>null)
       const primBtn = await page.waitForSelector(SELECTORS.passkeyPrimary, { timeout: 500 }).catch(()=>null)
       const title = (titleEl ? (await titleEl.textContent()) : '')?.trim() || ''
-      const looksLike = /sign in faster|passkey|fingerprint|face|pin/i.test(title)
+      const looksLike = /sign in faster|passkey|fingerprint|face|pin|empreinte|visage/i.test(title)
       if (looksLike && secBtn) { await secBtn.click().catch(()=>{}); did = true; this.logPasskeyOnce('title heuristic '+title) }
       else if (!did && secBtn && primBtn) {
         const text = (await secBtn.textContent()||'').trim()
-        if (/skip for now/i.test(text)) { await secBtn.click().catch(()=>{}); did = true; this.logPasskeyOnce('secondary button text') }
+        if (/skip for now|not now|later|passer|plus tard/i.test(text)) { 
+          await secBtn.click().catch(()=>{}); did = true; this.logPasskeyOnce('secondary button text') 
+        }
       }
-      if (!did) {
-        const textBtn = await page.locator('xpath=//button[contains(normalize-space(.),"Skip for now")]').first()
-        if (await textBtn.isVisible().catch(()=>false)) { await textBtn.click().catch(()=>{}); did = true; this.logPasskeyOnce('text fallback') }
-      }
-      if (!did) {
-        const close = await page.$('#close-button')
-        if (close) { await close.click().catch(()=>{}); did = true; this.logPasskeyOnce('close button') }
-      }
+    }
+    
+    // Priority 4: XPath fallback
+    if (!did) {
+      const textBtn = await page.locator('xpath=//button[contains(normalize-space(.),"Skip for now") or contains(normalize-space(.),"Not now") or contains(normalize-space(.),"Passer")]').first()
+      if (await textBtn.isVisible().catch(()=>false)) { await textBtn.click().catch(()=>{}); did = true; this.logPasskeyOnce('xpath fallback') }
+    }
+    
+    // Priority 5: Close button fallback
+    if (!did) {
+      const close = await page.$('#close-button')
+      if (close) { await close.click().catch(()=>{}); did = true; this.logPasskeyOnce('close button') }
     }
 
     // KMSI prompt
