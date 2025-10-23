@@ -10,7 +10,7 @@
 **Easiest way to get started — download and run:**
 
 1. **Clone the repository:**
-   ```bashs
+   ```bash
    git clone https://github.com/LightZirconite/Microsoft-Rewards-Rewi.git
    cd Microsoft-Rewards-Rewi
    ```
