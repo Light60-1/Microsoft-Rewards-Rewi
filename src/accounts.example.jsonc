@@ -52,8 +52,8 @@
         // If false, proxy is only used for browser automation
         "proxyAxios": true,
         
-        // Proxy server URL (without protocol)
-        // Examples: "proxy.example.com", "123.45.67.89"
+  // Proxy server URL (protocol optional)
+  // Examples: "proxy.example.com", "http://proxy.example.com", "socks5://proxy.example.com"
         // Leave empty "" to disable proxy for this account
         "url": "",
         

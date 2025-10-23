@@ -22,15 +22,16 @@ class AxiosClient {
 
     private getAgentForProxy(proxyConfig: AccountProxy): HttpProxyAgent<string> | HttpsProxyAgent<string> | SocksProxyAgent {
         const { proxyUrl, protocol } = this.buildProxyUrl(proxyConfig)
+        const normalized = protocol.replace(/:$/, '')
 
-        switch (protocol) {
-            case 'http:':
+        switch (normalized) {
+            case 'http':
                 return new HttpProxyAgent(proxyUrl)
-            case 'https:':
+            case 'https':
                 return new HttpsProxyAgent(proxyUrl)
-            case 'socks:':
-            case 'socks4:':
-            case 'socks5:':
+            case 'socks':
+            case 'socks4':
+            case 'socks5':
                 return new SocksProxyAgent(proxyUrl)
             default:
                 throw new Error(`Unsupported proxy protocol in "${proxyConfig.url}". Supported: http://, https://, socks://, socks4://, socks5://`)
@@ -44,19 +45,28 @@ class AxiosClient {
             throw new Error('Proxy URL is required when proxyAxios is enabled.')
         }
 
-        if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)) {
-            throw new Error(`Proxy URL "${url}" is missing a protocol. Use http://, https://, socks://, socks4://, or socks5://`)
-        }
+        const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)
+        const candidate = hasScheme ? url : `http://${url}`
 
         let parsedUrl: URL
         try {
-            parsedUrl = new URL(url)
+            parsedUrl = new URL(candidate)
         } catch (err) {
             throw new Error(`Invalid proxy URL "${url}": ${(err as Error).message}`)
         }
 
-        if (port) {
-            parsedUrl.port = String(port)
+        const protocol = parsedUrl.protocol.replace(/:$/, '')
+        const allowed = new Set(['http', 'https', 'socks', 'socks4', 'socks5'])
+        if (!allowed.has(protocol)) {
+            throw new Error(`Unsupported proxy protocol in "${url}". Supported: http://, https://, socks://, socks4://, socks5://`)
+        }
+
+        if (!parsedUrl.port) {
+            if (port) {
+                parsedUrl.port = String(port)
+            } else {
+                throw new Error(`Proxy port missing for "${url}". Provide a port value.`)
+            }
         }
 
         if (username) {
