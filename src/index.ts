@@ -1013,25 +1013,69 @@ export class MicrosoftRewardsBot {
             }
         } catch { /* ignore */ }
 
-        // Build clean embed with account details
-        const accountDetails: string[] = []
-        for (const s of summaries) {
-            const statusIcon = s.banned?.status ? '🚫' : (s.errors.length ? '⚠️' : '✅')
-            const line = `${statusIcon} **${s.email}** → +${s.totalCollected}pts (🖥️${s.desktopCollected} 📱${s.mobileCollected}) • ${formatDuration(s.durationMs)}`
-            accountDetails.push(line)
-            if (s.banned?.status) accountDetails.push(`  └ Banned: ${s.banned.reason || 'detected'}`)
-            if (s.errors.length > 0) accountDetails.push(`  └ Errors: ${s.errors.slice(0, 2).join(', ')}`)
+        const formatNumber = (value: number) => value.toLocaleString()
+        const formatSigned = (value: number) => `${value >= 0 ? '+' : ''}${formatNumber(value)}`
+        const padText = (value: string, length: number) => {
+            if (value.length >= length) {
+                if (length <= 1) return value.slice(0, length)
+                return value.length === length ? value : `${value.slice(0, length - 1)}…`
+            }
+            return value + ' '.repeat(length - value.length)
+        }
+        const buildAccountLine = (summary: AccountSummary): string => {
+            const statusIcon = summary.banned?.status ? '🚫' : (summary.errors.length ? '⚠️' : '✅')
+            const email = padText(summary.email, 24)
+            const total = padText(`${formatSigned(summary.totalCollected)} pts`, 13)
+            const desktop = padText(`D:${formatSigned(summary.desktopCollected)}`, 13)
+            const mobile = padText(`M:${formatSigned(summary.mobileCollected)}`, 13)
+            const totals = padText(`${formatNumber(summary.initialTotal)}→${formatNumber(summary.endTotal)}`, 21)
+            const duration = padText(formatDuration(summary.durationMs), 10)
+            const extras: string[] = []
+            if (summary.banned?.status) extras.push(`BAN:${summary.banned.reason || 'detected'}`)
+            if (summary.errors.length) extras.push(`ERR:${summary.errors.slice(0, 1).join(' | ')}`)
+            const tail = extras.length ? ` | ${extras.join(' • ')}` : ''
+            return `${statusIcon} ${email} ${total} ${desktop}${mobile} ${totals} ${duration}${tail}`
+        }
+        const chunkLines = (lines: string[], maxLen = 900): string[][] => {
+            const chunks: string[][] = []
+            let current: string[] = []
+            let currentLen = 0
+            for (const line of lines) {
+                const nextLen = line.length + 1
+                if (current.length > 0 && currentLen + nextLen > maxLen) {
+                    chunks.push(current)
+                    current = []
+                    currentLen = 0
+                }
+                current.push(line)
+                currentLen += nextLen
+            }
+            if (current.length) chunks.push(current)
+            return chunks
         }
 
+        const accountLines = summaries.map(buildAccountLine)
+        const accountChunks = chunkLines(accountLines)
+
+        const globalStatsValue = [
+            `Total points: **${formatNumber(totalInitial)}** → **${formatNumber(totalEnd)}** (${formatSigned(totalCollected)} pts)`,
+            `Accounts: ✅ ${successes}${accountsWithErrors > 0 ? ` • ⚠️ ${accountsWithErrors}` : ''} (${totalAccounts} total)`,
+            `Average per account: **${formatSigned(avgPointsPerAccount)} pts** • **${formatDuration(avgDuration)}**`,
+            `Runtime: **${formatDuration(totalDuration)}**`
+        ].join('\n')
+
         const fields: { name: string; value: string; inline?: boolean }[] = [
-            { name: '📊 Global Statistics', value: [
-                `Total Points: **${totalInitial}** → **${totalEnd}** (+**${totalCollected}**)`,
-                `Accounts: ✅ ${successes}${accountsWithErrors > 0 ? ` • ⚠️ ${accountsWithErrors}` : ''} (${totalAccounts} total)`,
-                `Average: **${avgPointsPerAccount}pts/account** • **${formatDuration(avgDuration)}/account**`,
-                `Runtime: **${formatDuration(totalDuration)}**`
-            ].join('\n'), inline: false },
-            { name: '📈 Account Details', value: accountDetails.join('\n').slice(0, 1024), inline: false }
+            { name: '📊 Run Totals', value: globalStatsValue, inline: false }
         ]
+
+        if (accountChunks.length === 0) {
+            fields.push({ name: '🧾 Account Overview', value: '_No account results recorded_', inline: false })
+        } else {
+            accountChunks.forEach((chunk, index) => {
+                const name = accountChunks.length === 1 ? '🧾 Account Overview' : `🧾 Account Overview (part ${index + 1})`
+                fields.push({ name, value: ['```', ...chunk, '```'].join('\n'), inline: false })
+            })
+        }
 
         // Send webhook
         if (conclusionWebhookEnabled || ntfyEnabled || webhookEnabled) {
