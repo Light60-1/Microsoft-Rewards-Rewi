@@ -8,10 +8,9 @@
 
 ### For Complete Beginners
 
-1. **[Getting Started](./getting-started.md)** — Install and run in 10 minutes
-2. **[Accounts & 2FA](./accounts.md)** — Add your Microsoft accounts
-3. **[Basic Config](./config.md#quick-start)** — 5 essential options
-4. **[Scheduler](./schedule.md#quick-start)** — Automate daily runs
+1. **[Accounts & 2FA](./accounts.md)** — Add your Microsoft accounts
+2. **[Basic Config](./config.md#quick-start)** — 5 essential options
+3. **[Scheduler](./schedule.md#quick-start)** — Automate daily runs
 
 **You're all set! 🎉**
 
