@@ -33,12 +33,14 @@
 
 ### How to Get Your TOTP Secret
 
-1. **Open Microsoft Account** → Security → Advanced security options
-2. **Add authenticator app** → Click "Set up"
-3. **Choose "I want to use a different app"**
-4. Microsoft shows a **QR code** + **secret key**
-5. **Copy the secret key** (starts with letters/numbers)
-6. **Add to** `accounts.json`:
+1. **Open** https://account.live.com/proofs/Manage/additional (Security → Advanced security options → Additional security).
+2. Enable two-step verification and click **Next** until you see the setup wizard.
+3. Click the blue link **"Set up a different authenticator app"**.
+4. On the next screen click **"I can't scan the bar code"** to reveal the Base32 secret.
+5. Scan the QR with your preferred authenticator (Google Authenticator recommended to keep data separate from Microsoft) **and** copy the secret:
+  - The same secret can stay in your app and be saved in this file (multiple authenticators can share it).
+6. Enter the 6-digit code in Microsoft’s wizard to finish pairing.
+7. **Add the secret to** `accounts.json`:
 
 ```json
 {

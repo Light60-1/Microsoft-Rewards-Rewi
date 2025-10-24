@@ -17,6 +17,82 @@ import { spawn, execSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
+function stripJsonComments(input) {
+  let result = ""
+  let inString = false
+  let stringChar = ""
+  let inLineComment = false
+  let inBlockComment = false
+
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i]
+    const next = input[i + 1]
+
+    if (inLineComment) {
+      if (char === "\n" || char === "\r") {
+        inLineComment = false
+        result += char
+      }
+      continue
+    }
+
+    if (inBlockComment) {
+      if (char === "*" && next === "/") {
+        inBlockComment = false
+        i++
+      }
+      continue
+    }
+
+    if (inString) {
+      result += char
+      if (char === "\\") {
+        i++
+        if (i < input.length) result += input[i]
+        continue
+      }
+      if (char === stringChar) inString = false
+      continue
+    }
+
+    if (char === "\"" || char === "'") {
+      inString = true
+      stringChar = char
+      result += char
+      continue
+    }
+
+    if (char === "/" && next === "/") {
+      inLineComment = true
+      i++
+      continue
+    }
+
+    if (char === "/" && next === "*") {
+      inBlockComment = true
+      i++
+      continue
+    }
+
+    result += char
+  }
+
+  return result
+}
+
+function readJsonConfig(preferredPaths) {
+  for (const candidate of preferredPaths) {
+    if (!existsSync(candidate)) continue
+    try {
+      const raw = readFileSync(candidate, "utf8").replace(/^\uFEFF/, "")
+      return JSON.parse(stripJsonComments(raw))
+    } catch {
+      // Try next candidate on parse errors
+    }
+  }
+  return null
+}
+
 function run(cmd, args, opts = {}) {
   return new Promise((resolve) => {
     const child = spawn(cmd, args, { stdio: 'inherit', shell: process.platform === 'win32', ...opts })
@@ -52,19 +128,18 @@ async function updateGit() {
 
   // Step 1: Read config to get user preferences
   let userConfig = { autoUpdateConfig: false, autoUpdateAccounts: false }
-  try {
-    if (existsSync('src/config.jsonc')) {
-      const configContent = readFileSync('src/config.jsonc', 'utf8')
-        .replace(/\/\/.*$/gm, '') // remove comments
-        .replace(/\/\*[\s\S]*?\*\//g, '') // remove multi-line comments
-      const config = JSON.parse(configContent)
-      if (config.update) {
-        userConfig.autoUpdateConfig = config.update.autoUpdateConfig ?? false
-        userConfig.autoUpdateAccounts = config.update.autoUpdateAccounts ?? false
-      }
-    }
-  } catch (e) {
+  const configData = readJsonConfig([
+    "src/config.jsonc",
+    "config.jsonc",
+    "src/config.json",
+    "config.json"
+  ])
+
+  if (!configData) {
     console.log('Warning: Could not read config.jsonc, using defaults (preserve local files)')
+  } else if (configData.update) {
+    userConfig.autoUpdateConfig = configData.update.autoUpdateConfig ?? false
+    userConfig.autoUpdateAccounts = configData.update.autoUpdateAccounts ?? false
   }
 
   console.log('\nUser preferences:')

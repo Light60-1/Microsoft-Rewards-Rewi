@@ -88,14 +88,25 @@ export class Login {
       }
       
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Starting login process')
-  this.currentTotpSecret = (totpSecret && totpSecret.trim()) || undefined
-  this.lastTotpSubmit = 0
-  this.totpAttempts = 0
+      this.currentTotpSecret = (totpSecret && totpSecret.trim()) || undefined
+      this.lastTotpSubmit = 0
+      this.totpAttempts = 0
+
+      const resumed = await this.tryReuseExistingSession(page)
+      if (resumed) {
+        await this.verifyBingContext(page)
+        await saveSessionData(this.bot.config.sessionPath, page.context(), email, this.bot.isMobile)
+        this.bot.log(this.bot.isMobile, 'LOGIN', 'Session restored (skip full login)')
+        this.currentTotpSecret = undefined
+        return
+      }
 
       await page.goto('https://rewards.bing.com/signin')
       await this.disableFido(page)
       await page.waitForLoadState('domcontentloaded').catch(()=>{})
       await this.bot.browser.utils.reloadBadPage(page)
+  await this.bot.utils.wait(250)
+  await this.tryAutoTotp(page, 'initial landing')
       await this.checkAccountLocked(page)
 
       const already = await page.waitForSelector('html[data-role-name="RewardsPortal"]', { timeout: 8000 }).then(()=>true).catch(()=>false)
@@ -187,6 +198,39 @@ export class Login {
   }
 
   // --------------- Main Flow ---------------
+  private async tryReuseExistingSession(page: Page): Promise<boolean> {
+    const homeUrl = 'https://rewards.bing.com/'
+    try {
+      await page.goto(homeUrl)
+      await page.waitForLoadState('domcontentloaded').catch(()=>{})
+      await this.bot.browser.utils.reloadBadPage(page)
+      await this.bot.utils.wait(250)
+
+      const portalSelector = await this.waitForRewardsRoot(page, 3500)
+      if (portalSelector) {
+        this.bot.log(this.bot.isMobile, 'LOGIN', `Existing session still valid (${portalSelector})`)
+        await this.checkAccountLocked(page)
+        return true
+      }
+
+      if (await this.tryAutoTotp(page, 'session reuse probe')) {
+        await this.bot.utils.wait(900)
+        const postTotp = await this.waitForRewardsRoot(page, 5000)
+        if (postTotp) {
+          this.bot.log(this.bot.isMobile, 'LOGIN', `Existing session unlocked via TOTP (${postTotp})`)
+          await this.checkAccountLocked(page)
+          return true
+        }
+      }
+
+      const currentUrl = page.url()
+      if (currentUrl.includes('login.live.com') || currentUrl.includes('login.microsoftonline.com')) {
+        await this.handlePasskeyPrompts(page, 'main')
+      }
+    } catch {/* ignore reuse errors and continue with full login */}
+    return false
+  }
+
   private async performLoginFlow(page: Page, email: string, password: string) {
     await this.inputEmail(page, email)
     await this.bot.utils.wait(1000)
@@ -212,15 +256,35 @@ export class Login {
   private async inputEmail(page: Page, email: string) {
     // Check for passkey prompts first
     await this.handlePasskeyPrompts(page, 'main')
-    await this.bot.utils.wait(500)
+    await this.bot.utils.wait(250)
+
+    if (await this.tryAutoTotp(page, 'pre-email check')) {
+      await this.bot.utils.wait(800)
+    }
     
-    const field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 5000 }).catch(()=>null)
-    if (!field) { 
+    let field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 5000 }).catch(()=>null)
+    if (!field) {
+      const totpHandled = await this.tryAutoTotp(page, 'pre-email challenge')
+      if (totpHandled) {
+        await this.bot.utils.wait(800)
+        field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 5000 }).catch(()=>null)
+      }
+    }
+
+    if (!field) {
       // Try one more time after handling possible passkey prompts
       await this.handlePasskeyPrompts(page, 'main')
       await this.bot.utils.wait(500)
-      const retry = await page.waitForSelector(SELECTORS.emailInput, { timeout: 3000 }).catch(()=>null)
-      if (!retry) {
+      const totpRetry = await this.tryAutoTotp(page, 'pre-email retry')
+      if (totpRetry) {
+        await this.bot.utils.wait(800)
+      }
+      field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 3000 }).catch(()=>null)
+      if (!field && this.totpAttempts > 0) {
+        await this.bot.utils.wait(2000)
+        field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 3000 }).catch(()=>null)
+      }
+      if (!field) {
         this.bot.log(this.bot.isMobile, 'LOGIN', 'Email field not present', 'warn')
         return
       }
@@ -377,7 +441,7 @@ export class Login {
   }
 
   private async ensureTotpInput(page: Page): Promise<string | null> {
-    const selector = await this.findFirstVisibleSelector(page, this.totpInputSelectors())
+  const selector = await this.findFirstTotpInput(page)
     if (selector) return selector
 
     const attempts = 4
@@ -396,7 +460,7 @@ export class Login {
         if (acted) await this.bot.utils.wait(900)
       }
 
-      const ready = await this.findFirstVisibleSelector(page, this.totpInputSelectors())
+  const ready = await this.findFirstTotpInput(page)
       if (ready) return ready
 
       if (!acted) break
@@ -436,7 +500,8 @@ export class Login {
       '#idTxtBx_SAOTCS_OTC',
       'input[data-testid="otcInput"]',
       'input[autocomplete="one-time-code"]',
-      'input[type="tel"][name="otc"]'
+      'input[type="tel"][name="otc"]',
+      'input[id^="floatingLabelInput"]'
     ],
     altOptions: [
       '#idA_SAOTCS_ProofPickerChange',
@@ -469,7 +534,10 @@ export class Login {
       'button[type="submit"]:has-text("Continuer")',
       'button:has-text("Verify")',
       'button:has-text("Continuer")',
-      'button:has-text("Submit")'
+      'button:has-text("Submit")',
+      'button[type="submit"]:has-text("Next")',
+      'button:has-text("Next")',
+      'button[data-testid="primaryButton"]:has-text("Next")'
     ]
   } as const
 
@@ -477,11 +545,99 @@ export class Login {
   private totpAltOptionSelectors(): readonly string[] { return Login.TOTP_SELECTORS.altOptions }
   private totpChallengeSelectors(): readonly string[] { return Login.TOTP_SELECTORS.challenge }
 
-  // Generic selector finder - reduces duplication from 3 functions to 1
-  private async findFirstVisibleSelector(page: Page, selectors: readonly string[]): Promise<string | null> {
-    for (const sel of selectors) {
+  // Locate the most likely authenticator input on the page using heuristics
+  private async findFirstTotpInput(page: Page): Promise<string | null> {
+    const headingHint = await this.detectTotpHeading(page)
+    for (const sel of this.totpInputSelectors()) {
       const loc = page.locator(sel).first()
-      if (await loc.isVisible().catch(() => false)) return sel
+      if (await loc.isVisible().catch(() => false)) {
+        if (await this.isLikelyTotpInput(page, loc, sel, headingHint)) {
+          if (sel.includes('floatingLabelInput')) {
+            const idAttr = await loc.getAttribute('id')
+            if (idAttr) return `#${idAttr}`
+          }
+          return sel
+        }
+      }
+    }
+    return null
+  }
+
+  private async isLikelyTotpInput(page: Page, locator: Locator, selector: string, headingHint: string | null): Promise<boolean> {
+    try {
+      if (!await locator.isVisible().catch(() => false)) return false
+
+      const attr = async (name: string) => (await locator.getAttribute(name) || '').toLowerCase()
+      const type = await attr('type')
+      if (type === 'email' || type === 'password') return false
+
+      const nameAttr = await attr('name')
+      if (nameAttr.includes('loginfmt') || nameAttr.includes('passwd')) return false
+      if (nameAttr.includes('otc') || nameAttr.includes('otp') || nameAttr.includes('code')) return true
+
+      const autocomplete = await attr('autocomplete')
+      if (autocomplete.includes('one-time')) return true
+
+      const inputmode = await attr('inputmode')
+      if (inputmode === 'numeric') return true
+
+      const pattern = await locator.getAttribute('pattern') || ''
+      if (pattern && /\d/.test(pattern)) return true
+
+      const aria = await attr('aria-label')
+      if (aria.includes('code') || aria.includes('otp') || aria.includes('authenticator')) return true
+
+      const placeholder = await attr('placeholder')
+      if (placeholder.includes('code') || placeholder.includes('security') || placeholder.includes('authenticator')) return true
+
+      if (/otc|otp/.test(selector)) return true
+
+      const idAttr = await attr('id')
+      if (idAttr.startsWith('floatinglabelinput')) {
+        if (headingHint || await this.detectTotpHeading(page)) return true
+      }
+      if (selector.toLowerCase().includes('floatinglabelinput')) {
+        if (headingHint || await this.detectTotpHeading(page)) return true
+      }
+
+      const maxLength = await locator.getAttribute('maxlength')
+      if (maxLength && Number(maxLength) > 0 && Number(maxLength) <= 8) return true
+
+      const dataTestId = await attr('data-testid')
+      if (dataTestId.includes('otc') || dataTestId.includes('otp')) return true
+
+      const labelText = await locator.evaluate(node => {
+        const label = node.closest('label')
+        if (label && label.textContent) return label.textContent
+        const describedBy = node.getAttribute('aria-describedby')
+        if (!describedBy) return ''
+        const parts = describedBy.split(/\s+/).filter(Boolean)
+        const texts: string[] = []
+        parts.forEach(id => {
+          const el = document.getElementById(id)
+          if (el && el.textContent) texts.push(el.textContent)
+        })
+        return texts.join(' ')
+      }).catch(()=>'')
+
+      if (labelText && /code|otp|authenticator|sécurité|securité|security/i.test(labelText)) return true
+      if (headingHint && /code|otp|authenticator/i.test(headingHint.toLowerCase())) return true
+    } catch {/* fall through to false */}
+
+    return false
+  }
+
+  private async detectTotpHeading(page: Page): Promise<string | null> {
+    const headings = page.locator('[data-testid="title"], h1, h2, div[role="heading"]')
+    const count = await headings.count().catch(()=>0)
+    const max = Math.min(count, 6)
+    for (let i = 0; i < max; i++) {
+      const text = (await headings.nth(i).textContent().catch(()=>null))?.trim()
+      if (!text) continue
+      const lowered = text.toLowerCase()
+      if (/authenticator/.test(lowered) && /code/.test(lowered)) return text
+      if (/code de vérification|code de verification|code de sécurité|code de securité/.test(lowered)) return text
+      if (/enter your security code|enter your code/.test(lowered)) return text
     }
     return null
   }
