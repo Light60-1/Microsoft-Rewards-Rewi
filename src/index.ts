@@ -287,14 +287,14 @@ export class MicrosoftRewardsBot {
         const banner = `
  ╔═══════════════════════════════════════════════════════════════════════╗
  ║                                                                       ║
- ║  ███╗   ███╗███████╗    ██████╗ ███████╗██╗    ██╗██╗                ║
- ║  ████╗ ████║██╔════╝    ██╔══██╗██╔════╝██║    ██║██║                ║
- ║  ██╔████╔██║███████╗    ██████╔╝█████╗  ██║ █╗ ██║██║                ║
- ║  ██║╚██╔╝██║╚════██║    ██╔══██╗██╔══╝  ██║███╗██║██║                ║
- ║  ██║ ╚═╝ ██║███████║    ██║  ██║███████╗╚███╔███╔╝██║                ║
- ║  ╚═╝     ╚═╝╚══════╝    ╚═╝  ╚═╝╚══════╝ ╚══╝╚══╝ ╚═╝                ║
+ ║  ███╗   ███╗███████╗    ██████╗ ███████╗██╗    ██╗██╗                 ║
+ ║  ████╗ ████║██╔════╝    ██╔══██╗██╔════╝██║    ██║██║                 ║
+ ║  ██╔████╔██║███████╗    ██████╔╝█████╗  ██║ █╗ ██║██║                 ║
+ ║  ██║╚██╔╝██║╚════██║    ██╔══██╗██╔══╝  ██║███╗██║██║                 ║
+ ║  ██║ ╚═╝ ██║███████║    ██║  ██║███████╗╚███╔███╔╝██║                 ║
+ ║  ╚═╝     ╚═╝╚══════╝    ╚═╝  ╚═╝╚══════╝ ╚══╝╚══╝ ╚═╝                 ║
  ║                                                                       ║
- ║          TypeScript • Playwright • Intelligent Automation            ║
+ ║          TypeScript • Playwright • Intelligent Automation             ║
  ║                                                                       ║
  ╚═══════════════════════════════════════════════════════════════════════╝
 `
@@ -302,12 +302,12 @@ export class MicrosoftRewardsBot {
         const buyModeBanner = `
  ╔══════════════════════════════════════════════════════╗
  ║                                                      ║
- ║  ███╗   ███╗███████╗    ██████╗ ██╗   ██╗██╗   ██╗  ║
- ║  ████╗ ████║██╔════╝    ██╔══██╗██║   ██║╚██╗ ██╔╝  ║
- ║  ██╔████╔██║███████╗    ██████╔╝██║   ██║ ╚████╔╝   ║
- ║  ██║╚██╔╝██║╚════██║    ██╔══██╗██║   ██║  ╚██╔╝    ║
- ║  ██║ ╚═╝ ██║███████║    ██████╔╝╚██████╔╝   ██║     ║
- ║  ╚═╝     ╚═╝╚══════╝    ╚═════╝  ╚═════╝    ╚═╝     ║
+ ║  ███╗   ███╗███████╗    ██████╗ ██╗   ██╗██╗   ██╗   ║
+ ║  ████╗ ████║██╔════╝    ██╔══██╗██║   ██║╚██╗ ██╔╝   ║
+ ║  ██╔████╔██║███████╗    ██████╔╝██║   ██║ ╚████╔╝    ║
+ ║  ██║╚██╔╝██║╚════██║    ██╔══██╗██║   ██║  ╚██╔╝     ║
+ ║  ██║ ╚═╝ ██║███████║    ██████╔╝╚██████╔╝   ██║      ║
+ ║  ╚═╝     ╚═╝╚══════╝    ╚═════╝  ╚═════╝    ╚═╝      ║
  ║                                                      ║
  ║      Manual Purchase Mode • Passive Monitoring       ║
  ║                                                      ║
@@ -1238,6 +1238,24 @@ function formatDuration(ms: number): string {
 }
 
 async function main() {
+    const initialConfig = loadConfig()
+    const scheduleEnabled = initialConfig?.schedule?.enabled === true
+    const skipScheduler = process.argv.some(arg => arg === '--no-scheduler' || arg === '--single-run')
+        || process.env.REWARDS_FORCE_SINGLE_RUN === '1'
+    const buyModeRequested = process.argv.includes('-buy')
+    const invokedByScheduler = !!process.env.SCHEDULER_HEARTBEAT_FILE
+
+    if (scheduleEnabled && !skipScheduler && !buyModeRequested && !invokedByScheduler) {
+        log('main', 'SCHEDULER', 'Schedule enabled → handing off to in-process scheduler. Use --no-scheduler for a single pass.', 'log', 'green')
+        try {
+            await import('./scheduler')
+            return
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            log('main', 'SCHEDULER', `Failed to start scheduler inline: ${message}. Continuing with single-run fallback.`, 'warn', 'yellow')
+        }
+    }
+
     const rewardsBot = new MicrosoftRewardsBot(false)
 
     const crashState = { restarts: 0 }
