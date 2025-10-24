@@ -14,11 +14,14 @@
   "accounts": [
     {
       "email": "your@email.com",
-      "password": "your_password"
+      "password": "your_password",
+      "recoveryEmail": "backup@email.com"
     }
   ]
 }
 ```
+
+> ℹ️ `recoveryEmail` is **mandatory**. It lets the bot verify Microsoft’s masked hint during login and alert you if the recovery address ever changes.
 
 **That's it!** Run `npm start` to test.
 
@@ -48,6 +51,7 @@
     {
       "email": "your@email.com",
       "password": "your_password",
+      "recoveryEmail": "backup@email.com",
       "totp": "JBSWY3DPEHPK3PXP"
     }
   ]
@@ -64,11 +68,13 @@
     {
       "email": "account1@email.com",
       "password": "password1",
+      "recoveryEmail": "backup1@email.com",
       "totp": "SECRET1"
     },
     {
       "email": "account2@email.com",
       "password": "password2",
+      "recoveryEmail": "backup2@email.com",
       "totp": "SECRET2"
     }
   ]
@@ -85,6 +91,7 @@
     {
       "email": "your@email.com",
       "password": "password",
+      "recoveryEmail": "backup@email.com",
       "totp": "",
       "proxy": {
         "proxyAxios": true,

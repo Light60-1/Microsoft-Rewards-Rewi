@@ -158,6 +158,45 @@ function normalizeConfig(raw: unknown): Config {
         const t = n.vacation.minDays; n.vacation.minDays = n.vacation.maxDays; n.vacation.maxDays = t
     }
 
+    const riskRaw = (n.riskManagement ?? {}) as Record<string, unknown>
+    const hasRiskCfg = Object.keys(riskRaw).length > 0
+    const riskManagement = hasRiskCfg ? {
+        enabled: riskRaw.enabled === true,
+        autoAdjustDelays: riskRaw.autoAdjustDelays !== false,
+        stopOnCritical: riskRaw.stopOnCritical === true,
+        banPrediction: riskRaw.banPrediction === true,
+        riskThreshold: typeof riskRaw.riskThreshold === 'number' ? riskRaw.riskThreshold : undefined
+    } : undefined
+
+    const analyticsRaw = (n.analytics ?? {}) as Record<string, unknown>
+    const hasAnalyticsCfg = Object.keys(analyticsRaw).length > 0
+    const analytics = hasAnalyticsCfg ? {
+        enabled: analyticsRaw.enabled === true,
+        retentionDays: typeof analyticsRaw.retentionDays === 'number' ? analyticsRaw.retentionDays : undefined,
+        exportMarkdown: analyticsRaw.exportMarkdown === true,
+        webhookSummary: analyticsRaw.webhookSummary === true
+    } : undefined
+
+    const queryDiversityRaw = (n.queryDiversity ?? {}) as Record<string, unknown>
+    const hasQueryCfg = Object.keys(queryDiversityRaw).length > 0
+    const queryDiversity = hasQueryCfg ? {
+        enabled: queryDiversityRaw.enabled === true,
+        sources: Array.isArray(queryDiversityRaw.sources) && queryDiversityRaw.sources.length
+            ? (queryDiversityRaw.sources.filter((s: unknown) => typeof s === 'string') as Array<'google-trends' | 'reddit' | 'news' | 'wikipedia' | 'local-fallback'>)
+            : undefined,
+        maxQueriesPerSource: typeof queryDiversityRaw.maxQueriesPerSource === 'number' ? queryDiversityRaw.maxQueriesPerSource : undefined,
+        cacheMinutes: typeof queryDiversityRaw.cacheMinutes === 'number' ? queryDiversityRaw.cacheMinutes : undefined
+    } : undefined
+
+    const dryRun = n.dryRun === true
+
+    const jobStateRaw = (n.jobState ?? {}) as Record<string, unknown>
+    const jobState = {
+        enabled: jobStateRaw.enabled !== false,
+        dir: typeof jobStateRaw.dir === 'string' ? jobStateRaw.dir : undefined,
+        skipCompletedAccounts: jobStateRaw.skipCompletedAccounts !== false
+    }
+
     const cfg: Config = {
         baseURL: n.baseURL ?? 'https://rewards.bing.com',
         sessionPath: n.sessionPath ?? 'sessions',
@@ -170,23 +209,27 @@ function normalizeConfig(raw: unknown): Config {
         searchOnBingLocalQueries: !!useLocalQueries,
         globalTimeout,
         searchSettings,
-    humanization: n.humanization,
+        humanization: n.humanization,
         retryPolicy: n.retryPolicy,
-        jobState: n.jobState,
+        jobState,
         logExcludeFunc,
         webhookLogExcludeFunc,
-    logging, // retain full logging object for live webhook usage
-    proxy: n.proxy ?? { proxyGoogleTrends: true, proxyBingTerms: true },
+        logging, // retain full logging object for live webhook usage
+        proxy: n.proxy ?? { proxyGoogleTrends: true, proxyBingTerms: true },
         webhook,
         conclusionWebhook,
         ntfy,
         diagnostics: n.diagnostics,
         update: n.update,
         schedule: n.schedule,
-    passesPerRun: passesPerRun,
+        passesPerRun: passesPerRun,
         vacation: n.vacation,
         buyMode: { enabled: buyModeEnabled, maxMinutes: buyModeMax },
-        crashRecovery: n.crashRecovery || {}
+        crashRecovery: n.crashRecovery || {},
+        riskManagement,
+        analytics,
+        dryRun,
+        queryDiversity
     }
 
     return cfg
@@ -243,9 +286,20 @@ export function loadAccounts(): Account[] {
         const parsed = Array.isArray(parsedUnknown) ? parsedUnknown : (parsedUnknown && typeof parsedUnknown === 'object' && Array.isArray((parsedUnknown as { accounts?: unknown }).accounts) ? (parsedUnknown as { accounts: unknown[] }).accounts : null)
         if (!Array.isArray(parsed)) throw new Error('accounts must be an array')
         // minimal shape validation
-        for (const a of parsed) {
+        for (const entry of parsed) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const a = entry as any
             if (!a || typeof a.email !== 'string' || typeof a.password !== 'string') {
                 throw new Error('each account must have email and password strings')
+            }
+            a.email = String(a.email).trim()
+            a.password = String(a.password)
+            if (typeof a.recoveryEmail !== 'string') {
+                throw new Error(`account ${a.email || '<unknown>'} must include a recoveryEmail string`)
+            }
+            a.recoveryEmail = String(a.recoveryEmail).trim()
+            if (!a.recoveryEmail || !/@/.test(a.recoveryEmail)) {
+                throw new Error(`account ${a.email} recoveryEmail must be a valid email address`)
             }
         }
         // Filter out disabled accounts (enabled: false)
