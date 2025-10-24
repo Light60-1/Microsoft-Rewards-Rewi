@@ -23,6 +23,11 @@ import path from 'path'
 import { spawn } from 'child_process'
 import Humanizer from './util/Humanizer'
 import { detectBanReason } from './util/BanDetector'
+import { RiskManager, RiskMetrics, RiskEvent } from './util/RiskManager'
+import { BanPredictor } from './util/BanPredictor'
+import { Analytics } from './util/Analytics'
+import { QueryDiversityEngine } from './util/QueryDiversityEngine'
+import JobState from './util/JobState'
 
 
 // Main bot class
@@ -40,6 +45,7 @@ export class MicrosoftRewardsBot {
     public homePage!: Page
     public currentAccountEmail?: string
     public currentAccountRecoveryEmail?: string
+    public queryEngine?: QueryDiversityEngine
     public compromisedModeActive: boolean = false
     public compromisedReason?: string
     public compromisedEmail?: string
@@ -69,6 +75,13 @@ export class MicrosoftRewardsBot {
     // Scheduler heartbeat integration
     private heartbeatFile?: string
     private heartbeatTimer?: NodeJS.Timeout
+    private riskManager?: RiskManager
+    private lastRiskMetrics?: RiskMetrics
+    private riskThresholdTriggered: boolean = false
+    private banPredictor?: BanPredictor
+    private analytics?: Analytics
+    private accountJobState?: JobState
+    private accountRunCounts: Map<string, number> = new Map()
 
     public axios!: Axios
 
@@ -79,6 +92,9 @@ export class MicrosoftRewardsBot {
         this.accounts = []
         this.utils = new Util()
         this.config = loadConfig()
+        if (this.config.jobState?.enabled !== false) {
+            this.accountJobState = new JobState(this.config)
+        }
         this.browser = {
             func: new BrowserFunc(this),
             utils: new BrowserUtil(this)
@@ -87,6 +103,25 @@ export class MicrosoftRewardsBot {
         this.humanizer = new Humanizer(this.utils, this.config.humanization)
         this.activeWorkers = this.config.clusters
         this.mobileRetryAttempts = 0
+
+        if (this.config.queryDiversity?.enabled) {
+            this.queryEngine = new QueryDiversityEngine({
+                sources: this.config.queryDiversity.sources,
+                maxQueriesPerSource: this.config.queryDiversity.maxQueriesPerSource,
+                cacheMinutes: this.config.queryDiversity.cacheMinutes
+            })
+        }
+
+        if (this.config.analytics?.enabled) {
+            this.analytics = new Analytics()
+        }
+
+        if (this.config.riskManagement?.enabled) {
+            this.riskManager = new RiskManager()
+            if (this.config.riskManagement.banPrediction) {
+                this.banPredictor = new BanPredictor(this.riskManager)
+            }
+        }
         
         // Buy mode: CLI args take precedence over config
         const idx = process.argv.indexOf('-buy')
@@ -114,6 +149,87 @@ export class MicrosoftRewardsBot {
 
     async initialize() {
         this.accounts = loadAccounts()
+    }
+
+    private resetRiskTracking(): void {
+        if (this.riskManager) {
+            this.riskManager.reset()
+        }
+    this.lastRiskMetrics = undefined
+        this.riskThresholdTriggered = false
+    }
+
+    private recordRiskEvent(type: RiskEvent['type'], severity: number, context?: string): void {
+        if (!this.riskManager || this.config.riskManagement?.enabled !== true) return
+        this.riskManager.recordEvent(type, severity, context)
+        const metrics = this.riskManager.assessRisk()
+        this.lastRiskMetrics = metrics
+
+        const threshold = this.config.riskManagement?.riskThreshold
+        if (typeof threshold === 'number' && metrics.score >= threshold && !this.riskThresholdTriggered) {
+            this.riskThresholdTriggered = true
+            log('main', 'RISK', `Risk score ${metrics.score} exceeded threshold ${threshold} (level=${metrics.level})`, 'warn', 'yellow')
+        }
+
+        if (this.config.riskManagement?.stopOnCritical && metrics.level === 'critical') {
+            void this.engageGlobalStandby('risk-critical', this.currentAccountEmail)
+        }
+    }
+
+    public getRiskDelayMultiplier(): number {
+        if (!this.config.riskManagement?.enabled || this.config.riskManagement.autoAdjustDelays === false) return 1
+        return this.lastRiskMetrics?.delayMultiplier ?? 1
+    }
+
+    private trackAnalytics(summary: AccountSummary, riskScore?: number): void {
+        if (!this.analytics || this.config.analytics?.enabled !== true) return
+        const today = new Date().toISOString().slice(0, 10)
+        try {
+            this.analytics.recordRun({
+                date: today,
+                email: summary.email,
+                pointsEarned: summary.totalCollected,
+                pointsInitial: summary.initialTotal,
+                pointsEnd: summary.endTotal,
+                desktopPoints: summary.desktopCollected,
+                mobilePoints: summary.mobileCollected,
+                executionTimeMs: summary.durationMs,
+                successRate: summary.errors.length ? 0 : 1,
+                errorsCount: summary.errors.length,
+                banned: !!summary.banned?.status,
+                riskScore
+            })
+        } catch (e) {
+            log('main', 'ANALYTICS', `Failed to record analytics for ${summary.email}: ${e instanceof Error ? e.message : e}`, 'warn')
+        }
+    }
+
+    private shouldSkipAccount(email: string, dayKey: string): boolean {
+        if (!this.accountJobState) return false
+        if (this.config.jobState?.skipCompletedAccounts === false) return false
+        if ((this.config.passesPerRun ?? 1) > 1) return false
+        if (this.isAccountSkipOverride()) return false
+        return this.accountJobState.isAccountComplete(email, dayKey)
+    }
+
+    private persistAccountCompletion(email: string, dayKey: string, summary: AccountSummary): void {
+        if (!this.accountJobState) return
+        if (this.config.jobState?.skipCompletedAccounts === false) return
+        if ((this.config.passesPerRun ?? 1) > 1) return
+        if (this.isAccountSkipOverride()) return
+        this.accountJobState.markAccountComplete(email, dayKey, {
+            runId: this.runId,
+            totalCollected: summary.totalCollected,
+            banned: summary.banned?.status === true,
+            errors: summary.errors.length
+        })
+    }
+
+    private isAccountSkipOverride(): boolean {
+        const value = process.env.REWARDS_DISABLE_ACCOUNT_SKIP
+        if (!value) return false
+        const lower = value.toLowerCase()
+        return value === '1' || lower === 'true' || lower === 'yes'
     }
 
     async run() {
@@ -483,10 +599,16 @@ export class MicrosoftRewardsBot {
                 log('main','TASK',`Stopping remaining accounts due to ban on ${this.bannedTriggered.email}: ${this.bannedTriggered.reason}`,'warn')
                 break
             }
+            const accountDayKey = this.utils.getFormattedDate()
+            if (this.shouldSkipAccount(account.email, accountDayKey)) {
+                log('main','TASK',`Skipping account ${account.email}: already completed on ${accountDayKey} (job-state resume)`, 'warn')
+                continue
+            }
             // Reset compromised state per account
             this.compromisedModeActive = false
             this.compromisedReason = undefined
             this.compromisedEmail = undefined
+            this.resetRiskTracking()
             // If humanization allowed windows are configured, wait until within a window
             try {
                 const windows: string[] | undefined = this.config?.humanization?.allowedWindows
@@ -500,6 +622,8 @@ export class MicrosoftRewardsBot {
             } catch {/* ignore */}
             this.currentAccountEmail = account.email
             this.currentAccountRecoveryEmail = account.recoveryEmail
+            const runNumber = (this.accountRunCounts.get(account.email) ?? 0) + 1
+            this.accountRunCounts.set(account.email, runNumber)
             log('main', 'MAIN-WORKER', `Started tasks for account ${account.email}`)
 
             const accountStart = Date.now()
@@ -520,26 +644,51 @@ export class MicrosoftRewardsBot {
                 return `${label}:${base}`
             }
 
+            if (this.config.dryRun) {
+                log('main', 'DRY-RUN', `Dry run: skipping automation for ${account.email}`)
+                const summary: AccountSummary = {
+                    email: account.email,
+                    durationMs: 0,
+                    desktopCollected: 0,
+                    mobileCollected: 0,
+                    totalCollected: 0,
+                    initialTotal: 0,
+                    endTotal: 0,
+                    errors: [],
+                    banned,
+                    riskScore: 0,
+                    riskLevel: 'safe'
+                }
+                this.accountSummaries.push(summary)
+                this.trackAnalytics(summary, summary.riskScore)
+                this.persistAccountCompletion(account.email, accountDayKey, summary)
+                continue
+            }
+
             if (this.config.parallel) {
                 const mobileInstance = new MicrosoftRewardsBot(true)
                 mobileInstance.axios = this.axios
                 // Run both and capture results with detailed logging
                 const desktopPromise = this.Desktop(account).catch(e => {
                     const msg = e instanceof Error ? e.message : String(e)
+                    this.recordRiskEvent('error', 6, `desktop:${msg}`)
                     log(false, 'TASK', `Desktop flow failed early for ${account.email}: ${msg}`,'error')
                     const bd = detectBanReason(e)
                     if (bd.status) {
                         banned.status = true; banned.reason = bd.reason.substring(0,200)
+                        this.recordRiskEvent('ban_hint', 9, bd.reason)
                         void this.handleImmediateBanAlert(account.email, banned.reason)
                     }
                     errors.push(formatFullErr('desktop', e)); return null
                 })
                 const mobilePromise = mobileInstance.Mobile(account).catch(e => {
                     const msg = e instanceof Error ? e.message : String(e)
+                    this.recordRiskEvent('error', 6, `mobile:${msg}`)
                     log(true, 'TASK', `Mobile flow failed early for ${account.email}: ${msg}`,'error')
                     const bd = detectBanReason(e)
                     if (bd.status) {
                         banned.status = true; banned.reason = bd.reason.substring(0,200)
+                        this.recordRiskEvent('ban_hint', 9, bd.reason)
                         void this.handleImmediateBanAlert(account.email, banned.reason)
                     }
                     errors.push(formatFullErr('mobile', e)); return null
@@ -552,6 +701,7 @@ export class MicrosoftRewardsBot {
                     desktopCollected = desktopResult.value.collectedPoints
                 } else if (desktopResult.status === 'rejected') {
                     log(false, 'TASK', `Desktop promise rejected unexpectedly: ${shortErr(desktopResult.reason)}`,'error')
+                    this.recordRiskEvent('error', 6, `desktop-rejected:${shortErr(desktopResult.reason)}`)
                     errors.push(formatFullErr('desktop-rejected', desktopResult.reason))
                 }
                 
@@ -561,6 +711,7 @@ export class MicrosoftRewardsBot {
                     mobileCollected = mobileResult.value.collectedPoints
                 } else if (mobileResult.status === 'rejected') {
                     log(true, 'TASK', `Mobile promise rejected unexpectedly: ${shortErr(mobileResult.reason)}`,'error')
+                    this.recordRiskEvent('error', 6, `mobile-rejected:${shortErr(mobileResult.reason)}`)
                     errors.push(formatFullErr('mobile-rejected', mobileResult.reason))
                 }
             } else {
@@ -573,10 +724,12 @@ export class MicrosoftRewardsBot {
                     this.isDesktopRunning = true
                     const desktopResult = await this.Desktop(account).catch(e => {
                         const msg = e instanceof Error ? e.message : String(e)
+                        this.recordRiskEvent('error', 6, `desktop:${msg}`)
                         log(false, 'TASK', `Desktop flow failed early for ${account.email}: ${msg}`,'error')
                         const bd = detectBanReason(e)
                         if (bd.status) {
                             banned.status = true; banned.reason = bd.reason.substring(0,200)
+                            this.recordRiskEvent('ban_hint', 9, bd.reason)
                             void this.handleImmediateBanAlert(account.email, banned.reason)
                         }
                         errors.push(formatFullErr('desktop', e)); return null
@@ -593,10 +746,12 @@ export class MicrosoftRewardsBot {
                         this.isMobileRunning = true
                         const mobileResult = await this.Mobile(account).catch(e => {
                             const msg = e instanceof Error ? e.message : String(e)
+                            this.recordRiskEvent('error', 6, `mobile:${msg}`)
                             log(true, 'TASK', `Mobile flow failed early for ${account.email}: ${msg}`,'error')
                             const bd = detectBanReason(e)
                             if (bd.status) {
                                 banned.status = true; banned.reason = bd.reason.substring(0,200)
+                                this.recordRiskEvent('ban_hint', 9, bd.reason)
                                 void this.handleImmediateBanAlert(account.email, banned.reason)
                             }
                             errors.push(formatFullErr('mobile', e)); return null
@@ -629,7 +784,36 @@ export class MicrosoftRewardsBot {
             // Fallback if both missing
             if (initialTotal === 0 && (desktopInitial || mobileInitial)) initialTotal = desktopInitial || mobileInitial || 0
             const endTotal = initialTotal + totalCollected
-            this.accountSummaries.push({
+            if (!banned.status) {
+                this.recordRiskEvent('success', 1, 'account-complete')
+            }
+
+            const riskMetrics = this.lastRiskMetrics
+            let riskScore = riskMetrics?.score
+            const riskLevel = riskMetrics?.level
+            let banPredictionScore: number | undefined
+            let banLikelihood: string | undefined
+
+            if (this.banPredictor && this.config.riskManagement?.banPrediction) {
+                const prediction = this.banPredictor.predictBanRisk(account.email, runNumber, runNumber)
+                banPredictionScore = prediction.riskScore
+                banLikelihood = prediction.likelihood
+                riskScore = prediction.riskScore
+                if (prediction.likelihood === 'high' || prediction.likelihood === 'critical') {
+                    log('main', 'RISK', `Ban predictor warning for ${account.email}: likelihood=${prediction.likelihood} score=${prediction.riskScore}`, 'warn', 'yellow')
+                }
+                if (banned.status) {
+                    this.banPredictor.recordBan(account.email, runNumber, runNumber)
+                } else {
+                    this.banPredictor.recordSuccess(account.email, runNumber, runNumber)
+                }
+            } else if (banned.status && this.banPredictor) {
+                this.banPredictor.recordBan(account.email, runNumber, runNumber)
+            } else if (this.banPredictor && !banned.status) {
+                this.banPredictor.recordSuccess(account.email, runNumber, runNumber)
+            }
+
+            const summary: AccountSummary = {
                 email: account.email,
                 durationMs,
                 desktopCollected,
@@ -638,13 +822,22 @@ export class MicrosoftRewardsBot {
                 initialTotal,
                 endTotal,
                 errors,
-                banned
-            })
+                banned,
+                riskScore,
+                riskLevel,
+                banPredictionScore,
+                banLikelihood
+            }
+
+            this.accountSummaries.push(summary)
+            this.trackAnalytics(summary, riskScore)
+            this.persistAccountCompletion(account.email, accountDayKey, summary)
 
             if (banned.status) {
                 this.bannedTriggered = { email: account.email, reason: banned.reason }
                 // Enter global standby: do not proceed to next accounts
                 this.globalStandby = { active: true, reason: `banned:${banned.reason}` }
+                this.recordRiskEvent('ban_hint', 9, `final-ban:${banned.reason}`)
                 await this.sendGlobalSecurityStandbyAlert(account.email, `Ban detected: ${banned.reason || 'unknown'}`)
             }
 
@@ -1033,6 +1226,14 @@ export class MicrosoftRewardsBot {
             const extras: string[] = []
             if (summary.banned?.status) extras.push(`BAN:${summary.banned.reason || 'detected'}`)
             if (summary.errors.length) extras.push(`ERR:${summary.errors.slice(0, 1).join(' | ')}`)
+            if (summary.riskLevel) {
+                const scoreLabel = summary.riskScore != null ? `(${summary.riskScore})` : ''
+                extras.push(`RISK:${summary.riskLevel}${scoreLabel}`)
+            }
+            if (summary.banLikelihood) {
+                const predLabel = summary.banPredictionScore != null ? `(${summary.banPredictionScore})` : ''
+                extras.push(`PRED:${summary.banLikelihood}${predLabel}`)
+            }
             const tail = extras.length ? ` | ${extras.join(' • ')}` : ''
             return `${statusIcon} ${email} ${total} ${desktop}${mobile} ${totals} ${duration}${tail}`
         }
@@ -1057,12 +1258,21 @@ export class MicrosoftRewardsBot {
         const accountLines = summaries.map(buildAccountLine)
         const accountChunks = chunkLines(accountLines)
 
-        const globalStatsValue = [
+        const riskSamples = summaries.filter(s => typeof s.riskScore === 'number' && !Number.isNaN(s.riskScore as number))
+        const globalLines = [
             `Total points: **${formatNumber(totalInitial)}** → **${formatNumber(totalEnd)}** (${formatSigned(totalCollected)} pts)`,
             `Accounts: ✅ ${successes}${accountsWithErrors > 0 ? ` • ⚠️ ${accountsWithErrors}` : ''} (${totalAccounts} total)`,
             `Average per account: **${formatSigned(avgPointsPerAccount)} pts** • **${formatDuration(avgDuration)}**`,
             `Runtime: **${formatDuration(totalDuration)}**`
-        ].join('\n')
+        ]
+
+        if (riskSamples.length > 0) {
+            const avgRiskScore = riskSamples.reduce((sum, s) => sum + (s.riskScore ?? 0), 0) / riskSamples.length
+            const highestRisk = riskSamples.reduce((prev, curr) => ((curr.riskScore ?? 0) > (prev.riskScore ?? 0) ? curr : prev))
+            globalLines.push(`Risk avg: **${avgRiskScore.toFixed(1)}** • Highest: ${highestRisk.email} (${highestRisk.riskScore ?? 0})`)
+        }
+
+        const globalStatsValue = globalLines.join('\n')
 
         const fields: { name: string; value: string; inline?: boolean }[] = [
             { name: '📊 Run Totals', value: globalStatsValue, inline: false }
@@ -1119,6 +1329,10 @@ export class MicrosoftRewardsBot {
             log('main','REPORT',`Failed diagnostics cleanup: ${e instanceof Error ? e.message : e}`,'warn')
         }
 
+        await this.publishAnalyticsArtifacts().catch(e => {
+            log('main','ANALYTICS',`Failed analytics post-processing: ${e instanceof Error ? e.message : e}`,'warn')
+        })
+
     }
 
     /** Reserve one diagnostics slot for this run (caps captures). */
@@ -1147,6 +1361,39 @@ export class MicrosoftRewardsBot {
             if (now - dirDate > keepMs) {
                 const dirPath = path.join(base, name)
                 try { fs.rmSync(dirPath, { recursive: true, force: true }) } catch { /* ignore */ }
+            }
+        }
+    }
+
+    private async publishAnalyticsArtifacts(): Promise<void> {
+        if (!this.analytics || this.config.analytics?.enabled !== true) return
+
+        const retention = this.config.analytics.retentionDays
+        if (typeof retention === 'number' && retention > 0) {
+            this.analytics.cleanup(retention)
+        }
+
+        if (this.config.analytics.exportMarkdown || this.config.analytics.webhookSummary) {
+            const markdown = this.analytics.exportMarkdown(30)
+            if (this.config.analytics.exportMarkdown) {
+                const now = new Date()
+                const day = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+                const baseDir = path.join(process.cwd(), 'reports', day)
+                if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true })
+                const mdPath = path.join(baseDir, `analytics_${this.runId}.md`)
+                fs.writeFileSync(mdPath, markdown, 'utf-8')
+                log('main','ANALYTICS',`Saved analytics summary to ${mdPath}`)
+            }
+
+            if (this.config.analytics.webhookSummary) {
+                const { ConclusionWebhook } = await import('./util/ConclusionWebhook')
+                await ConclusionWebhook(
+                    this.config,
+                    '📈 Analytics Snapshot',
+                    ['```markdown', markdown, '```'].join('\n'),
+                    undefined,
+                    DISCORD.COLOR_BLUE
+                )
             }
         }
     }
@@ -1215,6 +1462,10 @@ interface AccountSummary {
     endTotal: number
     errors: string[]
     banned?: { status: boolean; reason: string }
+    riskScore?: number
+    riskLevel?: string
+    banPredictionScore?: number
+    banLikelihood?: string
 }
 
 function shortErr(e: unknown): string {

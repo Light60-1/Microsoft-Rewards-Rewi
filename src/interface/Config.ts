@@ -173,6 +173,7 @@ export interface ConfigRetryPolicy {
 export interface ConfigJobState {
     enabled?: boolean; // default true
     dir?: string; // base directory; defaults to <sessionPath>/job-state
+    skipCompletedAccounts?: boolean; // if true (default), skip accounts already completed for the day
 }
 
 // Live logging configuration
