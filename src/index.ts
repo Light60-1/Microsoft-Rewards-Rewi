@@ -28,6 +28,7 @@ import { BanPredictor } from './util/BanPredictor'
 import { Analytics } from './util/Analytics'
 import { QueryDiversityEngine } from './util/QueryDiversityEngine'
 import JobState from './util/JobState'
+import { StartupValidator } from './util/StartupValidator'
 
 
 // Main bot class
@@ -149,6 +150,18 @@ export class MicrosoftRewardsBot {
 
     async initialize() {
         this.accounts = loadAccounts()
+        
+        // Run comprehensive startup validation
+        const validator = new StartupValidator()
+        await validator.validate(this.config, this.accounts)
+        
+        // Always continue - validation is informative, not blocking
+        // This allows users to proceed even with warnings or minor issues
+        
+        // Initialize job state
+        if (this.config.jobState?.enabled !== false) {
+            this.accountJobState = new JobState(this.config)
+        }
     }
 
     private resetRiskTracking(): void {
