@@ -151,7 +151,12 @@ export default class BrowserFunc {
 
             let scriptContent = await target.evaluate(() => {
                 const scripts = Array.from(document.querySelectorAll('script'))
-                const targetScript = scripts.find(script => script.innerText.includes('var dashboard'))
+                // Try multiple patterns for better compatibility
+                const targetScript = scripts.find(script => 
+                    script.innerText.includes('var dashboard') ||
+                    script.innerText.includes('dashboard=') ||
+                    script.innerText.includes('dashboard :')
+                )
 
                 return targetScript?.innerText ? targetScript.innerText : null
             })
@@ -175,7 +180,11 @@ export default class BrowserFunc {
                 
                 const retryContent = await target.evaluate(() => {
                     const scripts = Array.from(document.querySelectorAll('script'))
-                    const targetScript = scripts.find(script => script.innerText.includes('var dashboard'))
+                    const targetScript = scripts.find(script => 
+                        script.innerText.includes('var dashboard') ||
+                        script.innerText.includes('dashboard=') ||
+                        script.innerText.includes('dashboard :')
+                    )
                     return targetScript?.innerText ? targetScript.innerText : null
                 }).catch(()=>null)
                 

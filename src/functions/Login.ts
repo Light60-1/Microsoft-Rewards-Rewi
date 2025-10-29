@@ -681,11 +681,31 @@ export class Login {
       '[data-bi-name="rewards-dashboard"]',
       'main[data-bi-name="dashboard"]',
       '#more-activities',
-      '#dashboard'
+      '#dashboard',
+      // Additional fallback selectors for newer Microsoft layouts
+      '[class*="rewards"]',
+      '[id*="rewards-dashboard"]',
+      'main.dashboard-container',
+      '.dashboard-content'
     ]
 
     const start = Date.now()
     while (Date.now() - start < timeoutMs) {
+      // First try to detect by URL pattern (more reliable)
+      const url = page.url()
+      if (url.includes('rewards.bing.com') || url.includes('rewards.microsoft.com')) {
+        // If on rewards domain, check if basic page structure is loaded
+        const hasBasicContent = await page.evaluate(() => {
+          return document.body && document.body.innerText.length > 100
+        }).catch(() => false)
+        
+        if (hasBasicContent) {
+          this.bot.log(this.bot.isMobile, 'LOGIN', 'Rewards page detected by URL and content')
+          return 'rewards-url-detected'
+        }
+      }
+      
+      // Then try selector-based detection
       for (const sel of selectors) {
         const loc = page.locator(sel).first()
         if (await loc.isVisible().catch(()=>false)) {
