@@ -62,7 +62,7 @@
         // IANA timezone (e.g., "Europe/Paris", "America/New_York" check schedule.md)
         "timeZone": "Europe/Paris",
         // If true, run immediately on process start
-        "runImmediatelyOnStart": false
+        "runImmediatelyOnStart": true
     },
     
     "jobState": {
