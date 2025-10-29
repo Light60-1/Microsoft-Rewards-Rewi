@@ -81,11 +81,8 @@ export class Login {
   // --------------- Public API ---------------
   async login(page: Page, email: string, password: string, totpSecret?: string) {
     try {
-      // Clear any existing intervals from previous runs
-      if (this.compromisedInterval) {
-        clearInterval(this.compromisedInterval)
-        this.compromisedInterval = undefined
-      }
+      // Clear any existing intervals from previous runs to prevent memory leaks
+      this.cleanupCompromisedInterval()
       
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Starting login process')
       this.currentTotpSecret = (totpSecret && totpSecret.trim()) || undefined
@@ -176,11 +173,12 @@ export class Login {
     
     const isRetryable = (e: unknown): boolean => {
       if (!e || typeof e !== 'object') return false
-      const status = (e as any).response?.status
+      const err = e as { response?: { status?: number }; code?: string }
+      const status = err.response?.status
       // Retry on 502, 503, 504 (gateway errors) and network errors
       return status === 502 || status === 503 || status === 504 || 
-             (e as any).code === 'ECONNRESET' || 
-             (e as any).code === 'ETIMEDOUT'
+             err.code === 'ECONNRESET' || 
+             err.code === 'ETIMEDOUT'
     }
 
     const retry = new Retry(this.bot.config.retryPolicy)
@@ -197,8 +195,9 @@ export class Login {
     } catch (error) {
       // Clear TOTP secret on error too
       this.currentTotpSecret = undefined
-      const statusCode = (error as any).response?.status
-      const errMsg = error instanceof Error ? error.message : String(error)
+      const err = error as { response?: { status?: number }; message?: string }
+      const statusCode = err.response?.status
+      const errMsg = err.message || String(error)
       if (statusCode) {
         this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Token exchange failed with status ${statusCode}: ${errMsg}`, 'error')
       } else {
@@ -471,7 +470,7 @@ export class Login {
         if (acted) await this.bot.utils.wait(900)
       }
 
-  const ready = await this.findFirstTotpInput(page)
+      const ready = await this.findFirstTotpInput(page)
       if (ready) return ready
 
       if (!acted) break
@@ -580,10 +579,15 @@ export class Login {
 
       const attr = async (name: string) => (await locator.getAttribute(name) || '').toLowerCase()
       const type = await attr('type')
+      
+      // Explicit exclusions: never treat email or password fields as TOTP
       if (type === 'email' || type === 'password') return false
 
       const nameAttr = await attr('name')
-      if (nameAttr.includes('loginfmt') || nameAttr.includes('passwd')) return false
+      // Explicit exclusions: login/email/password field names
+      if (nameAttr.includes('loginfmt') || nameAttr.includes('passwd') || nameAttr.includes('email') || nameAttr.includes('login')) return false
+      
+      // Strong positive signals for TOTP
       if (nameAttr.includes('otc') || nameAttr.includes('otp') || nameAttr.includes('code')) return true
 
       const autocomplete = await attr('autocomplete')
@@ -1078,6 +1082,13 @@ export class Login {
     this.compromisedInterval = setInterval(()=>{
       try { this.bot.log(this.bot.isMobile,'SECURITY','Account in security standby. Review before proceeding. Security check by @Light','warn') } catch {/* ignore */}
     }, 5*60*1000)
+  }
+
+  private cleanupCompromisedInterval() {
+    if (this.compromisedInterval) {
+      clearInterval(this.compromisedInterval)
+      this.compromisedInterval = undefined
+    }
   }
 
   private async saveIncidentArtifacts(page: Page, slug: string) {

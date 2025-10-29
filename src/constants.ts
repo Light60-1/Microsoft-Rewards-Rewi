@@ -3,6 +3,27 @@
  * Defines timeouts, retry limits, and other magic numbers used throughout the application
  */
 
+/**
+ * Safe environment variable parsing with validation
+ */
+function parseEnvNumber(key: string, defaultValue: number, min: number, max: number): number {
+  const raw = process.env[key]
+  if (!raw) return defaultValue
+  
+  const parsed = Number(raw)
+  if (isNaN(parsed)) {
+    console.warn(`[Constants] Invalid ${key}="${raw}". Using default ${defaultValue}`)
+    return defaultValue
+  }
+  
+  if (parsed < min || parsed > max) {
+    console.warn(`[Constants] ${key}=${parsed} out of range [${min}, ${max}]. Using default ${defaultValue}`)
+    return defaultValue
+  }
+  
+  return parsed
+}
+
 export const TIMEOUTS = {
   SHORT: 500,
   MEDIUM: 1500,
@@ -11,7 +32,7 @@ export const TIMEOUTS = {
   VERY_LONG: 5000,
   EXTRA_LONG: 10000,
   DASHBOARD_WAIT: 10000,
-  LOGIN_MAX: 180000, // 3 minutes
+  LOGIN_MAX: parseEnvNumber('LOGIN_MAX_WAIT_MS', 180000, 30000, 600000),
   NETWORK_IDLE: 5000
 } as const
 

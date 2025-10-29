@@ -1,5 +1,5 @@
 {
-  "name": "microsoft-rewards-script",
+  "name": "microsoft-rewards-rewi",
   "version": "2.50.3",
   "description": "Automatically do tasks for Microsoft Rewards but in TS!",
   "private": true,
@@ -9,12 +9,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/LightZirconite/Microsoft-Rewards-Rewi.git"
+    "url": "https://github.com/Light60-1/Microsoft-Rewards-Rewi.git"
   },
   "bugs": {
-    "url": "https://github.com/LightZirconite/Microsoft-Rewards-Rewi/issues"
+    "url": "https://github.com/Light60-1/Microsoft-Rewards-Rewi/issues"
   },
-  "homepage": "https://github.com/LightZirconite/Microsoft-Rewards-Rewi#readme",
+  "homepage": "https://github.com/Light60-1/Microsoft-Rewards-Rewi#readme",
   "scripts": {
     "clean": "rimraf dist",
     "pre-build": "npm i && npm run clean && node -e \"process.exit(process.env.SKIP_PLAYWRIGHT_INSTALL?0:1)\" || npx playwright install chromium",
@@ -29,7 +29,7 @@
     "prepare": "npm run build",
     "setup": "node ./setup/update/setup.mjs",
     "kill-chrome-win": "powershell -Command \"Get-Process | Where-Object { $_.MainModule.FileVersionInfo.FileDescription -eq 'Google Chrome for Testing' } | ForEach-Object { Stop-Process -Id $_.Id -Force }\"",
-    "create-docker": "docker build -t microsoft-rewards-script-docker ."
+    "create-docker": "docker build -t microsoft-rewards-rewi-docker ."
   },
   "keywords": [
     "Bing Rewards",
@@ -40,13 +40,13 @@
     "Playwright",
     "Cheerio"
   ],
-  "author": "LightZirconite",
+  "author": "Light60-1",
   "contributors": [
-  "Microsoft-Rewards-Rewi (https://github.com/LightZirconite/Microsoft-Rewards-Rewi)"],
+  "Microsoft-Rewards-Rewi (https://github.com/Light60-1/Microsoft-Rewards-Rewi)"],
   "license": "PROPRIETARY",
   "funding": {
     "type": "github",
-    "url": "https://github.com/sponsors/LightZirconite"
+    "url": "https://github.com/sponsors/Light60-1"
   },
   "devDependencies": {
   "@types/node": "^20.14.11",

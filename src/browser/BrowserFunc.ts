@@ -114,7 +114,8 @@ export default class BrowserFunc {
                 this.bot.log(this.bot.isMobile, 'DASHBOARD-DATA', 'Provided page did not equal dashboard page, redirecting to dashboard page')
                 await this.goHome(target)
             }
-                let lastError: unknown = null
+            
+            let lastError: unknown = null
             for (let attempt = 1; attempt <= 2; attempt++) {
                 try {
                     // Reload the page to get new data
@@ -136,9 +137,15 @@ export default class BrowserFunc {
                             break
                         }
                     }
-                    if (attempt === 2 && lastError) throw lastError
-                    await this.bot.utils.wait(1000)
+                    if (attempt === 2) {
+                        await this.bot.utils.wait(1000)
+                    }
                 }
+            }
+            
+            // If reload failed after all attempts, throw the last error
+            if (lastError) {
+                throw lastError
             }
 
             // Wait a bit longer for scripts to load, especially on mobile

@@ -168,7 +168,7 @@ export class MicrosoftRewardsBot {
         if (this.riskManager) {
             this.riskManager.reset()
         }
-    this.lastRiskMetrics = undefined
+        this.lastRiskMetrics = undefined
         this.riskThresholdTriggered = false
     }
 
@@ -622,6 +622,7 @@ export class MicrosoftRewardsBot {
             this.compromisedReason = undefined
             this.compromisedEmail = undefined
             this.resetRiskTracking()
+            
             // If humanization allowed windows are configured, wait until within a window
             try {
                 const windows: string[] | undefined = this.config?.humanization?.allowedWindows
@@ -784,18 +785,22 @@ export class MicrosoftRewardsBot {
             const accountEnd = Date.now()
             const durationMs = accountEnd - accountStart
             const totalCollected = desktopCollected + mobileCollected
-            // Correct initial points (previous version double counted desktop+mobile baselines)
-            // Strategy: pick the lowest non-zero baseline (desktopInitial or mobileInitial) as true start.
-            // Sequential flow: desktopInitial < mobileInitial after gain -> min = original baseline.
-            // Parallel flow: both baselines equal -> min is fine.
-            const baselines: number[] = []
-            if (desktopInitial) baselines.push(desktopInitial)
-            if (mobileInitial) baselines.push(mobileInitial)
+            
+            // Calculate initial total: use the lower value between desktop and mobile initial points
+            // to avoid double-counting. In sequential mode, mobile starts with desktop's earned points.
+            // In parallel mode, both should start from the same baseline.
             let initialTotal = 0
-            if (baselines.length === 1) initialTotal = baselines[0]!
-            else if (baselines.length === 2) initialTotal = Math.min(baselines[0]!, baselines[1]!)
-            // Fallback if both missing
-            if (initialTotal === 0 && (desktopInitial || mobileInitial)) initialTotal = desktopInitial || mobileInitial || 0
+            if (desktopInitial > 0 && mobileInitial > 0) {
+                // Both flows completed: take minimum (true baseline before any earning)
+                initialTotal = Math.min(desktopInitial, mobileInitial)
+            } else if (desktopInitial > 0) {
+                // Only desktop completed
+                initialTotal = desktopInitial
+            } else if (mobileInitial > 0) {
+                // Only mobile completed
+                initialTotal = mobileInitial
+            }
+            
             const endTotal = initialTotal + totalCollected
             if (!banned.status) {
                 this.recordRiskEvent('success', 1, 'account-complete')
