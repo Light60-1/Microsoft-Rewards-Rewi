@@ -241,8 +241,8 @@ async function updateGit() {
   if (existsSync('src/config.jsonc')) {
     console.log('\nBacking up config.jsonc...')
     writeFileSync(join(backupDir, 'config.jsonc'), readFileSync('src/config.jsonc', 'utf8'))
-    // Restore if: remote changed it AND user doesn't want auto-update
-    if (configChanged && !userConfig.autoUpdateConfig) {
+    // ALWAYS restore config unless user explicitly wants auto-update
+    if (!userConfig.autoUpdateConfig) {
       filesToRestore.push('config.jsonc')
     }
   }
@@ -250,35 +250,44 @@ async function updateGit() {
   if (existsSync('src/accounts.json')) {
     console.log('Backing up accounts.json...')
     writeFileSync(join(backupDir, 'accounts.json'), readFileSync('src/accounts.json', 'utf8'))
-    // Restore if: remote changed it AND user doesn't want auto-update
-    if (accountsChanged && !userConfig.autoUpdateAccounts) {
+    // ALWAYS restore accounts unless user explicitly wants auto-update
+    if (!userConfig.autoUpdateAccounts) {
       filesToRestore.push('accounts.json')
     }
   }
 
   // Show what will happen
-  console.log('\nRemote changes:')
-  if (configChanged) {
-    console.log(`  config.jsonc: ${userConfig.autoUpdateConfig ? 'WILL UPDATE' : 'KEEPING LOCAL (restoring from backup)'}`)
-  } else {
-    console.log('  config.jsonc: no changes in remote')
+  console.log('\nUpdate strategy:')
+  console.log(`  config.jsonc: ${userConfig.autoUpdateConfig ? 'WILL UPDATE from remote' : 'KEEPING YOUR LOCAL VERSION (always)'}`)
+  console.log(`  accounts.json: ${userConfig.autoUpdateAccounts ? 'WILL UPDATE from remote' : 'KEEPING YOUR LOCAL VERSION (always)'}`)
+  console.log('  All other files: will update from remote')
+
+  // Step 6: Handle local changes intelligently
+  // Check if there are uncommitted changes to config/accounts
+  const localChanges = exec('git status --porcelain')
+  const hasConfigChanges = localChanges && localChanges.includes('src/config.jsonc')
+  const hasAccountChanges = localChanges && localChanges.includes('src/accounts.json')
+  
+  if (hasConfigChanges && !userConfig.autoUpdateConfig) {
+    console.log('\n✓ Detected local changes to config.jsonc - will preserve them')
   }
-  if (accountsChanged) {
-    console.log(`  accounts.json: ${userConfig.autoUpdateAccounts ? 'WILL UPDATE' : 'KEEPING LOCAL (restoring from backup)'}`)
-  } else {
-    console.log('  accounts.json: no changes in remote')
+  
+  if (hasAccountChanges && !userConfig.autoUpdateAccounts) {
+    console.log('✓ Detected local changes to accounts.json - will preserve them')
   }
 
-  // Step 6: Stash changes
+  // Step 7: Stash ALL changes (including untracked)
   const hasChanges = exec('git status --porcelain')
+  let stashCreated = false
   if (hasChanges) {
-    console.log('\nStashing local changes...')
-    await run('git', ['stash', 'push', '-m', 'Auto-update backup'])
+    console.log('\nStashing local changes (including config/accounts)...')
+    await run('git', ['stash', 'push', '-u', '-m', 'Auto-update backup with untracked files'])
+    stashCreated = true
   }
 
-  // Step 7: Pull with conflict handling
+  // Step 8: Pull with strategy to handle diverged branches
   console.log('\nPulling latest code...')
-  const pullCode = await run('git', ['pull', '--rebase'])
+  let pullCode = await run('git', ['pull', '--rebase'])
   
   if (pullCode !== 0) {
     console.log('\n❌ Pull failed! Checking for conflicts...')
@@ -294,7 +303,7 @@ async function updateGit() {
       abortAllGitOperations()
       
       // Pop stash before giving up
-      if (hasChanges) {
+      if (stashCreated) {
         console.log('Restoring stashed changes...')
         await run('git', ['stash', 'pop'])
       }
@@ -311,13 +320,13 @@ async function updateGit() {
     
     // Not a conflict, just a generic pull failure
     console.log('Pull failed for unknown reason.')
-    if (hasChanges) await run('git', ['stash', 'pop'])
+    if (stashCreated) await run('git', ['stash', 'pop'])
     return pullCode
   }
 
-  // Step 8: Restore files based on user preferences
+  // Step 9: Restore user files based on preferences
   if (filesToRestore.length > 0) {
-    console.log('\nRestoring local files (per your config preferences)...')
+    console.log('\nRestoring your local files (per config preferences)...')
     for (const file of filesToRestore) {
       const content = readFileSync(join(backupDir, file), 'utf8')
       writeFileSync(join('src', file), content)
@@ -325,9 +334,32 @@ async function updateGit() {
     }
   }
 
-  // Step 9: Restore stash
-  if (hasChanges) {
-    await run('git', ['stash', 'pop'])
+  // Step 10: Restore stash (but skip config/accounts if we already restored them)
+  if (stashCreated) {
+    console.log('\nRestoring stashed changes...')
+    // Pop stash but auto-resolve conflicts by keeping our versions
+    const popCode = await run('git', ['stash', 'pop'])
+    
+    if (popCode !== 0) {
+      console.log('⚠️  Stash pop had conflicts - resolving automatically...')
+      
+      // For config/accounts, keep our version (--ours)
+      if (!userConfig.autoUpdateConfig) {
+        await run('git', ['checkout', '--ours', 'src/config.jsonc'])
+        await run('git', ['add', 'src/config.jsonc'])
+      }
+      
+      if (!userConfig.autoUpdateAccounts) {
+        await run('git', ['checkout', '--ours', 'src/accounts.json'])
+        await run('git', ['add', 'src/accounts.json'])
+      }
+      
+      // Drop the stash since we resolved manually
+      await run('git', ['reset'])
+      await run('git', ['stash', 'drop'])
+      
+      console.log('✓ Conflicts auto-resolved')
+    }
   }
 
   // Step 9: Install & build
