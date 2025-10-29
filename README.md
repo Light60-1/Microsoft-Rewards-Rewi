@@ -28,7 +28,7 @@
      ```
 
 3. **Follow the setup prompts.** The script will:
-   * Rename `accounts.example.jsonc` → `accounts.json`
+   * Rename `accounts.example.jsonc` → `accounts.jsonc`
    * Ask for Microsoft account credentials
    * Remind you to review `config.jsonc`
    * Install dependencies (`npm install`)
@@ -51,7 +51,7 @@
 
 ### Manual Setup (if setup script fails)
 
-1. Copy `src/accounts.example.jsonc` → `src/accounts.json` and add your accounts.
+1. Copy `src/accounts.example.jsonc` → `src/accounts.jsonc` and add your accounts.
 2. Edit `src/config.jsonc` as needed.
 3. Install dependencies:
    ```bash
@@ -74,7 +74,7 @@
 
 * Remove local `/node_modules` and `/dist` if you previously built.
 * Remove old Docker volumes when upgrading from older versions.
-* You can reuse older `accounts.json`.
+* You can reuse older `accounts.jsonc`.
 
 **Quick Docker (recommended for scheduling):**
 

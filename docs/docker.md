@@ -9,7 +9,7 @@
 ### 1. Create Required Files
 
 Ensure you have:
-- `src/accounts.json` with your credentials
+- `src/accounts.jsonc` with your credentials
 - `src/config.jsonc` (uses defaults if missing)
 
 ### 2. Start Container
@@ -42,8 +42,8 @@ The Docker setup:
 
 | Host Path | Container Path | Purpose |
 |-----------|----------------|---------|
-| `./src/accounts.jsonc` | `/usr/src/.../accounts.jsonc` | Account credentials (read-only) |
-| `./src/config.jsonc` | `/usr/src/.../config.jsonc` | Configuration (read-only) |
+| `./src/accounts.jsonc` | `/usr/src/.../src/accounts.jsonc` | Account credentials (read-only) |
+| `./src/config.jsonc` | `/usr/src/.../src/config.jsonc` | Configuration (read-only) |
 | `./sessions` | `/usr/src/.../sessions` | Cookies & fingerprints |
 
 ---
@@ -113,8 +113,8 @@ docker exec -it microsoft-rewards-script /bin/bash
 # Check Node.js version
 docker exec -it microsoft-rewards-script node --version
 
-# View config
-docker exec -it microsoft-rewards-script cat config.json
+# View config (mounted in /src/)
+docker exec -it microsoft-rewards-script cat src/config.jsonc
 
 # Check if cron is enabled
 docker exec -it microsoft-rewards-script printenv | grep USE_CRON
