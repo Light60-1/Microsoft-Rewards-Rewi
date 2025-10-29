@@ -218,6 +218,14 @@ export class Login {
 
       const portalSelector = await this.waitForRewardsRoot(page, 3500)
       if (portalSelector) {
+        // Additional validation: make sure we're not just on the page but actually logged in
+        // Check if we're redirected to login
+        const currentUrl = page.url()
+        if (currentUrl.includes('login.live.com') || currentUrl.includes('login.microsoftonline.com')) {
+          this.bot.log(this.bot.isMobile, 'LOGIN', 'Detected redirect to login page - session not valid', 'warn')
+          return false
+        }
+        
         this.bot.log(this.bot.isMobile, 'LOGIN', `Existing session still valid (${portalSelector})`)
         await this.checkAccountLocked(page)
         return true
@@ -704,8 +712,71 @@ export class Login {
         }).catch(() => false)
         
         if (hasBasicContent) {
-          this.bot.log(this.bot.isMobile, 'LOGIN', 'Rewards page detected by URL and content')
-          return 'rewards-url-detected'
+          // CRITICAL: Verify user is actually authenticated
+          // Check for login indicators (sign-in button = NOT logged in)
+          const notLoggedIn = await page.evaluate(() => {
+            const signInSelectors = [
+              'a[href*="signin"]',
+              'button:has-text("Sign in")',
+              'a:has-text("Sign in")',
+              '[data-bi-id*="signin"]',
+              '.login-button',
+              '#login-link'
+            ]
+            
+            for (const sel of signInSelectors) {
+              try {
+                const elements = document.querySelectorAll(sel)
+                for (const el of elements) {
+                  const text = el.textContent?.toLowerCase() || ''
+                  const href = (el as HTMLAnchorElement).href?.toLowerCase() || ''
+                  // If sign-in link is visible and prominent, user is NOT logged in
+                  if ((text.includes('sign in') || href.includes('signin')) && 
+                      (el as HTMLElement).offsetParent !== null) {
+                    return true
+                  }
+                }
+              } catch {
+                // Ignore selector errors
+              }
+            }
+            return false
+          }).catch(() => false)
+          
+          if (notLoggedIn) {
+            // User is on rewards page but NOT logged in - continue waiting
+            this.bot.log(this.bot.isMobile, 'LOGIN', 'On rewards page but not authenticated yet, continuing...', 'warn')
+          } else {
+            // Check for positive authentication indicators
+            const hasAuthIndicators = await page.evaluate(() => {
+              // Look for user profile elements, points counter, or account menu
+              const authSelectors = [
+                '#id_n',  // Bing user menu
+                '[id*="point"]',
+                '[class*="userProfile"]',
+                '[data-bi-id*="profile"]',
+                '.user-menu',
+                '#more-activities'  // Dashboard activities
+              ]
+              
+              for (const sel of authSelectors) {
+                try {
+                  const el = document.querySelector(sel)
+                  if (el && (el as HTMLElement).offsetParent !== null) {
+                    return true
+                  }
+                } catch {
+                  // Ignore errors
+                }
+              }
+              return false
+            }).catch(() => false)
+            
+            if (hasAuthIndicators) {
+              this.bot.log(this.bot.isMobile, 'LOGIN', 'Rewards page detected by URL and authenticated state confirmed')
+              return 'rewards-url-authenticated'
+            }
+          }
         }
       }
       
