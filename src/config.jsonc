@@ -109,8 +109,8 @@
             "retryMobileSearchAmount": 2,
             // Delay between searches
             "delay": {
-                "min": "1min",
-                "max": "5min"
+                "min": "40sec",
+                "max": "1min"
             }
         }
     },
