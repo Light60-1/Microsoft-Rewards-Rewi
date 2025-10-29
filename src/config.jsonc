@@ -331,7 +331,7 @@
         // Apply remote updates to accounts.json via git merge
         // true = accept new fields (like "region", "totpSecret") while keeping credentials (RECOMMENDED)
         // false = always keep your local accounts file (safest but may miss new optional fields)
-        "autoUpdateAccounts": true
+        "autoUpdateAccounts": false
     }
 }
 
