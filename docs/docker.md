@@ -42,8 +42,8 @@ The Docker setup:
 
 | Host Path | Container Path | Purpose |
 |-----------|----------------|---------|
-| `./src/accounts.jsonc` | `/usr/src/.../accounts.json` | Account credentials (read-only) |
-| `./src/config.jsonc` | `/usr/src/.../config.json` | Configuration (read-only) |
+| `./src/accounts.jsonc` | `/usr/src/.../accounts.jsonc` | Account credentials (read-only) |
+| `./src/config.jsonc` | `/usr/src/.../config.jsonc` | Configuration (read-only) |
 | `./sessions` | `/usr/src/.../sessions` | Cookies & fingerprints |
 
 ---
