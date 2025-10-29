@@ -1066,7 +1066,7 @@ export class MicrosoftRewardsBot {
         log(this.isMobile, 'MAIN', 'Starting browser')
 
         // Login into MS Rewards, then respect compromised mode
-    await this.login.login(this.homePage, account.email, account.password, account.totp)
+        await this.login.login(this.homePage, account.email, account.password, account.totp)
         if (this.compromisedModeActive) {
             const reason = this.compromisedReason || 'security-issue'
             log(this.isMobile, 'SECURITY', `Account flagged as compromised (${reason}). Leaving mobile browser open and skipping mobile activities for ${account.email}. Security check by @Light`, 'warn', 'yellow')
@@ -1087,8 +1087,7 @@ export class MicrosoftRewardsBot {
             }
             return { initialPoints: 0, collectedPoints: 0 }
         }
-        this.accessToken = await this.login.getMobileAccessToken(this.homePage, account.email)
-
+        this.accessToken = await this.login.getMobileAccessToken(this.homePage, account.email, account.totp)
         await this.browser.func.goHome(this.homePage)
 
     const data = await this.browser.func.getDashboardData()

@@ -126,7 +126,12 @@ export class Login {
     }
   }
 
-  async getMobileAccessToken(page: Page, email: string) {
+  async getMobileAccessToken(page: Page, email: string, totpSecret?: string) {
+    // Store TOTP secret for this mobile auth session
+    this.currentTotpSecret = (totpSecret && totpSecret.trim()) || undefined
+    this.lastTotpSubmit = 0
+    this.totpAttempts = 0
+    
     // Reuse same FIDO disabling
     await this.disableFido(page)
     const url = new URL(this.authBaseUrl)
@@ -144,6 +149,8 @@ export class Login {
     let code = ''
     while (Date.now() - start < DEFAULT_TIMEOUTS.loginMaxMs) {
       await this.handlePasskeyPrompts(page, 'oauth')
+      // Try auto-TOTP during mobile OAuth flow
+      await this.tryAutoTotp(page, 'mobile-oauth').catch(() => {})
       const u = new URL(page.url())
       if (u.hostname === 'login.live.com' && u.pathname === '/oauth20_desktop.srf') {
         code = u.searchParams.get('code') || ''
@@ -184,8 +191,12 @@ export class Login {
       )
       const data: OAuth = resp.data
       this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Authorized in ${Math.round((Date.now()-start)/1000)}s`)
+      // Clear TOTP secret after successful mobile auth
+      this.currentTotpSecret = undefined
       return data.access_token
     } catch (error) {
+      // Clear TOTP secret on error too
+      this.currentTotpSecret = undefined
       const statusCode = (error as any).response?.status
       const errMsg = error instanceof Error ? error.message : String(error)
       if (statusCode) {
