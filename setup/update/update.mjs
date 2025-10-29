@@ -115,6 +115,43 @@ function exec(cmd) {
   }
 }
 
+function hasUnresolvedConflicts() {
+  // Check for unmerged files
+  const unmerged = exec('git ls-files -u')
+  if (unmerged) {
+    return { hasConflicts: true, files: unmerged.split('\n').filter(Boolean) }
+  }
+  
+  // Check if in middle of merge/rebase
+  const gitDir = exec('git rev-parse --git-dir')
+  if (gitDir) {
+    const mergePath = join(gitDir, 'MERGE_HEAD')
+    const rebasePath = join(gitDir, 'rebase-merge')
+    const rebaseApplyPath = join(gitDir, 'rebase-apply')
+    
+    if (existsSync(mergePath) || existsSync(rebasePath) || existsSync(rebaseApplyPath)) {
+      return { hasConflicts: true, files: ['merge/rebase in progress'] }
+    }
+  }
+  
+  return { hasConflicts: false, files: [] }
+}
+
+function abortAllGitOperations() {
+  console.log('Aborting any ongoing Git operations...')
+  
+  // Try to abort merge
+  exec('git merge --abort')
+  
+  // Try to abort rebase
+  exec('git rebase --abort')
+  
+  // Try to abort cherry-pick
+  exec('git cherry-pick --abort')
+  
+  console.log('Git operations aborted.')
+}
+
 async function updateGit() {
   const hasGit = await which('git')
   if (!hasGit) {
@@ -125,6 +162,31 @@ async function updateGit() {
   console.log('\n' + '='.repeat(60))
   console.log('Smart Git Update')
   console.log('='.repeat(60))
+
+  // Step 0: Check for existing conflicts FIRST
+  const conflictCheck = hasUnresolvedConflicts()
+  if (conflictCheck.hasConflicts) {
+    console.log('\n⚠️  ERROR: Git repository has unresolved conflicts!')
+    console.log('Conflicted files:')
+    conflictCheck.files.forEach(f => console.log(`  - ${f}`))
+    console.log('\nAttempting automatic resolution...')
+    
+    // Abort any ongoing operations
+    abortAllGitOperations()
+    
+    // Verify conflicts are cleared
+    const recheckConflicts = hasUnresolvedConflicts()
+    if (recheckConflicts.hasConflicts) {
+      console.log('\n❌ Could not automatically resolve conflicts.')
+      console.log('Manual intervention required. Please run:')
+      console.log('  git status')
+      console.log('  git reset --hard origin/main  # WARNING: This will discard ALL local changes')
+      console.log('\nUpdate aborted for safety.')
+      return 1
+    }
+    
+    console.log('✓ Conflicts cleared. Continuing with update...\n')
+  }
 
   // Step 1: Read config to get user preferences
   let userConfig = { autoUpdateConfig: false, autoUpdateAccounts: false }
@@ -214,12 +276,41 @@ async function updateGit() {
     await run('git', ['stash', 'push', '-m', 'Auto-update backup'])
   }
 
-  // Step 7: Pull
+  // Step 7: Pull with conflict handling
   console.log('\nPulling latest code...')
   const pullCode = await run('git', ['pull', '--rebase'])
   
   if (pullCode !== 0) {
-    console.log('Pull failed.')
+    console.log('\n❌ Pull failed! Checking for conflicts...')
+    
+    // Check if it's a conflict
+    const postPullConflicts = hasUnresolvedConflicts()
+    if (postPullConflicts.hasConflicts) {
+      console.log('Conflicts detected during pull:')
+      postPullConflicts.files.forEach(f => console.log(`  - ${f}`))
+      
+      // Abort the rebase/merge
+      console.log('\nAborting failed pull...')
+      abortAllGitOperations()
+      
+      // Pop stash before giving up
+      if (hasChanges) {
+        console.log('Restoring stashed changes...')
+        await run('git', ['stash', 'pop'])
+      }
+      
+      console.log('\n⚠️  Update failed due to conflicts.')
+      console.log('Your local changes have been preserved.')
+      console.log('\nTo force update (DISCARDS local changes), run:')
+      console.log('  git fetch --all')
+      console.log('  git reset --hard origin/main')
+      console.log('  npm ci && npm run build')
+      
+      return 1
+    }
+    
+    // Not a conflict, just a generic pull failure
+    console.log('Pull failed for unknown reason.')
     if (hasChanges) await run('git', ['stash', 'pop'])
     return pullCode
   }
