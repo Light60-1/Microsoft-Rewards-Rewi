@@ -1,0 +1,40 @@
+services:
+  microsoft-rewards-script:
+    build: .
+    container_name: microsoft-rewards-script
+    restart: unless-stopped
+
+    volumes:
+      - ./src/accounts.json:/usr/src/microsoft-rewards-script/accounts.json:ro
+      - ./src/config.jsonc:/usr/src/microsoft-rewards-script/config.json:ro
+      - ./sessions:/usr/src/microsoft-rewards-script/sessions
+
+    environment:
+      # Timezone (REQUIRED)
+      TZ: "America/Toronto"
+      
+      NODE_ENV: "production"
+      FORCE_HEADLESS: "1"
+      
+      # ============================================================
+      # CRON SCHEDULING MODE
+      # ============================================================
+      USE_CRON: "true"
+      
+      # Cron schedule (crontab syntax)
+      # Examples:
+      #   "0 9 * * *"       - Daily at 9 AM
+      #   "0 9,21 * * *"    - Daily at 9 AM and 9 PM
+      #   "0 9,16,21 * * *" - Daily at 9 AM, 4 PM, and 9 PM
+      #   "0 */6 * * *"     - Every 6 hours
+      #   "0 8 * * 1-5"     - Weekdays at 8 AM
+      # Use https://crontab.guru to build your schedule
+      CRON_SCHEDULE: "0 9,16,21 * * *"
+      
+      # Run once immediately when container starts
+      RUN_ON_START: "true"
+
+    security_opt:
+      - no-new-privileges:true
+
+    command: ["npm", "run", "start:schedule"]

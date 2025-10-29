@@ -82,18 +82,51 @@
 2. Ensure `config.jsonc` has `"headless": true` in browser settings.
 3. Edit `compose.yaml`:
    * Set `TZ` (timezone)
-   * Set `CRON_SCHEDULE` (use crontab.guru for help)
-   * Optional: `RUN_ON_START=true`
+   * **Choose scheduling mode:**
+     * **Option A (default):** Built-in scheduler — configure `schedule` in `config.jsonc`
+     * **Option B (cron):** Uncomment `USE_CRON: "true"` and set `CRON_SCHEDULE`
+   * Optional: `RUN_ON_START=true` (runs once immediately on container start)
 4. Start:
    ```bash
    docker compose up -d
    ```
 5. Monitor:
    ```bash
-   docker logs microsoft-rewards-script
+   docker logs -f microsoft-rewards-script
    ```
 
-> The container randomly delays scheduled runs by ~5–50 minutes to appear more natural.
+### Scheduling Options
+
+**Built-in Scheduler (Default):**
+```yaml
+# In docker-compose.yml - no cron variables needed
+environment:
+  TZ: "Europe/Paris"
+```
+```jsonc
+// In config.jsonc
+{
+  "schedule": {
+    "enabled": true,
+    "time24": "09:00",
+    "timeZone": "Europe/Paris"
+  }
+}
+```
+
+**Native Cron (Traditional):**
+```yaml
+# In docker-compose.yml
+environment:
+  TZ: "Europe/Paris"
+  USE_CRON: "true"
+  CRON_SCHEDULE: "0 9,16,21 * * *"  # 9 AM, 4 PM, 9 PM
+  RUN_ON_START: "true"
+```
+
+Use [crontab.guru](https://crontab.guru) for cron syntax help.
+
+**See [Docker Documentation](docs/docker.md) for detailed setup and troubleshooting.**
 
 ---
 
@@ -249,14 +282,14 @@ Edit `src/config.jsonc` to customize behavior. See the [full configuration docum
 
 | Setting | Description | Default |
 | ------- | ----------- | ------- |
-| `notifications.webhook.enabled` | Enable Discord webhook | `false` |
-| `notifications.webhook.url` | Discord webhook URL | `""` |
-| `notifications.conclusionWebhook.enabled` | Summary-only webhook | `false` |
-| `notifications.conclusionWebhook.url` | Summary webhook URL | `""` |
-| `notifications.ntfy.enabled` | Enable NTFY notifications | `false` |
-| `notifications.ntfy.url` | NTFY server URL | `""` |
-| `notifications.ntfy.topic` | NTFY topic | `rewards` |
-| `notifications.ntfy.authToken` | NTFY auth token | `""` |
+| `webhook.enabled` | Enable Discord webhook | `false` |
+| `webhook.url` | Discord webhook URL | `""` |
+| `conclusionWebhook.enabled` | Summary-only webhook | `false` |
+| `conclusionWebhook.url` | Summary webhook URL | `""` |
+| `ntfy.enabled` | Enable NTFY notifications | `false` |
+| `ntfy.url` | NTFY server URL | `""` |
+| `ntfy.topic` | NTFY topic | `rewards` |
+| `ntfy.authToken` | NTFY auth token | `""` |
 
 </details>
 
