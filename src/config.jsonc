@@ -204,24 +204,24 @@
     // 🔔 NOTIFICATIONS
     // ============================================================
     
-    "notifications": {
-        // Live logs webhook (Discord or similar). URL = your webhook endpoint
-        "webhook": {
-            "enabled": false,
-            "url": ""
-        },
-        // Rich end-of-run summary webhook (Discord or similar)
-        "conclusionWebhook": {
-            "enabled": false,
-            "url": ""
-        },
-        // NTFY push notifications (plain text)
-        "ntfy": {
-            "enabled": false,
-            "url": "",
-            "topic": "rewards",
-            "authToken": ""
-        }
+    // Live logs webhook (Discord or similar). URL = your webhook endpoint
+    "webhook": {
+        "enabled": false,
+        "url": ""
+    },
+    
+    // Rich end-of-run summary webhook (Discord or similar)
+    "conclusionWebhook": {
+        "enabled": false,
+        "url": ""
+    },
+    
+    // NTFY push notifications (plain text)
+    "ntfy": {
+        "enabled": false,
+        "url": "",
+        "topic": "rewards",
+        "authToken": ""
     },
     
     
