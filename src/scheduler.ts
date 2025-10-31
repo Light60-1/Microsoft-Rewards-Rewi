@@ -337,7 +337,7 @@ async function main() {
     running = true
     if (applyInitialJitter) {
       const min = Math.max(0, Math.min(initialJitterBounds[0], initialJitterBounds[1]))
-      const max = Math.max(0, Math.max(initialJitterBounds[0], initialJitterBounds[1]))
+      const max = Math.max(min, initialJitterBounds[0], initialJitterBounds[1])
       const jitterSec = (min === max) ? min * 60 : (min * 60 + Math.floor(Math.random() * ((max - min) * 60)))
       if (jitterSec > 0) {
         await log('main', 'SCHEDULER', `Initial jitter: delaying first run by ${Math.round(jitterSec / 60)} minute(s) (${jitterSec}s)`, 'warn')
@@ -374,7 +374,7 @@ async function main() {
       const djMax = dailyJitterBounds[1]
       if (djMin > 0 || djMax > 0) {
         const mn = Math.max(0, Math.min(djMin, djMax))
-        const mx = Math.max(0, Math.max(djMin, djMax))
+        const mx = Math.max(mn, djMin, djMax)
         const jitterSec = (mn === mx) ? mn * 60 : (mn * 60 + Math.floor(Math.random() * ((mx - mn) * 60)))
         extraMs = jitterSec * 1000
         ms += extraMs

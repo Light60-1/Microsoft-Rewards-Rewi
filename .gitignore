@@ -3,8 +3,7 @@ dist/
 node_modules/
 .vscode/
 .github/
-diagnostic/
-report/
+diagnostics/
 reports/
 accounts.json
 accounts.jsonc

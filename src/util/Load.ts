@@ -141,10 +141,10 @@ function normalizeConfig(raw: unknown): Config {
     }
     // Strong default gestures when enabled (explicit values still win)
     if (typeof n.humanization.gestureMoveProb !== 'number') {
-        n.humanization.gestureMoveProb = n.humanization.enabled === false ? 0 : 0.5
+        n.humanization.gestureMoveProb = !n.humanization.enabled ? 0 : 0.5
     }
     if (typeof n.humanization.gestureScrollProb !== 'number') {
-        n.humanization.gestureScrollProb = n.humanization.enabled === false ? 0 : 0.25
+        n.humanization.gestureScrollProb = !n.humanization.enabled ? 0 : 0.25
     }
 
     // Vacation mode (monthly contiguous off-days)
@@ -401,7 +401,10 @@ export async function saveSessionData(sessionPath: string, browser: BrowserConte
         }
 
         // Save cookies to a file
-        await fs.promises.writeFile(path.join(sessionDir, `${isMobile ? 'mobile_cookies' : 'desktop_cookies'}.json`), JSON.stringify(cookies))
+        await fs.promises.writeFile(
+            path.join(sessionDir, `${isMobile ? 'mobile_cookies' : 'desktop_cookies'}.json`), 
+            JSON.stringify(cookies, null, 2)
+        )
 
         return sessionDir
     } catch (error) {

@@ -361,13 +361,15 @@ export default class BrowserFunc {
 
             for (const item of eligibleActivities) {
                 if (item.attributes.type === 'msnreadearn') {
-                    points.readToEarn = parseInt(item.attributes.pointmax ?? '') - parseInt(item.attributes.pointprogress ?? '')
+                    points.readToEarn = parseInt(item.attributes.pointmax ?? '', 10) - parseInt(item.attributes.pointprogress ?? '', 10)
                     break
                 } else if (item.attributes.type === 'checkin') {
-                    const checkInDay = parseInt(item.attributes.progress ?? '') % 7
-
-                    if (checkInDay < 6 && (new Date()).getDate() != (new Date(item.attributes.last_updated ?? '')).getDate()) {
-                        points.checkIn = parseInt(item.attributes['day_' + (checkInDay + 1) + '_points'] ?? '')
+                    const checkInDay = parseInt(item.attributes.progress ?? '', 10) % 7
+                    const today = new Date()
+                    const lastUpdated = new Date(item.attributes.last_updated ?? '')
+                    
+                    if (checkInDay < 6 && today.getDate() !== lastUpdated.getDate()) {
+                        points.checkIn = parseInt(item.attributes['day_' + (checkInDay + 1) + '_points'] ?? '', 10)
                     }
                     break
                 }
