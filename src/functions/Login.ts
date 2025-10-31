@@ -914,7 +914,7 @@ export class Login {
       const secBtn = await page.waitForSelector(SELECTORS.passkeySecondary, { timeout: 500 }).catch(()=>null)
       const primBtn = await page.waitForSelector(SELECTORS.passkeyPrimary, { timeout: 500 }).catch(()=>null)
       const title = (titleEl ? (await titleEl.textContent()) : '')?.trim() || ''
-      const looksLike = /sign in faster|passkey|fingerprint|face|pin|empreinte|visage/i.test(title)
+      const looksLike = /sign in faster|passkey|fingerprint|face|pin|empreinte|visage|windows hello|hello/i.test(title)
       if (looksLike && secBtn) { await secBtn.click().catch(()=>{}); did = true; this.logPasskeyOnce('title heuristic '+title) }
       else if (!did && secBtn && primBtn) {
         const text = (await secBtn.textContent()||'').trim()
@@ -924,10 +924,35 @@ export class Login {
       }
     }
     
-    // Priority 4: XPath fallback
+    // Priority 4: XPath fallback (includes Windows Hello specific patterns)
     if (!did) {
-      const textBtn = await page.locator('xpath=//button[contains(normalize-space(.),"Skip for now") or contains(normalize-space(.),"Not now") or contains(normalize-space(.),"Passer")]').first()
+      const textBtn = await page.locator('xpath=//button[contains(normalize-space(.),"Skip for now") or contains(normalize-space(.),"Not now") or contains(normalize-space(.),"Passer") or contains(normalize-space(.),"No thanks")]').first()
       if (await textBtn.isVisible().catch(()=>false)) { await textBtn.click().catch(()=>{}); did = true; this.logPasskeyOnce('xpath fallback') }
+    }
+    
+    // Priority 4.5: Windows Hello specific detection
+    if (!did) {
+      const windowsHelloTitle = await page.locator('text=/windows hello/i').first().isVisible().catch(() => false)
+      if (windowsHelloTitle) {
+        // Try common Windows Hello skip patterns
+        const skipPatterns = [
+          'button:has-text("Skip")',
+          'button:has-text("No thanks")',
+          'button:has-text("Maybe later")',
+          'button:has-text("Cancel")',
+          '[data-testid="secondaryButton"]',
+          'button[class*="secondary"]'
+        ]
+        for (const pattern of skipPatterns) {
+          const btn = await page.locator(pattern).first()
+          if (await btn.isVisible().catch(() => false)) {
+            await btn.click().catch(() => {})
+            did = true
+            this.logPasskeyOnce('Windows Hello skip')
+            break
+          }
+        }
+      }
     }
     
     // Priority 5: Close button fallback

@@ -29,6 +29,7 @@ import { Analytics } from './util/Analytics'
 import { QueryDiversityEngine } from './util/QueryDiversityEngine'
 import JobState from './util/JobState'
 import { StartupValidator } from './util/StartupValidator'
+import { initializeSystem } from './util/SystemInit'
 
 
 // Main bot class
@@ -1594,7 +1595,10 @@ async function main() {
 
 // Start the bots
 if (require.main === module) {
-    main().catch(error => {
+    // CRITICAL: Initialize system FIRST (Windows auto-update, etc.)
+    initializeSystem().then(() => {
+        return main()
+    }).catch(error => {
         log('main', 'MAIN-ERROR', `Error running bots: ${error}`, 'error')
         process.exit(1)
     })
