@@ -1429,14 +1429,9 @@ export class MicrosoftRewardsBot {
         if (upd.docker) args.push('--docker')
         if (args.length === 0) return
 
-        // Pass scheduler flag to update script so it doesn't exit
-        const isSchedulerMode = !!process.env.SCHEDULER_HEARTBEAT_FILE
-        const env = isSchedulerMode 
-            ? { ...process.env, FROM_SCHEDULER: '1' }
-            : process.env
-
+        // Run update script as a child process - it will handle its own exit
         await new Promise<void>((resolve) => {
-            const child = spawn(process.execPath, [scriptAbs, ...args], { stdio: 'inherit', env })
+            const child = spawn(process.execPath, [scriptAbs, ...args], { stdio: 'inherit' })
             child.on('close', () => resolve())
             child.on('error', () => resolve())
         })

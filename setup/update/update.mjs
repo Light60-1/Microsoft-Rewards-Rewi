@@ -400,16 +400,13 @@ async function main() {
     code = await updateDocker()
   }
   
-  // Only exit if not called from scheduler
-  // When FROM_SCHEDULER=1, the parent script will handle process lifecycle
-  if (process.env.FROM_SCHEDULER !== '1') {
-    process.exit(code)
-  }
+  // CRITICAL FIX: Always exit with code, even from scheduler
+  // The scheduler expects the update script to complete and exit
+  // Otherwise the process hangs indefinitely and gets killed by watchdog
+  process.exit(code)
 }
 
-main().catch(() => {
-  // Only exit on error if not called from scheduler
-  if (process.env.FROM_SCHEDULER !== '1') {
-    process.exit(1)
-  }
+main().catch((err) => {
+  console.error('Update script error:', err)
+  process.exit(1)
 })
