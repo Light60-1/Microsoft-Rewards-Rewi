@@ -529,6 +529,9 @@ export class MicrosoftRewardsBot {
         // Reset activeWorkers to actual spawn count (constructor used raw clusters)
         this.activeWorkers = workerCount
 
+        // Store worker-to-chunk mapping for crash recovery
+        const workerChunkMap = new Map<number, Account[]>()
+
         for (let i = 0; i < workerCount; i++) {
             const worker = cluster.fork()
             const chunk = accountChunks[i] || []
@@ -536,6 +539,11 @@ export class MicrosoftRewardsBot {
             // Validate chunk has accounts
             if (chunk.length === 0) {
                 log('main', 'MAIN-PRIMARY', `Warning: Worker ${i} received empty account chunk`, 'warn')
+            }
+            
+            // Store chunk mapping for crash recovery
+            if (worker.id) {
+                workerChunkMap.set(worker.id, chunk)
             }
             
             (worker as unknown as { send?: (m: { chunk: Account[] }) => void }).send?.({ chunk })
@@ -555,20 +563,36 @@ export class MicrosoftRewardsBot {
             // Optional: restart crashed worker (basic heuristic) if crashRecovery allows
             try {
                 const cr = this.config.crashRecovery
-                if (cr?.restartFailedWorker && code !== 0) {
+                if (cr?.restartFailedWorker && code !== 0 && worker.id) {
                     const attempts = (worker as unknown as { _restartAttempts?: number })._restartAttempts || 0
                     if (attempts < (cr.restartFailedWorkerAttempts ?? 1)) {
                         (worker as unknown as { _restartAttempts?: number })._restartAttempts = attempts + 1
                         log('main','CRASH-RECOVERY',`Respawning worker (attempt ${attempts + 1})`, 'warn','yellow')
+                        
+                        // CRITICAL FIX: Re-send the original chunk to the new worker
+                        const originalChunk = workerChunkMap.get(worker.id)
                         const newW = cluster.fork()
-                        // NOTE: account chunk re-assignment simplistic: unused; real mapping improvement todo
+                        
+                        if (originalChunk && originalChunk.length > 0 && newW.id) {
+                            // Send the accounts to the new worker
+                            (newW as unknown as { send?: (m: { chunk: Account[] }) => void }).send?.({ chunk: originalChunk })
+                            // Update mapping with new worker ID
+                            workerChunkMap.set(newW.id, originalChunk)
+                            workerChunkMap.delete(worker.id)
+                            log('main','CRASH-RECOVERY',`Assigned ${originalChunk.length} account(s) to respawned worker`, 'log', 'green')
+                        } else {
+                            log('main','CRASH-RECOVERY','Warning: Could not reassign accounts to respawned worker (chunk not found)', 'warn', 'yellow')
+                        }
+                        
                         newW.on('message', (msg: unknown) => {
                             const m = msg as { type?: string; data?: AccountSummary[] }
                             if (m && m.type === 'summary' && Array.isArray(m.data)) this.accountSummaries.push(...m.data)
                         })
                     }
                 }
-            } catch { /* ignore */ }
+            } catch (e) {
+                log('main','CRASH-RECOVERY',`Failed to respawn worker: ${e instanceof Error ? e.message : e}`, 'error')
+            }
 
             // Check if all workers have exited
             if (this.activeWorkers === 0) {
