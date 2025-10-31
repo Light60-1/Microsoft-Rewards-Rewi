@@ -102,8 +102,8 @@ export class Login {
       await this.disableFido(page)
       await page.waitForLoadState('domcontentloaded').catch(()=>{})
       await this.bot.browser.utils.reloadBadPage(page)
-  await this.bot.utils.wait(250)
-  await this.tryAutoTotp(page, 'initial landing')
+      await this.bot.utils.wait(250)
+      await this.tryAutoTotp(page, 'initial landing')
       await this.checkAccountLocked(page)
 
       const already = await page.waitForSelector('html[data-role-name="RewardsPortal"]', { timeout: 8000 }).then(()=>true).catch(()=>false)
@@ -119,7 +119,10 @@ export class Login {
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Login complete (session saved)')
       this.currentTotpSecret = undefined
     } catch (e) {
-      throw this.bot.log(this.bot.isMobile, 'LOGIN', 'Failed login: ' + e, 'error')
+      const errorMessage = e instanceof Error ? e.message : String(e)
+      const stackTrace = e instanceof Error ? e.stack : undefined
+      this.bot.log(this.bot.isMobile, 'LOGIN', `Failed login: ${errorMessage}${stackTrace ? '\nStack: ' + stackTrace.split('\n').slice(0, 3).join(' | ') : ''}`, 'error')
+      throw new Error(`Login failed for ${email}: ${errorMessage}`)
     }
   }
 
@@ -155,7 +158,10 @@ export class Login {
       }
       await this.bot.utils.wait(1000)
     }
-    if (!code) throw this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'OAuth code not received in time', 'error')
+    if (!code) {
+      this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'OAuth code not received in time', 'error')
+      throw new Error('OAuth code not received within timeout - mobile token acquisition failed')
+    }
 
     const form = new URLSearchParams()
     form.append('grant_type', 'authorization_code')
@@ -819,7 +825,8 @@ export class Login {
       const fallbackSelector = await this.waitForRewardsRoot(page, 6000)
       if (!fallbackSelector) {
         await this.bot.browser.utils.captureDiagnostics(page, 'login-portal-missing').catch(()=>{})
-        throw this.bot.log(this.bot.isMobile, 'LOGIN', 'Portal root element missing after navigation (saved diagnostics to reports/)', 'error')
+        this.bot.log(this.bot.isMobile, 'LOGIN', 'Portal root element missing after navigation (saved diagnostics to reports/)', 'error')
+        throw new Error('Rewards portal not detected after login - check diagnostics in reports/ folder')
       }
       this.bot.log(this.bot.isMobile, 'LOGIN', `Reached rewards portal via fallback (${fallbackSelector})`)
       return
@@ -870,7 +877,10 @@ export class Login {
 
   private async checkAccountLocked(page: Page) {
     const locked = await page.waitForSelector('#serviceAbuseLandingTitle', { timeout: 1200 }).then(()=>true).catch(()=>false)
-    if (locked) throw this.bot.log(this.bot.isMobile,'CHECK-LOCKED','Account locked by Microsoft (serviceAbuseLandingTitle)','error')
+    if (locked) {
+      this.bot.log(this.bot.isMobile,'CHECK-LOCKED','Account locked by Microsoft (serviceAbuseLandingTitle)','error')
+      throw new Error('Account locked by Microsoft - please review account status')
+    }
   }
 
   // --------------- Passkey / Dialog Handling ---------------
