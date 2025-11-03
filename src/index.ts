@@ -367,49 +367,25 @@ export class MicrosoftRewardsBot {
     }
 
     private printBanner() {
-        // Only print once (primary process or single cluster execution)
         if (this.config.clusters > 1 && !cluster.isPrimary) return
         
-        const banner = `
- ╔════════════════════════════════════════════════════════╗
- ║                                                        ║
- ║     Microsoft Rewards Bot v${this.getVersion().padEnd(5)}                      ║
- ║     Automated Points Collection System                 ║
- ║                                                        ║
- ╚════════════════════════════════════════════════════════╝
-`
-
-        const buyModeBanner = `
- ╔════════════════════════════════════════════════════════╗
- ║                                                        ║
- ║     Microsoft Rewards Bot - Manual Mode                ║
- ║     Interactive Browsing Session                       ║
- ║                                                        ║
- ╚════════════════════════════════════════════════════════╝
-`
-        
         const version = this.getVersion()
-        const displayBanner = this.buyMode.enabled ? buyModeBanner : banner
-        console.log(displayBanner)
-        console.log('─'.repeat(60))
-            
-            if (this.buyMode.enabled) {
-                console.log(`  Version ${version} | PID ${process.pid} | Manual Session`)
-                console.log(`  Target: ${this.buyMode.email || 'First account'}`)
-            } else {
-                console.log(`  Version ${version} | PID ${process.pid} | Workers: ${this.config.clusters}`)
-                
-                const upd = this.config.update || {}
-                const updTargets: string[] = []
-                if (upd.git !== false) updTargets.push('Git')
-                if (upd.docker) updTargets.push('Docker')
-                if (updTargets.length > 0) {
-                    console.log(`  Auto-Update: ${updTargets.join(', ')}`)
-                }
-
-                console.log('  Scheduler: External (see docs)')
+        const mode = this.buyMode.enabled ? 'Manual Mode' : 'Automated Mode'
+        
+        log('main', 'BANNER', `Microsoft Rewards Bot v${version} - ${mode}`)
+        log('main', 'BANNER', `PID: ${process.pid} | Workers: ${this.config.clusters}`)
+        
+        if (this.buyMode.enabled) {
+            log('main', 'BANNER', `Target: ${this.buyMode.email || 'First account'}`)
+        } else {
+            const upd = this.config.update || {}
+            const updTargets: string[] = []
+            if (upd.git !== false) updTargets.push('Git')
+            if (upd.docker) updTargets.push('Docker')
+            if (updTargets.length > 0) {
+                log('main', 'BANNER', `Auto-Update: ${updTargets.join(', ')}`)
             }
-            console.log('─'.repeat(60) + '\n')
+        }
     }
 
     private getVersion(): string {
@@ -478,37 +454,30 @@ export class MicrosoftRewardsBot {
             log('main', 'MAIN-WORKER', `Worker ${worker.process.pid} destroyed | Code: ${code} | Active workers: ${this.activeWorkers}`, 'warn')
 
             // Optional: restart crashed worker (basic heuristic) if crashRecovery allows
-            try {
-                const cr = this.config.crashRecovery
-                if (cr?.restartFailedWorker && code !== 0 && worker.id) {
-                    const attempts = (worker as unknown as { _restartAttempts?: number })._restartAttempts || 0
-                    if (attempts < (cr.restartFailedWorkerAttempts ?? 1)) {
-                        (worker as unknown as { _restartAttempts?: number })._restartAttempts = attempts + 1
-                        log('main','CRASH-RECOVERY',`Respawning worker (attempt ${attempts + 1})`, 'warn','yellow')
-                        
-                        // CRITICAL FIX: Re-send the original chunk to the new worker
-                        const originalChunk = workerChunkMap.get(worker.id)
-                        const newW = cluster.fork()
-                        
-                        if (originalChunk && originalChunk.length > 0 && newW.id) {
-                            // Send the accounts to the new worker
-                            (newW as unknown as { send?: (m: { chunk: Account[] }) => void }).send?.({ chunk: originalChunk })
-                            // Update mapping with new worker ID
-                            workerChunkMap.set(newW.id, originalChunk)
-                            workerChunkMap.delete(worker.id)
-                            log('main','CRASH-RECOVERY',`Assigned ${originalChunk.length} account(s) to respawned worker`, 'log', 'green')
-                        } else {
-                            log('main','CRASH-RECOVERY','Warning: Could not reassign accounts to respawned worker (chunk not found)', 'warn', 'yellow')
-                        }
-                        
-                        newW.on('message', (msg: unknown) => {
-                            const m = msg as { type?: string; data?: AccountSummary[] }
-                            if (m && m.type === 'summary' && Array.isArray(m.data)) this.accountSummaries.push(...m.data)
-                        })
+            const cr = this.config.crashRecovery
+            if (cr?.restartFailedWorker && code !== 0 && worker.id) {
+                const attempts = (worker as { _restartAttempts?: number })._restartAttempts || 0
+                if (attempts < (cr.restartFailedWorkerAttempts ?? 1)) {
+                    (worker as { _restartAttempts?: number })._restartAttempts = attempts + 1
+                    log('main','CRASH-RECOVERY',`Respawning worker (attempt ${attempts + 1})`, 'warn')
+                    
+                    const originalChunk = workerChunkMap.get(worker.id)
+                    const newW = cluster.fork()
+                    
+                    if (originalChunk && originalChunk.length > 0 && newW.id) {
+                        (newW as { send?: (m: { chunk: Account[] }) => void }).send?.({ chunk: originalChunk })
+                        workerChunkMap.set(newW.id, originalChunk)
+                        workerChunkMap.delete(worker.id)
+                        log('main','CRASH-RECOVERY',`Assigned ${originalChunk.length} account(s) to respawned worker`)
+                    } else {
+                        log('main','CRASH-RECOVERY','Warning: Could not reassign accounts to respawned worker', 'warn')
                     }
+                    
+                    newW.on('message', (msg: unknown) => {
+                        const m = msg as { type?: string; data?: AccountSummary[] }
+                        if (m && m.type === 'summary' && Array.isArray(m.data)) this.accountSummaries.push(...m.data)
+                    })
                 }
-            } catch (e) {
-                log('main','CRASH-RECOVERY',`Failed to respawn worker: ${e instanceof Error ? e.message : e}`, 'error')
             }
 
             // Check if all workers have exited
@@ -591,13 +560,6 @@ export class MicrosoftRewardsBot {
 
             this.axios = new Axios(account.proxy)
             const verbose = process.env.DEBUG_REWARDS_VERBOSE === '1'
-            const formatFullErr = (label: string, e: unknown) => {
-                const base = shortErr(e)
-                if (verbose && e instanceof Error) {
-                    return `${label}:${base} :: ${e.stack?.split('\n').slice(0,4).join(' | ')}`
-                }
-                return `${label}:${base}`
-            }
 
             if (this.config.dryRun) {
                 log('main', 'DRY-RUN', `Dry run: skipping automation for ${account.email}`)
@@ -633,7 +595,7 @@ export class MicrosoftRewardsBot {
                         this.recordRiskEvent('ban_hint', 9, bd.reason)
                         void this.handleImmediateBanAlert(account.email, banned.reason)
                     }
-                    errors.push(formatFullErr('desktop', e)); return null
+                    errors.push(formatFullError('desktop', e, verbose)); return null
                 })
                 const mobilePromise = mobileInstance.Mobile(account).catch((e: unknown) => {
                     const msg = e instanceof Error ? e.message : String(e)
@@ -645,7 +607,7 @@ export class MicrosoftRewardsBot {
                         this.recordRiskEvent('ban_hint', 9, bd.reason)
                         void this.handleImmediateBanAlert(account.email, banned.reason)
                     }
-                    errors.push(formatFullErr('mobile', e)); return null
+                    errors.push(formatFullError('mobile', e, verbose)); return null
                 })
                 const [desktopResult, mobileResult] = await Promise.allSettled([desktopPromise, mobilePromise])
                 
@@ -656,7 +618,7 @@ export class MicrosoftRewardsBot {
                 } else if (desktopResult.status === 'rejected') {
                     log(false, 'TASK', `Desktop promise rejected unexpectedly: ${shortErr(desktopResult.reason)}`,'error')
                     this.recordRiskEvent('error', 6, `desktop-rejected:${shortErr(desktopResult.reason)}`)
-                    errors.push(formatFullErr('desktop-rejected', desktopResult.reason))
+                    errors.push(formatFullError('desktop-rejected', desktopResult.reason, verbose))
                 }
                 
                 // Handle mobile result
@@ -666,7 +628,7 @@ export class MicrosoftRewardsBot {
                 } else if (mobileResult.status === 'rejected') {
                     log(true, 'TASK', `Mobile promise rejected unexpectedly: ${shortErr(mobileResult.reason)}`,'error')
                     this.recordRiskEvent('error', 6, `mobile-rejected:${shortErr(mobileResult.reason)}`)
-                    errors.push(formatFullErr('mobile-rejected', mobileResult.reason))
+                    errors.push(formatFullError('mobile-rejected', mobileResult.reason, verbose))
                 }
             } else {
                 // Sequential execution with safety checks
@@ -686,7 +648,7 @@ export class MicrosoftRewardsBot {
                             this.recordRiskEvent('ban_hint', 9, bd.reason)
                             void this.handleImmediateBanAlert(account.email, banned.reason)
                         }
-                        errors.push(formatFullErr('desktop', e)); return null
+                        errors.push(formatFullError('desktop', e, verbose)); return null
                     })
                     if (desktopResult) {
                         desktopInitial = desktopResult.initialPoints
@@ -708,7 +670,7 @@ export class MicrosoftRewardsBot {
                                 this.recordRiskEvent('ban_hint', 9, bd.reason)
                                 void this.handleImmediateBanAlert(account.email, banned.reason)
                             }
-                            errors.push(formatFullErr('mobile', e)); return null
+                            errors.push(formatFullError('mobile', e, verbose)); return null
                         })
                         if (mobileResult) {
                             mobileInitial = mobileResult.initialPoints
@@ -1336,6 +1298,14 @@ function shortErr(e: unknown): string {
     if (e instanceof Error) return e.message.substring(0, 120)
     const s = String(e)
     return s.substring(0, 120)
+}
+
+function formatFullError(label: string, e: unknown, verbose: boolean): string {
+    const base = shortErr(e)
+    if (verbose && e instanceof Error && e.stack) {
+        return `${label}:${base} :: ${e.stack.split('\n').slice(0, 4).join(' | ')}`
+    }
+    return `${label}:${base}`
 }
 
 function formatDuration(ms: number): string {

@@ -18,6 +18,45 @@ export default class BrowserFunc {
         this.bot = bot
     }
 
+    /**
+     * Check if account is suspended using multiple detection methods
+     * @param page Playwright page
+     * @param iteration Current iteration number for logging
+     * @returns true if suspended, false otherwise
+     */
+    private async checkAccountSuspension(page: Page, iteration: number): Promise<boolean> {
+        // Primary check: suspension header element
+        const suspendedByHeader = await page.waitForSelector(SELECTORS.SUSPENDED_ACCOUNT, { state: 'visible', timeout: 500 })
+            .then(() => true)
+            .catch(() => false)
+        
+        if (suspendedByHeader) {
+            this.bot.log(this.bot.isMobile, 'GO-HOME', `Account suspension detected by header selector (iteration ${iteration})`, 'error')
+            return true
+        }
+        
+        // Secondary check: look for suspension text in main content area only
+        try {
+            const mainContent = (await page.locator('#contentContainer, #main, .main-content').first().textContent({ timeout: 500 }).catch(() => '')) || ''
+            const suspensionPatterns = [
+                /account\s+has\s+been\s+suspended/i,
+                /suspended\s+due\s+to\s+unusual\s+activity/i,
+                /your\s+account\s+is\s+temporarily\s+suspended/i
+            ]
+            
+            const isSuspended = suspensionPatterns.some(pattern => pattern.test(mainContent))
+            if (isSuspended) {
+                this.bot.log(this.bot.isMobile, 'GO-HOME', `Account suspension detected by content text (iteration ${iteration})`, 'error')
+                return true
+            }
+        } catch (e) {
+            // Ignore errors in text check - not critical
+            this.bot.log(this.bot.isMobile, 'GO-HOME', `Suspension text check skipped: ${e}`, 'warn')
+        }
+        
+        return false
+    }
+
 
     /**
      * Navigate the provided page to rewards homepage
@@ -46,31 +85,9 @@ export default class BrowserFunc {
 
                 } catch (error) {
                     // Activities not found yet - check if it's because account is suspended
-                    // Only check suspension if we can't find activities (reduces false positives)
-                    const suspendedByHeader = await page.waitForSelector(SELECTORS.SUSPENDED_ACCOUNT, { state: 'visible', timeout: 500 }).then(() => true).catch(() => false)
-                    
-                    if (suspendedByHeader) {
-                        this.bot.log(this.bot.isMobile, 'GO-HOME', `Account suspension detected by header selector (iteration ${iteration})`, 'error')
+                    const isSuspended = await this.checkAccountSuspension(page, iteration)
+                    if (isSuspended) {
                         throw new Error('Account has been suspended!')
-                    }
-                    
-                    // Secondary check: look for suspension text in main content area only
-                    try {
-                        const mainContent = (await page.locator('#contentContainer, #main, .main-content').first().textContent({ timeout: 500 }).catch(() => '')) || ''
-                        const suspensionPatterns = [
-                            /account\s+has\s+been\s+suspended/i,
-                            /suspended\s+due\s+to\s+unusual\s+activity/i,
-                            /your\s+account\s+is\s+temporarily\s+suspended/i
-                        ]
-                        
-                        const isSuspended = suspensionPatterns.some(pattern => pattern.test(mainContent))
-                        if (isSuspended) {
-                            this.bot.log(this.bot.isMobile, 'GO-HOME', `Account suspension detected by content text (iteration ${iteration})`, 'error')
-                            throw new Error('Account has been suspended!')
-                        }
-                    } catch (e) {
-                        // Ignore errors in text check - not critical
-                        this.bot.log(this.bot.isMobile, 'GO-HOME', `Suspension text check skipped: ${e}`, 'warn')
                     }
                     
                     // Not suspended, just activities not loaded yet - continue to next iteration
@@ -96,7 +113,7 @@ export default class BrowserFunc {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)
             this.bot.log(this.bot.isMobile, 'GO-HOME', 'An error occurred: ' + errorMessage, 'error')
-            throw new Error('Go home failed: ' + errorMessage)
+            throw error
         }
     }
 
@@ -155,7 +172,7 @@ export default class BrowserFunc {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)
             this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Error fetching dashboard data: ${errorMessage}`, 'error')
-            throw new Error('Get dashboard data failed: ' + errorMessage)
+            throw error
         }
 
     }
@@ -198,12 +215,14 @@ export default class BrowserFunc {
     private async extractDashboardScript(page: Page): Promise<string | null> {
         return await page.evaluate(() => {
             const scripts = Array.from(document.querySelectorAll('script'))
-            const targetScript = scripts.find(script => 
-                script.innerText.includes('var dashboard') ||
-                script.innerText.includes('dashboard=') ||
-                script.innerText.includes('dashboard :')
-            )
-            return targetScript?.innerText ? targetScript.innerText : null
+            const dashboardPatterns = ['var dashboard', 'dashboard=', 'dashboard :']
+            
+            const targetScript = scripts.find(script => {
+                const text = script.innerText
+                return text && dashboardPatterns.some(pattern => text.includes(pattern))
+            })
+            
+            return targetScript?.innerText || null
         })
     }
 
@@ -213,10 +232,9 @@ export default class BrowserFunc {
     private async parseDashboardFromScript(page: Page, scriptContent: string): Promise<DashboardData | null> {
         return await page.evaluate((scriptContent: string) => {
             const patterns = [
-                /var dashboard = (\{.*?\});/s,
-                /var dashboard=(\{.*?\});/s,
-                /var\s+dashboard\s*=\s*(\{.*?\});/s,
-                /dashboard\s*=\s*(\{[\s\S]*?\});/
+                /var\s+dashboard\s*=\s*(\{[\s\S]*?\});/,
+                /dashboard\s*=\s*(\{[\s\S]*?\});/,
+                /var\s+dashboard\s*:\s*(\{[\s\S]*?\})\s*[,;]/
             ]
 
             for (const regex of patterns) {
@@ -293,7 +311,7 @@ export default class BrowserFunc {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)
             this.bot.log(this.bot.isMobile, 'GET-BROWSER-EARNABLE-POINTS', 'An error occurred: ' + errorMessage, 'error')
-            throw new Error('Get browser earnable points failed: ' + errorMessage)
+            throw error
         }
     }
 
@@ -358,7 +376,7 @@ export default class BrowserFunc {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)
             this.bot.log(this.bot.isMobile, 'GET-APP-EARNABLE-POINTS', 'An error occurred: ' + errorMessage, 'error')
-            throw new Error('Get app earnable points failed: ' + errorMessage)
+            throw error
         }
     }
 
@@ -374,7 +392,7 @@ export default class BrowserFunc {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)
             this.bot.log(this.bot.isMobile, 'GET-CURRENT-POINTS', 'An error occurred: ' + errorMessage, 'error')
-            throw new Error('Get current points failed: ' + errorMessage)
+            throw error
         }
     }
 
@@ -447,7 +465,7 @@ export default class BrowserFunc {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)
             this.bot.log(this.bot.isMobile, 'GET-QUIZ-DATA', 'An error occurred: ' + errorMessage, 'error')
-            throw new Error('Get quiz data failed: ' + errorMessage)
+            throw error
         }
 
     }
@@ -515,7 +533,7 @@ export default class BrowserFunc {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)
             this.bot.log(this.bot.isMobile, 'CLOSE-BROWSER', 'An error occurred: ' + errorMessage, 'error')
-            throw new Error('Close browser failed: ' + errorMessage)
+            throw error
         }
     }
 }

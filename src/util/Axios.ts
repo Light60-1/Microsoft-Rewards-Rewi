@@ -22,7 +22,7 @@ class AxiosClient {
 
     private getAgentForProxy(proxyConfig: AccountProxy): HttpProxyAgent<string> | HttpsProxyAgent<string> | SocksProxyAgent {
         const { proxyUrl, protocol } = this.buildProxyUrl(proxyConfig)
-        const normalized = protocol.replace(/:$/, '')
+        const normalized = protocol.replace(/:$/, '').toLowerCase()
 
         switch (normalized) {
             case 'http':
@@ -80,7 +80,7 @@ class AxiosClient {
         return { proxyUrl: parsedUrl.toString(), protocol: parsedUrl.protocol }
     }
 
-    // Generic method to make any Axios request
+    // Generic method to make any Axios request with retry logic
     public async request(config: AxiosRequestConfig, bypassProxy = false): Promise<AxiosResponse> {
         if (bypassProxy) {
             const bypassInstance = axios.create()
@@ -95,25 +95,16 @@ class AxiosClient {
                 return await this.instance.request(config)
             } catch (err: unknown) {
                 lastError = err
-                const axiosErr = err as AxiosError | undefined
-
-                // Detect HTTP proxy auth failures (status 407) and retry without proxy
-                if (axiosErr && axiosErr.response && axiosErr.response.status === 407) {
-                    if (attempt < maxAttempts) {
-                        await this.sleep(1000 * attempt) // Exponential backoff
-                    }
+                
+                // Handle HTTP 407 Proxy Authentication Required
+                if (this.isProxyAuthError(err)) {
+                    // Retry without proxy on auth failure
                     const bypassInstance = axios.create()
                     return bypassInstance.request(config)
                 }
 
-                // If proxied request fails with common proxy/network errors, retry with backoff
-                const e = err as { code?: string; cause?: { code?: string }; message?: string } | undefined
-                const code = e?.code || e?.cause?.code
-                const isNetErr = code === 'ECONNREFUSED' || code === 'ETIMEDOUT' || code === 'ECONNRESET' || code === 'ENOTFOUND'
-                const msg = String(e?.message || '')
-                const looksLikeProxyIssue = /proxy|tunnel|socks|agent/i.test(msg)
-                
-                if (isNetErr || looksLikeProxyIssue) {
+                // Handle retryable network errors
+                if (this.isRetryableError(err)) {
                     if (attempt < maxAttempts) {
                         // Exponential backoff: 1s, 2s, 4s, etc.
                         const delayMs = 1000 * Math.pow(2, attempt - 1)
@@ -131,6 +122,34 @@ class AxiosClient {
         }
         
         throw lastError
+    }
+    
+    /**
+     * Check if error is HTTP 407 Proxy Authentication Required
+     */
+    private isProxyAuthError(err: unknown): boolean {
+        const axiosErr = err as AxiosError | undefined
+        return axiosErr?.response?.status === 407
+    }
+    
+    /**
+     * Check if error is retryable (network/proxy issues)
+     */
+    private isRetryableError(err: unknown): boolean {
+        const e = err as { code?: string; cause?: { code?: string }; message?: string } | undefined
+        if (!e) return false
+        
+        const code = e.code || e.cause?.code
+        const isNetworkError = code === 'ECONNREFUSED' || 
+                               code === 'ETIMEDOUT' || 
+                               code === 'ECONNRESET' || 
+                               code === 'ENOTFOUND' ||
+                               code === 'EPIPE'
+        
+        const msg = String(e.message || '')
+        const isProxyIssue = /proxy|tunnel|socks|agent/i.test(msg)
+        
+        return isNetworkError || isProxyIssue
     }
     
     private sleep(ms: number): Promise<void> {

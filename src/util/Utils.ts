@@ -3,13 +3,15 @@ import ms from 'ms'
 export class Util {
 
     async wait(ms: number): Promise<void> {
-        // Safety check: prevent extremely long or negative waits
-        const MAX_WAIT_MS = 3600000 // 1 hour max
-        const safeMs = Math.min(Math.max(0, ms), MAX_WAIT_MS)
+        const MAX_WAIT_MS = 3600000 // 1 hour max to prevent infinite waits
+        const MIN_WAIT_MS = 0
         
-        if (ms !== safeMs) {
-            console.warn(`[Utils] wait() clamped from ${ms}ms to ${safeMs}ms (max: ${MAX_WAIT_MS}ms)`)
+        // Validate and clamp input
+        if (!Number.isFinite(ms)) {
+            throw new Error(`Invalid wait time: ${ms}. Must be a finite number.`)
         }
+        
+        const safeMs = Math.min(Math.max(MIN_WAIT_MS, ms), MAX_WAIT_MS)
         
         return new Promise<void>((resolve) => {
             setTimeout(resolve, safeMs)
@@ -17,6 +19,14 @@ export class Util {
     }
 
     async waitRandom(minMs: number, maxMs: number): Promise<void> {
+        if (!Number.isFinite(minMs) || !Number.isFinite(maxMs)) {
+            throw new Error(`Invalid wait range: min=${minMs}, max=${maxMs}. Both must be finite numbers.`)
+        }
+        
+        if (minMs > maxMs) {
+            throw new Error(`Invalid wait range: min (${minMs}) cannot be greater than max (${maxMs}).`)
+        }
+        
         const delta = this.randomNumber(minMs, maxMs)
         return this.wait(delta)
     }
@@ -37,13 +47,25 @@ export class Util {
     }
 
     randomNumber(min: number, max: number): number {
+        if (!Number.isFinite(min) || !Number.isFinite(max)) {
+            throw new Error(`Invalid range: min=${min}, max=${max}. Both must be finite numbers.`)
+        }
+        
+        if (min > max) {
+            throw new Error(`Invalid range: min (${min}) cannot be greater than max (${max}).`)
+        }
+        
         return Math.floor(Math.random() * (max - min + 1)) + min
     }
 
     chunkArray<T>(arr: T[], numChunks: number): T[][] {
         // Validate input to prevent division by zero or invalid chunks
-        if (numChunks <= 0) {
-            throw new Error(`Invalid numChunks: ${numChunks}. Must be a positive integer.`)
+        if (!Number.isFinite(numChunks) || numChunks <= 0) {
+            throw new Error(`Invalid numChunks: ${numChunks}. Must be a positive finite number.`)
+        }
+        
+        if (!Array.isArray(arr)) {
+            throw new Error('Invalid input: arr must be an array.')
         }
         
         if (arr.length === 0) {
@@ -63,8 +85,12 @@ export class Util {
     }
 
     stringToMs(input: string | number): number {
+        if (typeof input !== 'string' && typeof input !== 'number') {
+            throw new Error('Invalid input type. Expected string or number.')
+        }
+        
         const milisec = ms(input.toString())
-        if (!milisec) {
+        if (!milisec || !Number.isFinite(milisec)) {
             throw new Error('The string provided cannot be parsed to a valid time! Use a format like "1 min", "1m" or "1 minutes"')
         }
         return milisec

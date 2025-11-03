@@ -16,9 +16,11 @@ type WebhookBuffer = {
 const webhookBuffers = new Map<string, WebhookBuffer>()
 
 // Periodic cleanup of old/idle webhook buffers to prevent memory leaks
-setInterval(() => {
+const BUFFER_MAX_AGE_MS = 3600000 // 1 hour
+const BUFFER_CLEANUP_INTERVAL_MS = 600000 // 10 minutes
+
+const cleanupInterval = setInterval(() => {
     const now = Date.now()
-    const BUFFER_MAX_AGE_MS = 3600000 // 1 hour
     
     for (const [url, buf] of webhookBuffers.entries()) {
         if (!buf.sending && buf.lines.length === 0) {
@@ -28,7 +30,12 @@ setInterval(() => {
             }
         }
     }
-}, 600000) // Check every 10 minutes
+}, BUFFER_CLEANUP_INTERVAL_MS)
+
+// Allow cleanup to be stopped (prevents process from hanging)
+if (cleanupInterval.unref) {
+    cleanupInterval.unref()
+}
 
 function getBuffer(url: string): WebhookBuffer {
     let buf = webhookBuffers.get(url)
@@ -87,28 +94,25 @@ async function sendBatch(url: string, buf: WebhookBuffer) {
 
 function determineColorFromContent(content: string): number {
     const lower = content.toLowerCase()
-    // Security/Ban alerts - Red
+    
+    // Priority order: most critical first
     if (lower.includes('[banned]') || lower.includes('[security]') || lower.includes('suspended') || lower.includes('compromised')) {
         return DISCORD.COLOR_RED
     }
-    // Errors - Dark Red
     if (lower.includes('[error]') || lower.includes('✗')) {
         return DISCORD.COLOR_CRIMSON
     }
-    // Warnings - Orange/Yellow
     if (lower.includes('[warn]') || lower.includes('⚠')) {
         return DISCORD.COLOR_ORANGE
     }
-    // Success - Green
     if (lower.includes('[ok]') || lower.includes('✓') || lower.includes('complet')) {
         return DISCORD.COLOR_GREEN
     }
-    // Info/Main - Blue
     if (lower.includes('[main]')) {
         return DISCORD.COLOR_BLUE
     }
-    // Default - Gray
-    return 0x95A5A6 // Gray
+    
+    return 0x95A5A6
 }
 
 function enqueueWebhookLog(url: string, line: string) {
@@ -246,7 +250,6 @@ export function log(isMobile: boolean | 'main', title: string, message: string, 
 
     // Return an Error when logging an error so callers can `throw log(...)`
     if (type === 'error') {
-        // CommunityReporter disabled per project policy
         return new Error(cleanStr)
     }
 }

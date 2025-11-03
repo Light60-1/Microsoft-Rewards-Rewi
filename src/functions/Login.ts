@@ -27,20 +27,16 @@ const LOGIN_TARGET = { host: 'rewards.bing.com', path: '/' }
 
 const DEFAULT_TIMEOUTS = {
   loginMaxMs: (() => {
-    const val = Number(process.env.LOGIN_MAX_WAIT_MS || 300000)
-    if (isNaN(val) || val < 10000 || val > 600000) {
-      console.warn(`[Login] Invalid LOGIN_MAX_WAIT_MS: ${process.env.LOGIN_MAX_WAIT_MS}. Using default 300000ms`)
-      return 300000
-    }
-    return val
+    const val = Number(process.env.LOGIN_MAX_WAIT_MS || 180000)
+    return (isNaN(val) || val < 10000 || val > 600000) ? 180000 : val
   })(),
-  short: 200,        // Reduced from 500ms
-  medium: 800,       // Reduced from 1500ms
-  long: 1500,        // Reduced from 3000ms
-  oauthMaxMs: 360000,
+  short: 200,
+  medium: 800,
+  long: 1500,
+  oauthMaxMs: 180000,
   portalWaitMs: 15000,
-  elementCheck: 100, // Fast element detection
-  fastPoll: 500      // Fast polling interval
+  elementCheck: 100,
+  fastPoll: 500
 }
 
 // Security pattern bundle
@@ -77,12 +73,14 @@ export class Login {
   private lastTotpSubmit = 0
   private totpAttempts = 0
 
-  constructor(bot: MicrosoftRewardsBot) { this.bot = bot }
+  constructor(bot: MicrosoftRewardsBot) { 
+    this.bot = bot
+    this.cleanupCompromisedInterval()
+  }
 
   // --------------- Public API ---------------
   async login(page: Page, email: string, password: string, totpSecret?: string) {
     try {
-      // Clear any existing intervals from previous runs to prevent memory leaks
       this.cleanupCompromisedInterval()
       
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Starting login process')
@@ -92,22 +90,19 @@ export class Login {
 
       const resumed = await this.tryReuseExistingSession(page)
       if (resumed) {
-        // OPTIMIZATION: Skip Bing verification if already on rewards page
         const needsVerification = !page.url().includes('rewards.bing.com')
         if (needsVerification) {
           await this.verifyBingContext(page)
         }
         await saveSessionData(this.bot.config.sessionPath, page.context(), email, this.bot.isMobile)
-        this.bot.log(this.bot.isMobile, 'LOGIN', 'Session restored (fast path)')
+        this.bot.log(this.bot.isMobile, 'LOGIN', 'Session restored')
         this.currentTotpSecret = undefined
         return
       }
 
-      // Full login flow needed
       await page.goto('https://rewards.bing.com/signin', { waitUntil: 'domcontentloaded' })
       await this.disableFido(page)
       
-      // OPTIMIZATION: Parallel checks instead of sequential
       const [, , portalCheck] = await Promise.allSettled([
         this.bot.browser.utils.reloadBadPage(page),
         this.tryAutoTotp(page, 'initial landing'),
@@ -123,7 +118,6 @@ export class Login {
         this.bot.log(this.bot.isMobile, 'LOGIN', 'Already authenticated')
       }
 
-      // OPTIMIZATION: Only verify Bing if needed
       const needsBingVerification = !page.url().includes('rewards.bing.com')
       if (needsBingVerification) {
         await this.verifyBingContext(page)
@@ -141,12 +135,10 @@ export class Login {
   }
 
   async getMobileAccessToken(page: Page, email: string, totpSecret?: string) {
-    // Store TOTP secret for this mobile auth session
     this.currentTotpSecret = (totpSecret && totpSecret.trim()) || undefined
     this.lastTotpSubmit = 0
     this.totpAttempts = 0
     
-    // Reuse same FIDO disabling
     await this.disableFido(page)
     const url = new URL(this.authBaseUrl)
     url.searchParams.set('response_type', 'code')
@@ -167,39 +159,34 @@ export class Login {
     while (Date.now() - start < DEFAULT_TIMEOUTS.oauthMaxMs) {
       checkCount++
       
-      // OPTIMIZATION: Check URL first (fastest check)
       const u = new URL(page.url())
       if (u.hostname === 'login.live.com' && u.pathname === '/oauth20_desktop.srf') {
         code = u.searchParams.get('code') || ''
         if (code) break
       }
       
-      // OPTIMIZATION: Handle prompts and TOTP in parallel when possible
-      if (checkCount % 3 === 0) { // Every 3rd iteration
+      if (checkCount % 3 === 0) {
         await Promise.allSettled([
           this.handlePasskeyPrompts(page, 'oauth'),
           this.tryAutoTotp(page, 'mobile-oauth')
         ])
       }
       
-      // Progress log every 30 seconds
       const now = Date.now()
       if (now - lastLogTime > 30000) {
         const elapsed = Math.round((now - start) / 1000)
-        this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Still waiting for OAuth code... (${elapsed}s elapsed, URL: ${u.hostname}${u.pathname})`, 'warn')
+        this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Waiting for OAuth code... (${elapsed}s, URL: ${u.hostname}${u.pathname})`, 'warn')
         lastLogTime = now
       }
       
-      // OPTIMIZATION: Adaptive polling - faster initially, slower after
       const pollDelay = Date.now() - start < 30000 ? 800 : 1500
       await this.bot.utils.wait(pollDelay)
     }
     if (!code) {
       const elapsed = Math.round((Date.now() - start) / 1000)
       const currentUrl = page.url()
-      this.bot.log(this.bot.isMobile, 'LOGIN-APP', `OAuth code not received after ${elapsed}s (timeout: ${DEFAULT_TIMEOUTS.oauthMaxMs / 1000}s). Current URL: ${currentUrl}`, 'error')
-      
-  throw new Error(`OAuth code not received within ${DEFAULT_TIMEOUTS.oauthMaxMs / 1000}s - mobile token acquisition failed. Check recent logs for details.`)
+      this.bot.log(this.bot.isMobile, 'LOGIN-APP', `OAuth code not received after ${elapsed}s. Current URL: ${currentUrl}`, 'error')
+      throw new Error(`OAuth code not received within ${DEFAULT_TIMEOUTS.oauthMaxMs / 1000}s`)
     }
     
     this.bot.log(this.bot.isMobile, 'LOGIN-APP', `OAuth code received in ${Math.round((Date.now() - start) / 1000)}s`)
@@ -210,22 +197,20 @@ export class Login {
     form.append('code', code)
     form.append('redirect_uri', this.redirectUrl)
 
-    // Token exchange with retry logic for transient errors (502, 503, network issues)
+    const isRetryable = (e: unknown): boolean => {
+      if (!e || typeof e !== 'object') return false
+      const err = e as { response?: { status?: number }; code?: string }
+      const status = err.response?.status
+      return status === 502 || status === 503 || status === 504 || 
+             err.code === 'ECONNRESET' || 
+             err.code === 'ETIMEDOUT'
+    }
+
     const req: AxiosRequestConfig = { 
       url: this.tokenUrl, 
       method: 'POST', 
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, 
       data: form.toString() 
-    }
-    
-    const isRetryable = (e: unknown): boolean => {
-      if (!e || typeof e !== 'object') return false
-      const err = e as { response?: { status?: number }; code?: string }
-      const status = err.response?.status
-      // Retry on 502, 503, 504 (gateway errors) and network errors
-      return status === 502 || status === 503 || status === 504 || 
-             err.code === 'ECONNRESET' || 
-             err.code === 'ETIMEDOUT'
     }
 
     const retry = new Retry(this.bot.config.retryPolicy)
@@ -236,11 +221,9 @@ export class Login {
       )
       const data: OAuth = resp.data
       this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Authorized in ${Math.round((Date.now()-start)/1000)}s`)
-      // Clear TOTP secret after successful mobile auth
       this.currentTotpSecret = undefined
       return data.access_token
     } catch (error) {
-      // Clear TOTP secret on error too
       this.currentTotpSecret = undefined
       const err = error as { response?: { status?: number }; message?: string }
       const statusCode = err.response?.status

@@ -3,6 +3,7 @@ import path from 'path'
 import chalk from 'chalk'
 import { Config } from '../interface/Config'
 import { Account } from '../interface/Account'
+import { log } from './Logger'
 
 interface ValidationError {
   severity: 'error' | 'warning'
@@ -22,9 +23,7 @@ export class StartupValidator {
    * Displays errors and warnings but lets execution continue.
    */
   async validate(config: Config, accounts: Account[]): Promise<boolean> {
-    console.log(chalk.cyan('\n═══════════════════════════════════════════════════════════════'))
-    console.log(chalk.cyan('  🔍 STARTUP VALIDATION - Checking Configuration'))
-    console.log(chalk.cyan('═══════════════════════════════════════════════════════════════\n'))
+    log('main', 'STARTUP', 'Running configuration validation...')
 
     // Run all validation checks
     this.validateAccounts(accounts)
@@ -621,62 +620,45 @@ export class StartupValidator {
   }
 
   private async displayResults(): Promise<void> {
-    // Display errors
     if (this.errors.length > 0) {
-      console.log(chalk.red('\n❌ VALIDATION ERRORS FOUND:\n'))
+      log('main', 'VALIDATION', chalk.red('❌ VALIDATION ERRORS FOUND:'), 'error')
       this.errors.forEach((err, index) => {
-        console.log(chalk.red(`  ${index + 1}. [${err.category.toUpperCase()}] ${err.message}`))
+        log('main', 'VALIDATION', chalk.red(`${index + 1}. [${err.category.toUpperCase()}] ${err.message}`), 'error')
         if (err.fix) {
-          console.log(chalk.yellow(`     💡 Fix: ${err.fix}`))
+          log('main', 'VALIDATION', chalk.yellow(`   Fix: ${err.fix}`), 'warn')
         }
         if (err.docsLink) {
-          console.log(chalk.cyan(`     📖 Documentation: ${err.docsLink}`))
+          log('main', 'VALIDATION', `   Docs: ${err.docsLink}`)
         }
-        console.log('')
       })
     }
 
-    // Display warnings
     if (this.warnings.length > 0) {
-      console.log(chalk.yellow('\n⚠️  WARNINGS:\n'))
+      log('main', 'VALIDATION', chalk.yellow('⚠️ WARNINGS:'), 'warn')
       this.warnings.forEach((warn, index) => {
-        console.log(chalk.yellow(`  ${index + 1}. [${warn.category.toUpperCase()}] ${warn.message}`))
+        log('main', 'VALIDATION', chalk.yellow(`${index + 1}. [${warn.category.toUpperCase()}] ${warn.message}`), 'warn')
         if (warn.fix) {
-          console.log(chalk.gray(`     💡 Suggestion: ${warn.fix}`))
+          log('main', 'VALIDATION', `   Suggestion: ${warn.fix}`)
         }
         if (warn.docsLink) {
-          console.log(chalk.cyan(`     📖 Documentation: ${warn.docsLink}`))
+          log('main', 'VALIDATION', `   Docs: ${warn.docsLink}`)
         }
-        console.log('')
       })
     }
 
-    // Summary
-    console.log(chalk.cyan('═══════════════════════════════════════════════════════════════'))
-    
     if (this.errors.length === 0 && this.warnings.length === 0) {
-      console.log(chalk.green('  ✅ All validation checks passed! Configuration looks good.'))
-      console.log(chalk.gray('  → Starting bot execution...'))
+      log('main', 'VALIDATION', chalk.green('✅ All validation checks passed!'))
     } else {
-      console.log(chalk.white(`  Found: ${chalk.red(`${this.errors.length} error(s)`)} | ${chalk.yellow(`${this.warnings.length} warning(s)`)}`))
+      log('main', 'VALIDATION', `Found: ${this.errors.length} error(s) | ${this.warnings.length} warning(s)`)
       
       if (this.errors.length > 0) {
-        console.log(chalk.red('\n  ⚠️  CRITICAL ERRORS DETECTED'))
-        console.log(chalk.white('  → Bot will continue, but these issues may cause failures'))
-        console.log(chalk.white('  → Review errors above and fix them for stable operation'))
-        console.log(chalk.gray('  → If you believe these are false positives, you can ignore them'))
+        log('main', 'VALIDATION', 'Bot will continue, but issues may cause failures', 'warn')
       } else {
-        console.log(chalk.yellow('\n  ⚠️  Warnings detected - review recommended'))
-        console.log(chalk.gray('  → Bot will continue normally'))
+        log('main', 'VALIDATION', 'Warnings detected - review recommended', 'warn')
       }
       
-      console.log(chalk.white('\n  📖 Full documentation: docs/index.md'))
-      console.log(chalk.gray('  → Proceeding with execution in 5 seconds...'))
-      
-      // Give user time to read (5 seconds for errors, 5 seconds for warnings)
-      await new Promise(resolve => setTimeout(resolve, 5000))
+      log('main', 'VALIDATION', 'Full documentation: docs/index.md')
+      await new Promise(resolve => setTimeout(resolve, 3000))
     }
-    
-    console.log(chalk.cyan('═══════════════════════════════════════════════════════════════\n'))
   }
 }
