@@ -135,9 +135,9 @@
         "redactEmails": true
     },
 
-    // Dashboard (NEW)
+    // Dashboard
     "dashboard": {
-        "enabled": false, // Auto-start dashboard with bot (default: false)
+        "enabled": true, // Auto-start dashboard with bot (default: false)
         "port": 3000, // Dashboard port (default: 3000)
         "host": "127.0.0.1" // Bind address (default: 127.0.0.1, localhost only for security)
     },
