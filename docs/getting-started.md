@@ -1,6 +1,8 @@
-# 🚀 Getting Started
-
 <div align="center">
+
+<img src="../assets/logo.png" alt="Microsoft Rewards Script Logo" width="120"/>
+
+# 🚀 Getting Started
 
 **🎯 From zero to earning Microsoft Rewards points in minutes**  
 *Complete setup guide for beginners*
@@ -123,7 +125,7 @@ Once running, explore these guides:
 **Login issues?** → [Accounts & 2FA Setup](./accounts.md)  
 **Want Docker?** → [Container Guide](./docker.md)  
 
-**Found a bug?** [Report it here](https://github.com/TheNetsky/Microsoft-Rewards-Script/issues)  
+**Found a bug?** [Report it here](https://github.com/Light60-1/Microsoft-Rewards-Bot/issues)  
 **Need support?** [Join our Discord](https://discord.gg/KRBFxxsU)
 
 ---

@@ -414,73 +414,47 @@ export class MicrosoftRewardsBot {
         if (this.config.clusters > 1 && !cluster.isPrimary) return
         
         const banner = `
- ╔═══════════════════════════════════════════════════════════════════════╗
- ║                                                                       ║
- ║  ███╗   ███╗███████╗    ██████╗ ███████╗██╗    ██╗██╗                 ║
- ║  ████╗ ████║██╔════╝    ██╔══██╗██╔════╝██║    ██║██║                 ║
- ║  ██╔████╔██║███████╗    ██████╔╝█████╗  ██║ █╗ ██║██║                 ║
- ║  ██║╚██╔╝██║╚════██║    ██╔══██╗██╔══╝  ██║███╗██║██║                 ║
- ║  ██║ ╚═╝ ██║███████║    ██║  ██║███████╗╚███╔███╔╝██║                 ║
- ║  ╚═╝     ╚═╝╚══════╝    ╚═╝  ╚═╝╚══════╝ ╚══╝╚══╝ ╚═╝                 ║
- ║                                                                       ║
- ║          TypeScript • Playwright • Intelligent Automation             ║
- ║                                                                       ║
- ╚═══════════════════════════════════════════════════════════════════════╝
+ ╔════════════════════════════════════════════════════════╗
+ ║                                                        ║
+ ║     Microsoft Rewards Bot v${this.getVersion().padEnd(5)}                      ║
+ ║     Automated Points Collection System                 ║
+ ║                                                        ║
+ ╚════════════════════════════════════════════════════════╝
 `
 
         const buyModeBanner = `
- ╔══════════════════════════════════════════════════════╗
- ║                                                      ║
- ║  ███╗   ███╗███████╗    ██████╗ ██╗   ██╗██╗   ██╗   ║
- ║  ████╗ ████║██╔════╝    ██╔══██╗██║   ██║╚██╗ ██╔╝   ║
- ║  ██╔████╔██║███████╗    ██████╔╝██║   ██║ ╚████╔╝    ║
- ║  ██║╚██╔╝██║╚════██║    ██╔══██╗██║   ██║  ╚██╔╝     ║
- ║  ██║ ╚═╝ ██║███████║    ██████╔╝╚██████╔╝   ██║      ║
- ║  ╚═╝     ╚═╝╚══════╝    ╚═════╝  ╚═════╝    ╚═╝      ║
- ║                                                      ║
- ║      Manual Purchase Mode • Passive Monitoring       ║
- ║                                                      ║
- ╚══════════════════════════════════════════════════════╝
+ ╔════════════════════════════════════════════════════════╗
+ ║                                                        ║
+ ║     Microsoft Rewards Bot - Manual Mode                ║
+ ║     Interactive Browsing Session                       ║
+ ║                                                        ║
+ ╚════════════════════════════════════════════════════════╝
 `
         
-        // Read package version and build banner info
-        const pkgPath = path.join(__dirname, '../', 'package.json')
-        let version = 'unknown'
-        try {
-            if (fs.existsSync(pkgPath)) {
-                const raw = fs.readFileSync(pkgPath, 'utf-8')
-                const pkg = JSON.parse(raw)
-                version = pkg.version || version
-            }
-        } catch { 
-            // Ignore version read errors
-        }
-        
-        // Display appropriate banner based on mode
+        const version = this.getVersion()
         const displayBanner = this.buyMode.enabled ? buyModeBanner : banner
         console.log(displayBanner)
-        console.log('='.repeat(80))
+        console.log('─'.repeat(60))
             
             if (this.buyMode.enabled) {
-                console.log(`  Version: ${version} | Process: ${process.pid} | Buy Mode: Active`)
-                console.log(`  Target: ${this.buyMode.email || 'First account'} | Documentation: buy-mode.md`)
+                console.log(`  Version ${version} | PID ${process.pid} | Manual Session`)
+                console.log(`  Target: ${this.buyMode.email || 'First account'}`)
             } else {
-                console.log(`  Version: ${version} | Process: ${process.pid} | Clusters: ${this.config.clusters}`)
-                // Replace visibility/parallel with concise enabled feature status
+                console.log(`  Version ${version} | PID ${process.pid} | Workers: ${this.config.clusters}`)
+                
                 const upd = this.config.update || {}
                 const updTargets: string[] = []
                 if (upd.git !== false) updTargets.push('Git')
                 if (upd.docker) updTargets.push('Docker')
                 if (updTargets.length > 0) {
-                    console.log(`  Update: ${updTargets.join(', ')}`)
+                    console.log(`  Auto-Update: ${updTargets.join(', ')}`)
                 }
 
                 const sched = this.config.schedule || {}
                 const schedEnabled = !!sched.enabled
                 if (!schedEnabled) {
-                    console.log('  Schedule: OFF')
+                    console.log('  Scheduler: Disabled')
                 } else {
-                    // Determine active format + time string to display
                     const tz = sched.timeZone || 'UTC'
                     let formatName = ''
                     let timeShown = ''
@@ -490,22 +464,33 @@ export class MicrosoftRewardsBot {
                     const time24Val = typeof srec['time24'] === 'string' ? String(srec['time24']) : undefined
 
                     if (useAmPmVal === true) {
-                        formatName = 'AM/PM'
+                        formatName = '12h'
                         timeShown = time12Val || sched.time || '9:00 AM'
                     } else if (useAmPmVal === false) {
                         formatName = '24h'
                         timeShown = time24Val || sched.time || '09:00'
                     } else {
-                        // Back-compat: infer from provided fields if possible
                         if (time24Val && time24Val.trim()) { formatName = '24h'; timeShown = time24Val }
-                        else if (time12Val && time12Val.trim()) { formatName = 'AM/PM'; timeShown = time12Val }
-                        else { formatName = 'legacy'; timeShown = sched.time || '09:00' }
+                        else if (time12Val && time12Val.trim()) { formatName = '12h'; timeShown = time12Val }
+                        else { formatName = 'auto'; timeShown = sched.time || '09:00' }
                     }
-                    console.log(`  Schedule: ON — ${formatName} • ${timeShown} • TZ=${tz}`)
+                    console.log(`  Scheduler: ${timeShown} (${formatName}, ${tz})`)
                 }
             }
-            console.log('='.repeat(80) + '\n')
-    }    
+            console.log('─'.repeat(60) + '\n')
+    }
+
+    private getVersion(): string {
+        try {
+            const pkgPath = path.join(__dirname, '../', 'package.json')
+            if (fs.existsSync(pkgPath)) {
+                const raw = fs.readFileSync(pkgPath, 'utf-8')
+                const pkg = JSON.parse(raw)
+                return pkg.version || '2.51.0'
+            }
+        } catch { /* ignore */ }
+        return '2.51.0'
+    }
     
     // Return summaries (used when clusters==1)
     public getSummaries() {
@@ -895,10 +880,10 @@ export class MicrosoftRewardsBot {
         }
         // If any account is flagged compromised, do NOT exit; keep the process alive so the browser stays open
         if (this.compromisedModeActive || this.globalStandby.active) {
-            log('main','SECURITY','Compromised or banned detected. Global standby engaged: we will NOT proceed to other accounts until resolved. Keeping process alive. Press CTRL+C to exit when done. Security check by @Light','warn','yellow')
+            log('main','SECURITY','Security alert active. Process kept alive for manual review. Press CTRL+C to exit when done.','warn','yellow')
             // Periodic heartbeat with cleanup on exit
             const standbyInterval = setInterval(() => {
-                log('main','SECURITY','Still in standby: session(s) held open for manual recovery / review...','warn','yellow')
+                log('main','SECURITY','Standby mode active: sessions kept open for review...','warn','yellow')
             }, 5 * 60 * 1000)
             
             // Cleanup on process exit
@@ -993,13 +978,13 @@ export class MicrosoftRewardsBot {
         if (this.compromisedModeActive) {
             // User wants the page to remain open for manual recovery. Do not proceed to tasks.
             const reason = this.compromisedReason || 'security-issue'
-            log(this.isMobile, 'SECURITY', `Account flagged as compromised (${reason}). Leaving the browser open and skipping all activities for ${account.email}. Security check by @Light`, 'warn', 'yellow')
+            log(this.isMobile, 'SECURITY', `Account security check failed (${reason}). Browser kept open for manual review: ${account.email}`, 'warn', 'yellow')
             try {
                 const { ConclusionWebhook } = await import('./util/ConclusionWebhook')
                 await ConclusionWebhook(
                     this.config,
-                    '🔐 Security Alert (Post-Login)',
-                    `**Account:** ${account.email}\n**Reason:** ${reason}\n**Action:** Leaving browser open; skipping tasks\n\n_Security check by @Light_`,
+                    '🔐 Security Check',
+                    `**Account:** ${account.email}\n**Status:** ${reason}\n**Action:** Browser kept open, activities paused`,
                     undefined,
                     0xFFAA00
                 )
@@ -1096,13 +1081,13 @@ export class MicrosoftRewardsBot {
         await this.login.login(this.homePage, account.email, account.password, account.totp)
         if (this.compromisedModeActive) {
             const reason = this.compromisedReason || 'security-issue'
-            log(this.isMobile, 'SECURITY', `Account flagged as compromised (${reason}). Leaving mobile browser open and skipping mobile activities for ${account.email}. Security check by @Light`, 'warn', 'yellow')
+            log(this.isMobile, 'SECURITY', `Mobile security check failed (${reason}). Browser kept open for manual review: ${account.email}`, 'warn', 'yellow')
             try {
                 const { ConclusionWebhook } = await import('./util/ConclusionWebhook')
                 await ConclusionWebhook(
                     this.config,
-                    '🔐 Security Alert (Mobile)',
-                    `**Account:** ${account.email}\n**Reason:** ${reason}\n**Action:** Leaving mobile browser open; skipping tasks\n\n_Security check by @Light_`,
+                    '🔐 Security Check (Mobile)',
+                    `**Account:** ${account.email}\n**Status:** ${reason}\n**Action:** Browser kept open, mobile activities paused`,
                     undefined,
                     0xFFAA00
                 )
@@ -1313,14 +1298,14 @@ export class MicrosoftRewardsBot {
         const globalStatsValue = globalLines.join('\n')
 
         const fields: { name: string; value: string; inline?: boolean }[] = [
-            { name: '📊 Run Totals', value: globalStatsValue, inline: false }
+            { name: '📊 Summary', value: globalStatsValue, inline: false }
         ]
 
         if (accountChunks.length === 0) {
-            fields.push({ name: '🧾 Account Overview', value: '_No account results recorded_', inline: false })
+            fields.push({ name: '📋 Accounts', value: '_No results recorded_', inline: false })
         } else {
             accountChunks.forEach((chunk, index) => {
-                const name = accountChunks.length === 1 ? '🧾 Account Overview' : `🧾 Account Overview (part ${index + 1})`
+                const name = accountChunks.length === 1 ? '📋 Accounts' : `📋 Accounts (${index + 1}/${accountChunks.length})`
                 fields.push({ name, value: ['```', ...chunk, '```'].join('\n'), inline: false })
             })
         }
@@ -1329,8 +1314,8 @@ export class MicrosoftRewardsBot {
         if (conclusionWebhookEnabled || ntfyEnabled || webhookEnabled) {
             await ConclusionWebhook(
                 cfg,
-                '🎯 MS Rewi - Daily Summary',
-                `**v${version}** • Run ${this.runId}`,
+                '✅ Daily Run Complete',
+                `**v${version}** • ${this.runId}`,
                 fields,
                 accountsWithErrors > 0 ? DISCORD.COLOR_ORANGE : DISCORD.COLOR_GREEN
             )
@@ -1427,7 +1412,7 @@ export class MicrosoftRewardsBot {
                 const { ConclusionWebhook } = await import('./util/ConclusionWebhook')
                 await ConclusionWebhook(
                     this.config,
-                    '📈 Analytics Snapshot',
+                    '📈 Performance Report',
                     ['```markdown', markdown, '```'].join('\n'),
                     undefined,
                     DISCORD.COLOR_BLUE
@@ -1474,13 +1459,13 @@ export class MicrosoftRewardsBot {
             const { ConclusionWebhook } = await import('./util/ConclusionWebhook')
             await ConclusionWebhook(
                 this.config,
-                '🚨 Global Security Standby Engaged',
-                `@everyone\n\n**Account:** ${email}\n**Reason:** ${reason}\n**Action:** Pausing all further accounts. We will not proceed until this is resolved.\n\n_Security check by @Light_`,
+                '🚨 Critical Security Alert',
+                `@everyone\n\n**Account:** ${email}\n**Issue:** ${reason}\n**Status:** All accounts paused pending review`,
                 undefined,
                 DISCORD.COLOR_RED
             )
         } catch (e) {
-            log('main','ALERT',`Failed to send standby alert: ${e instanceof Error ? e.message : e}`,'warn')
+            log('main','ALERT',`Failed to send alert: ${e instanceof Error ? e.message : e}`,'warn')
         }
     }
 }

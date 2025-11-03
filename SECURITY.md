@@ -352,8 +352,8 @@ Security contributors will be credited in the changelog (with permission).— St
 ## 📞 Contact
 
 - **Security issues:** Open a GitHub issue with "Security" label
-- **General support:** [Discord community](https://discord.gg/kn3695Kx32)
-- **Bug reports:** [GitHub Issues](https://github.com/LightZirconite/Microsoft-Rewards-Rewi/issues)
+- **General support:** [Discord community](https://discord.gg/h6Z69ZPPCz)
+- **Bug reports:** [GitHub Issues](https://github.com/Light60-1/Microsoft-Rewards-Bot/issues)
 
 ---
 
