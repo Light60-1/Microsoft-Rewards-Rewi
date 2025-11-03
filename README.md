@@ -98,7 +98,7 @@ For detailed configuration, advanced features, and troubleshooting, visit our co
 
 ---
 
-## 📊 Dashboard (NEW)
+## 📊 Dashboard (BETA)
 
 Monitor and control your bot through a local web interface:
 

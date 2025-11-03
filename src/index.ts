@@ -1325,7 +1325,18 @@ async function main() {
     // Check for dashboard mode flag (standalone dashboard)
     if (process.argv.includes('-dashboard')) {
         const { startDashboardServer } = await import('./dashboard/server')
+        const { dashboardState } = await import('./dashboard/state')
         log('main', 'DASHBOARD', 'Starting standalone dashboard server...')
+        
+        // Load and initialize accounts
+        try {
+            const accounts = loadAccounts()
+            dashboardState.initializeAccounts(accounts.map(a => a.email))
+            log('main', 'DASHBOARD', `Initialized ${accounts.length} accounts in dashboard`)
+        } catch (error) {
+            log('main', 'DASHBOARD', 'Could not load accounts: ' + (error instanceof Error ? error.message : String(error)), 'warn')
+        }
+        
         startDashboardServer()
         return
     }
@@ -1338,12 +1349,17 @@ async function main() {
     // Auto-start dashboard if enabled in config
     if (config.dashboard?.enabled) {
         const { DashboardServer } = await import('./dashboard/server')
+        const { dashboardState } = await import('./dashboard/state')
         const port = config.dashboard.port || 3000
         const host = config.dashboard.host || '127.0.0.1'
         
         // Override env vars with config values
         process.env.DASHBOARD_PORT = String(port)
         process.env.DASHBOARD_HOST = host
+        
+        // Initialize dashboard with accounts
+        const accounts = loadAccounts()
+        dashboardState.initializeAccounts(accounts.map(a => a.email))
         
         const dashboardServer = new DashboardServer()
         dashboardServer.start()

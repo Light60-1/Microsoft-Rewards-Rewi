@@ -2,6 +2,7 @@ import express from 'express'
 import { createServer } from 'http'
 import { WebSocketServer, WebSocket } from 'ws'
 import path from 'path'
+import fs from 'fs'
 import { apiRouter } from './routes'
 import { dashboardState, DashboardLog } from './state'
 import { log as botLog } from '../util/Logger'
@@ -23,10 +24,19 @@ export class DashboardServer {
     this.setupRoutes()
     this.setupWebSocket()
     this.interceptBotLogs()
+    this.setupStateListener()
+  }
+
+  private setupStateListener(): void {
+    // Listen to dashboard state changes and broadcast to all clients
+    dashboardState.addChangeListener((type, data) => {
+      this.broadcastUpdate(type, data)
+    })
   }
 
   private setupMiddleware(): void {
     this.app.use(express.json())
+    this.app.use('/assets', express.static(path.join(__dirname, '../../assets')))
     this.app.use(express.static(path.join(__dirname, '../../public')))
   }
 
@@ -38,9 +48,32 @@ export class DashboardServer {
       res.json({ status: 'ok', uptime: process.uptime() })
     })
 
-    // Serve dashboard UI
+    // Serve dashboard UI (with fallback if file doesn't exist)
     this.app.get('/', (_req, res) => {
-      res.sendFile(path.join(__dirname, '../../public/index.html'))
+      const dashboardPath = path.join(__dirname, '../../public/dashboard.html')
+      const indexPath = path.join(__dirname, '../../public/index.html')
+      
+      if (fs.existsSync(dashboardPath)) {
+        res.sendFile(dashboardPath)
+      } else if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath)
+      } else {
+        res.status(200).send(`
+          <!DOCTYPE html>
+          <html><head><title>Dashboard - API Only Mode</title></head>
+          <body style="font-family: sans-serif; padding: 40px; text-align: center;">
+            <h1>Dashboard API Active</h1>
+            <p>Frontend UI not found. API endpoints are available:</p>
+            <ul style="list-style: none; padding: 0;">
+              <li><a href="/api/status">GET /api/status</a></li>
+              <li><a href="/api/accounts">GET /api/accounts</a></li>
+              <li><a href="/api/logs">GET /api/logs</a></li>
+              <li><a href="/api/metrics">GET /api/metrics</a></li>
+              <li><a href="/health">GET /health</a></li>
+            </ul>
+          </body></html>
+        `)
+      }
     })
   }
 
@@ -54,9 +87,23 @@ export class DashboardServer {
         console.log('[Dashboard] WebSocket client disconnected')
       })
 
-      // Send recent logs on connect
-      const recentLogs = dashboardState.getLogs(50)
-      ws.send(JSON.stringify({ type: 'history', logs: recentLogs }))
+      ws.on('error', (error) => {
+        console.error('[Dashboard] WebSocket error:', error)
+      })
+
+      // Send initial data on connect
+      const recentLogs = dashboardState.getLogs(100)
+      const status = dashboardState.getStatus()
+      const accounts = dashboardState.getAccounts()
+      
+      ws.send(JSON.stringify({ 
+        type: 'init', 
+        data: {
+          logs: recentLogs,
+          status,
+          accounts
+        }
+      }))
     })
   }
 
@@ -88,11 +135,28 @@ export class DashboardServer {
       const payload = JSON.stringify({ type: 'log', log: logEntry })
       for (const client of clients) {
         if (client.readyState === WebSocket.OPEN) {
-          client.send(payload)
+          try {
+            client.send(payload)
+          } catch (error) {
+            console.error('[Dashboard] Error sending to WebSocket client:', error)
+          }
         }
       }
       
       return result
+    }
+  }
+
+  public broadcastUpdate(type: string, data: unknown): void {
+    const payload = JSON.stringify({ type, data })
+    for (const client of this.clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        try {
+          client.send(payload)
+        } catch (error) {
+          console.error('[Dashboard] Error broadcasting update:', error)
+        }
+      }
     }
   }
 

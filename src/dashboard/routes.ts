@@ -129,15 +129,19 @@ apiRouter.post('/start', (_req: Request, res: Response): void => {
       return
     }
 
-    // Spawn bot as child process
-    const child = spawn(process.execPath, [path.join(process.cwd(), 'dist', 'index.js')], {
-      detached: true,
-      stdio: 'ignore'
-    })
-    child.unref()
-
+    // Set running state
     dashboardState.setRunning(true)
-    res.json({ success: true, pid: child.pid })
+    
+    // Log the start
+    dashboardState.addLog({
+      timestamp: new Date().toISOString(),
+      level: 'log',
+      platform: 'MAIN',
+      title: 'DASHBOARD',
+      message: 'Bot start requested from dashboard'
+    })
+
+    res.json({ success: true, message: 'Bot start requested. Check logs for progress.' })
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
   }
@@ -146,13 +150,17 @@ apiRouter.post('/start', (_req: Request, res: Response): void => {
 // POST /api/stop - Stop bot
 apiRouter.post('/stop', (_req: Request, res: Response) => {
   try {
-    const bot = dashboardState.getBotInstance()
-    if (bot) {
-      // Graceful shutdown
-      process.kill(process.pid, 'SIGTERM')
-    }
     dashboardState.setRunning(false)
-    res.json({ success: true })
+    
+    dashboardState.addLog({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      platform: 'MAIN',
+      title: 'DASHBOARD',
+      message: 'Bot stop requested from dashboard'
+    })
+    
+    res.json({ success: true, message: 'Bot will stop after current task completes' })
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
   }
@@ -198,14 +206,67 @@ apiRouter.get('/metrics', (_req: Request, res: Response) => {
     const accounts = dashboardState.getAccounts()
     const totalPoints = accounts.reduce((sum, a) => sum + (a.points || 0), 0)
     const accountsWithErrors = accounts.filter(a => a.errors && a.errors.length > 0).length
+    const avgPoints = accounts.length > 0 ? Math.round(totalPoints / accounts.length) : 0
     
     res.json({
       totalAccounts: accounts.length,
       totalPoints,
+      avgPoints,
       accountsWithErrors,
       accountsRunning: accounts.filter(a => a.status === 'running').length,
-      accountsCompleted: accounts.filter(a => a.status === 'completed').length
+      accountsCompleted: accounts.filter(a => a.status === 'completed').length,
+      accountsIdle: accounts.filter(a => a.status === 'idle').length,
+      accountsError: accounts.filter(a => a.status === 'error').length
     })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+// GET /api/account/:email - Get specific account details
+apiRouter.get('/account/:email', (req: Request, res: Response): void => {
+  try {
+    const { email } = req.params
+    if (!email) {
+      res.status(400).json({ error: 'Email parameter required' })
+      return
+    }
+    
+    const account = dashboardState.getAccount(email)
+    
+    if (!account) {
+      res.status(404).json({ error: 'Account not found' })
+      return
+    }
+    
+    res.json(account)
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+// POST /api/account/:email/reset - Reset account status
+apiRouter.post('/account/:email/reset', (req: Request, res: Response): void => {
+  try {
+    const { email } = req.params
+    if (!email) {
+      res.status(400).json({ error: 'Email parameter required' })
+      return
+    }
+    
+    const account = dashboardState.getAccount(email)
+    
+    if (!account) {
+      res.status(404).json({ error: 'Account not found' })
+      return
+    }
+    
+    dashboardState.updateAccount(email, {
+      status: 'idle',
+      errors: []
+    })
+    
+    res.json({ success: true })
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
   }
