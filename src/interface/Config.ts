@@ -30,6 +30,7 @@ export interface Config {
     riskManagement?: ConfigRiskManagement; // NEW: Risk-aware throttling and ban prediction
     dryRun?: boolean; // NEW: Dry-run mode (simulate without executing)
     queryDiversity?: ConfigQueryDiversity; // NEW: Multi-source query generation
+    dashboard?: ConfigDashboard; // NEW: Local web dashboard for monitoring and control
 }
 
 export interface ConfigSaveFingerprint {
@@ -187,4 +188,10 @@ export interface ConfigQueryDiversity {
     sources?: Array<'google-trends' | 'reddit' | 'news' | 'wikipedia' | 'local-fallback'>; // which sources to use
     maxQueriesPerSource?: number; // limit per source
     cacheMinutes?: number; // cache duration
+}
+
+export interface ConfigDashboard {
+    enabled?: boolean; // auto-start dashboard with bot (default: false)
+    port?: number; // dashboard server port (default: 3000)
+    host?: string; // bind address (default: 127.0.0.1)
 }

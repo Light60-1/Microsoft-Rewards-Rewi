@@ -1322,10 +1322,33 @@ function formatDuration(ms: number): string {
 }
 
 async function main() {
+    // Check for dashboard mode flag (standalone dashboard)
+    if (process.argv.includes('-dashboard')) {
+        const { startDashboardServer } = await import('./dashboard/server')
+        log('main', 'DASHBOARD', 'Starting standalone dashboard server...')
+        startDashboardServer()
+        return
+    }
+
     const rewardsBot = new MicrosoftRewardsBot(false)
 
     const crashState = { restarts: 0 }
     const config = rewardsBot.config
+
+    // Auto-start dashboard if enabled in config
+    if (config.dashboard?.enabled) {
+        const { DashboardServer } = await import('./dashboard/server')
+        const port = config.dashboard.port || 3000
+        const host = config.dashboard.host || '127.0.0.1'
+        
+        // Override env vars with config values
+        process.env.DASHBOARD_PORT = String(port)
+        process.env.DASHBOARD_HOST = host
+        
+        const dashboardServer = new DashboardServer()
+        dashboardServer.start()
+        log('main', 'DASHBOARD', `Auto-started dashboard on http://${host}:${port}`)
+    }
 
     const attachHandlers = () => {
         process.on('unhandledRejection', (reason: unknown) => {

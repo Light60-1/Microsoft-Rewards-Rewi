@@ -20,10 +20,12 @@
     "pre-build": "npm i && npm run clean && node -e \"process.exit(process.env.SKIP_PLAYWRIGHT_INSTALL?0:1)\" || npx playwright install chromium",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
-    "test": "node --test --loader ts-node/esm tests",
+    "test": "node --test --loader ts-node/esm tests/**/*.test.ts",
     "start": "node --enable-source-maps ./dist/index.js",
     "ts-start": "node --loader ts-node/esm ./src/index.ts",
     "dev": "ts-node ./src/index.ts -dev",
+    "dashboard": "node --enable-source-maps ./dist/index.js -dashboard",
+    "dashboard-dev": "ts-node ./src/index.ts -dashboard",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "prepare": "npm run build",
     "setup": "node ./setup/update/setup.mjs",
@@ -49,8 +51,10 @@
     "url": "https://github.com/sponsors/Obsidian-wtf"
   },
   "devDependencies": {
+    "@types/express": "^4.17.25",
     "@types/ms": "^0.7.34",
     "@types/node": "^20.19.24",
+    "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^7.17.0",
     "eslint": "^8.57.0",
     "eslint-plugin-modules-newline": "^0.0.6",
@@ -61,6 +65,7 @@
     "axios": "^1.8.4",
     "chalk": "^4.1.2",
     "cheerio": "^1.0.0",
+    "express": "^4.21.2",
     "fingerprint-generator": "^2.1.66",
     "fingerprint-injector": "^2.1.66",
     "http-proxy-agent": "^7.0.2",
@@ -70,6 +75,7 @@
     "playwright": "1.52.0",
     "rebrowser-playwright": "1.52.0",
     "socks-proxy-agent": "^8.0.5",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "ws": "^8.18.3"
   }
 }

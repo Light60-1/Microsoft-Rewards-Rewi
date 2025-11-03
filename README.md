@@ -88,12 +88,41 @@ For detailed configuration, advanced features, and troubleshooting, visit our co
 | **[Getting Started](docs/getting-started.md)** | Detailed installation and first-run guide |
 | **[Configuration](docs/config.md)** | Complete configuration options reference |
 | **[Accounts & 2FA](docs/accounts.md)** | Setting up accounts with TOTP authentication |
+| **[Dashboard](src/dashboard/README.md)** | 🆕 Local web dashboard for monitoring and control |
 | **[External Scheduling](docs/schedule.md)** | Use OS schedulers for automation |
 | **[Docker Deployment](docs/docker.md)** | Running in containers |
 | **[Humanization](docs/humanization.md)** | Anti-detection and natural behavior |
 | **[Notifications](docs/conclusionwebhook.md)** | Discord webhooks and NTFY setup |
 | **[Proxy Setup](docs/proxy.md)** | Configuring proxies for privacy |
 | **[Troubleshooting](docs/diagnostics.md)** | Debug common issues and capture logs |
+
+---
+
+## 📊 Dashboard (NEW)
+
+Monitor and control your bot through a local web interface:
+
+```bash
+# Start dashboard separately
+npm run dashboard
+
+# Or enable auto-start in config.jsonc:
+{
+  "dashboard": {
+    "enabled": true,
+    "port": 3000
+  }
+}
+```
+
+Access at `http://localhost:3000` to:
+- 📈 View real-time points and account status
+- 📋 Monitor live logs with WebSocket streaming
+- 🔄 Manually sync individual accounts
+- ⚙️ Edit configuration with automatic backup
+- 📊 View historical run summaries and metrics
+
+**[📖 Full Dashboard API Documentation](src/dashboard/README.md)**
 
 ---
 

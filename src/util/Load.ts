@@ -187,6 +187,13 @@ function normalizeConfig(raw: unknown): Config {
         skipCompletedAccounts: jobStateRaw.skipCompletedAccounts !== false
     }
 
+    const dashboardRaw = (n.dashboard ?? {}) as Record<string, unknown>
+    const dashboard = {
+        enabled: dashboardRaw.enabled === true,
+        port: typeof dashboardRaw.port === 'number' ? dashboardRaw.port : 3000,
+        host: typeof dashboardRaw.host === 'string' ? dashboardRaw.host : '127.0.0.1'
+    }
+
     const cfg: Config = {
         baseURL: n.baseURL ?? 'https://rewards.bing.com',
         sessionPath: n.sessionPath ?? 'sessions',
@@ -216,7 +223,8 @@ function normalizeConfig(raw: unknown): Config {
         crashRecovery: n.crashRecovery || {},
         riskManagement,
         dryRun,
-        queryDiversity
+        queryDiversity,
+        dashboard
     }
 
     return cfg

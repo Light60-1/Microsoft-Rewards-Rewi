@@ -1,0 +1,97 @@
+import { MicrosoftRewardsBot } from '../index'
+
+export interface DashboardStatus {
+  running: boolean
+  lastRun?: string
+  currentAccount?: string
+  totalAccounts: number
+}
+
+export interface DashboardLog {
+  timestamp: string
+  level: 'log' | 'warn' | 'error'
+  platform: string
+  title: string
+  message: string
+}
+
+export interface AccountStatus {
+  email: string
+  maskedEmail: string
+  points?: number
+  lastSync?: string
+  status: 'idle' | 'running' | 'completed' | 'error'
+  errors?: string[]
+}
+
+class DashboardState {
+  private botInstance?: MicrosoftRewardsBot
+  private status: DashboardStatus = { running: false, totalAccounts: 0 }
+  private logs: DashboardLog[] = []
+  private accounts: Map<string, AccountStatus> = new Map()
+  private maxLogsInMemory = 500
+
+  getStatus(): DashboardStatus {
+    return { ...this.status }
+  }
+
+  setRunning(running: boolean, currentAccount?: string): void {
+    this.status.running = running
+    this.status.currentAccount = currentAccount
+    if (!running && currentAccount === undefined) {
+      this.status.lastRun = new Date().toISOString()
+    }
+  }
+
+  setBotInstance(bot: MicrosoftRewardsBot | undefined): void {
+    this.botInstance = bot
+  }
+
+  getBotInstance(): MicrosoftRewardsBot | undefined {
+    return this.botInstance
+  }
+
+  addLog(log: DashboardLog): void {
+    this.logs.push(log)
+    if (this.logs.length > this.maxLogsInMemory) {
+      this.logs.shift()
+    }
+  }
+
+  getLogs(limit = 100): DashboardLog[] {
+    return this.logs.slice(-limit)
+  }
+
+  clearLogs(): void {
+    this.logs = []
+  }
+
+  updateAccount(email: string, update: Partial<AccountStatus>): void {
+    const existing = this.accounts.get(email) || {
+      email,
+      maskedEmail: this.maskEmail(email),
+      status: 'idle'
+    }
+    this.accounts.set(email, { ...existing, ...update })
+    this.status.totalAccounts = this.accounts.size
+  }
+
+  getAccounts(): AccountStatus[] {
+    return Array.from(this.accounts.values())
+  }
+
+  getAccount(email: string): AccountStatus | undefined {
+    return this.accounts.get(email)
+  }
+
+  private maskEmail(email: string): string {
+    const [local, domain] = email.split('@')
+    if (!local || !domain) return email
+    const maskedLocal = local.length > 2 ? `${local.slice(0, 1)}***` : '***'
+    const [domainName, tld] = domain.split('.')
+    const maskedDomain = domainName && domainName.length > 1 ? `${domainName.slice(0, 1)}***.${tld || 'com'}` : domain
+    return `${maskedLocal}@${maskedDomain}`
+  }
+}
+
+export const dashboardState = new DashboardState()

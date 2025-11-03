@@ -1,0 +1,221 @@
+import { Router, Request, Response } from 'express'
+import fs from 'fs'
+import path from 'path'
+import { dashboardState } from './state'
+import { loadAccounts, loadConfig, getConfigPath } from '../util/Load'
+import { spawn } from 'child_process'
+
+export const apiRouter = Router()
+
+// GET /api/status - Bot status
+apiRouter.get('/status', (_req: Request, res: Response) => {
+  try {
+    const status = dashboardState.getStatus()
+    res.json(status)
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+// GET /api/accounts - List all accounts with masked emails
+apiRouter.get('/accounts', (_req: Request, res: Response) => {
+  try {
+    const accounts = dashboardState.getAccounts()
+    res.json(accounts)
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+// GET /api/logs - Recent logs
+apiRouter.get('/logs', (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 100
+    const logs = dashboardState.getLogs(Math.min(limit, 500))
+    res.json(logs)
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+// DELETE /api/logs - Clear logs
+apiRouter.delete('/logs', (_req: Request, res: Response) => {
+  try {
+    dashboardState.clearLogs()
+    res.json({ success: true })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+// GET /api/history - Recent run summaries
+apiRouter.get('/history', (_req: Request, res: Response): void => {
+  try {
+    const reportsDir = path.join(process.cwd(), 'reports')
+    if (!fs.existsSync(reportsDir)) {
+      res.json([])
+      return
+    }
+
+    const days = fs.readdirSync(reportsDir).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().reverse().slice(0, 7)
+    const summaries: unknown[] = []
+
+    for (const day of days) {
+      const dayDir = path.join(reportsDir, day)
+      const files = fs.readdirSync(dayDir).filter(f => f.startsWith('summary_') && f.endsWith('.json'))
+      for (const file of files) {
+        try {
+          const content = fs.readFileSync(path.join(dayDir, file), 'utf-8')
+          summaries.push(JSON.parse(content))
+        } catch {
+          continue
+        }
+      }
+    }
+
+    res.json(summaries.slice(0, 50))
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+// GET /api/config - Current config (tokens masked)
+apiRouter.get('/config', (_req: Request, res: Response) => {
+  try {
+    const config = loadConfig()
+    const safe = JSON.parse(JSON.stringify(config))
+    
+    // Mask sensitive data
+    if (safe.webhook?.url) safe.webhook.url = maskUrl(safe.webhook.url)
+    if (safe.conclusionWebhook?.url) safe.conclusionWebhook.url = maskUrl(safe.conclusionWebhook.url)
+    if (safe.ntfy?.authToken) safe.ntfy.authToken = '***'
+
+    res.json(safe)
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+// POST /api/config - Update config (with backup)
+apiRouter.post('/config', (req: Request, res: Response): void => {
+  try {
+    const newConfig = req.body
+    const configPath = getConfigPath()
+    
+    if (!configPath || !fs.existsSync(configPath)) {
+      res.status(404).json({ error: 'Config file not found' })
+      return
+    }
+
+    // Backup current config
+    const backupPath = `${configPath}.backup.${Date.now()}`
+    fs.copyFileSync(configPath, backupPath)
+
+    // Write new config
+    fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2), 'utf-8')
+
+    res.json({ success: true, backup: backupPath })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+// POST /api/start - Start bot in background
+apiRouter.post('/start', (_req: Request, res: Response): void => {
+  try {
+    const status = dashboardState.getStatus()
+    if (status.running) {
+      res.status(400).json({ error: 'Bot already running' })
+      return
+    }
+
+    // Spawn bot as child process
+    const child = spawn(process.execPath, [path.join(process.cwd(), 'dist', 'index.js')], {
+      detached: true,
+      stdio: 'ignore'
+    })
+    child.unref()
+
+    dashboardState.setRunning(true)
+    res.json({ success: true, pid: child.pid })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+// POST /api/stop - Stop bot
+apiRouter.post('/stop', (_req: Request, res: Response) => {
+  try {
+    const bot = dashboardState.getBotInstance()
+    if (bot) {
+      // Graceful shutdown
+      process.kill(process.pid, 'SIGTERM')
+    }
+    dashboardState.setRunning(false)
+    res.json({ success: true })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+// POST /api/sync/:email - Force sync single account
+apiRouter.post('/sync/:email', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.params
+    if (!email) {
+      res.status(400).json({ error: 'Email parameter required' })
+      return
+    }
+
+    const accounts = loadAccounts()
+    const account = accounts.find(a => a.email === email)
+    
+    if (!account) {
+      res.status(404).json({ error: 'Account not found' })
+      return
+    }
+
+    dashboardState.updateAccount(email, { status: 'running', lastSync: new Date().toISOString() })
+
+    // Spawn single account run
+    const child = spawn(process.execPath, [
+      path.join(process.cwd(), 'dist', 'index.js'),
+      '-account',
+      email
+    ], { detached: true, stdio: 'ignore' })
+    
+    if (child.unref) child.unref()
+
+    res.json({ success: true, pid: child.pid || undefined })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+// GET /api/metrics - Basic metrics
+apiRouter.get('/metrics', (_req: Request, res: Response) => {
+  try {
+    const accounts = dashboardState.getAccounts()
+    const totalPoints = accounts.reduce((sum, a) => sum + (a.points || 0), 0)
+    const accountsWithErrors = accounts.filter(a => a.errors && a.errors.length > 0).length
+    
+    res.json({
+      totalAccounts: accounts.length,
+      totalPoints,
+      accountsWithErrors,
+      accountsRunning: accounts.filter(a => a.status === 'running').length,
+      accountsCompleted: accounts.filter(a => a.status === 'completed').length
+    })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+function maskUrl(url: string): string {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.protocol}//${parsed.hostname.slice(0, 3)}***${parsed.pathname.slice(0, 5)}***`
+  } catch {
+    return '***'
+  }
+}
