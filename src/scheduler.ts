@@ -11,6 +11,30 @@ import type { Config } from './interface/Config'
 type CronExpressionInfo = { expression: string; tz: string }
 type DateTimeInstance = ReturnType<typeof DateTime.fromJSDate>
 
+/**
+ * Parse environment variable as number with validation
+ */
+function parseEnvNumber(key: string, defaultValue: number, min: number, max: number): number {
+  const raw = process.env[key]
+  if (!raw) return defaultValue
+  
+  const parsed = Number(raw)
+  if (isNaN(parsed)) {
+    void log('main', 'SCHEDULER', `Invalid ${key}="${raw}". Using default ${defaultValue}`, 'warn')
+    return defaultValue
+  }
+  
+  if (parsed < min || parsed > max) {
+    void log('main', 'SCHEDULER', `${key}=${parsed} out of range [${min}, ${max}]. Using default ${defaultValue}`, 'warn')
+    return defaultValue
+  }
+  
+  return parsed
+}
+
+/**
+ * Parse time from schedule config (supports 12h and 24h formats)
+ */
 function resolveTimeParts(schedule: Config['schedule'] | undefined): { tz: string; hour: number; minute: number } {
   const tz = (schedule?.timeZone && IANAZone.isValidZone(schedule.timeZone)) ? schedule.timeZone : 'UTC'
   
@@ -118,29 +142,13 @@ async function runOnePass(): Promise<void> {
  */
 async function runOnePassWithWatchdog(): Promise<void> {
   // Heartbeat-aware watchdog configuration
-  // If a child is actively updating its heartbeat file, we allow it to run beyond the legacy timeout.
-  // Defaults are generous to allow first-day passes to finish searches with delays.
-  const parseEnvNumber = (key: string, fallback: number, min: number, max: number): number => {
-    const val = Number(process.env[key] || fallback)
-    if (isNaN(val) || val < min || val > max) {
-      void log('main', 'SCHEDULER', `Invalid ${key}="${process.env[key]}". Using default ${fallback}`, 'warn')
-      return fallback
-    }
-    return val
-  }
-  
-  const staleHeartbeatMin = parseEnvNumber(
-    process.env.SCHEDULER_STALE_HEARTBEAT_MINUTES ? 'SCHEDULER_STALE_HEARTBEAT_MINUTES' : 'SCHEDULER_PASS_TIMEOUT_MINUTES',
-    30, 5, 1440
-  )
+  const staleHeartbeatMin = parseEnvNumber('SCHEDULER_STALE_HEARTBEAT_MINUTES', 30, 5, 1440)
   const graceMin = parseEnvNumber('SCHEDULER_HEARTBEAT_GRACE_MINUTES', 15, 1, 120)
   const hardcapMin = parseEnvNumber('SCHEDULER_PASS_HARDCAP_MINUTES', 480, 30, 1440)
   const checkEveryMs = 60_000 // check once per minute
 
   // Validate: stale should be >= grace
-  if (staleHeartbeatMin < graceMin) {
-    await log('main', 'SCHEDULER', `Warning: STALE_HEARTBEAT (${staleHeartbeatMin}m) < GRACE (${graceMin}m). Adjusting stale to ${graceMin}m`, 'warn')
-  }
+  const effectiveStale = Math.max(staleHeartbeatMin, graceMin)
 
   // Fork per pass: safer because we can terminate a stuck child without killing the scheduler
   const forkPerPass = String(process.env.SCHEDULER_FORK_PER_PASS || 'true').toLowerCase() !== 'false'
@@ -196,8 +204,8 @@ async function runOnePassWithWatchdog(): Promise<void> {
         const st = fs.statSync(hbFile)
         const mtimeMs = st.mtimeMs
         const ageMin = Math.floor((now - mtimeMs) / 60000)
-        if (ageMin >= staleHeartbeatMin) {
-          log('main', 'SCHEDULER', `Heartbeat stale for ${ageMin}m (>=${staleHeartbeatMin}m). Terminating child...`, 'warn')
+        if (ageMin >= effectiveStale) {
+          log('main', 'SCHEDULER', `Heartbeat stale for ${ageMin}m (>=${effectiveStale}m). Terminating child...`, 'warn')
           void killChild('SIGTERM')
           if (killTimeout) clearTimeout(killTimeout)
           killTimeout = setTimeout(() => { try { child.kill('SIGKILL') } catch { /* ignore */ } }, 10_000)

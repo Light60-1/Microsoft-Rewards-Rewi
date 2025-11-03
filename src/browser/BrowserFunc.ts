@@ -117,133 +117,38 @@ export default class BrowserFunc {
                 await this.goHome(target)
             }
             
-            let lastError: unknown = null
-            for (let attempt = 1; attempt <= 2; attempt++) {
-                try {
-                    // Reload the page to get new data
-                    await target.reload({ waitUntil: 'domcontentloaded' })
-                    lastError = null
-                    break
-                } catch (re) {
-                    lastError = re
-                    const msg = (re instanceof Error ? re.message : String(re))
-                    this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Reload failed attempt ${attempt}: ${msg}`, 'warn')
-                    // If page/context closed => bail early after first retry
-                    if (msg.includes('has been closed')) {
-                        if (attempt === 1) {
-                            this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', 'Page appears closed; trying one navigation fallback', 'warn')
-                            try {
-                                await this.goHome(target)
-                            } catch {/* ignore */}
-                        } else {
-                            break
-                        }
-                    }
-                    if (attempt === 2) {
-                        await this.bot.utils.wait(1000)
-                    }
-                }
-            }
-            
-            // If reload failed after all attempts, throw the last error
-            if (lastError) {
-                throw lastError
-            }
-
-            // Wait a bit longer for scripts to load, especially on mobile
-            await this.bot.utils.wait(this.bot.isMobile ? TIMEOUTS.LONG : TIMEOUTS.MEDIUM)
+            // Reload with retry
+            await this.reloadPageWithRetry(target, 2)
             
             // Wait for the more-activities element to ensure page is fully loaded
             await target.waitForSelector(SELECTORS.MORE_ACTIVITIES, { timeout: TIMEOUTS.DASHBOARD_WAIT }).catch(() => {
                 this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', 'Activities element not found, continuing anyway', 'warn')
             })
 
-            let scriptContent = await target.evaluate(() => {
-                const scripts = Array.from(document.querySelectorAll('script'))
-                // Try multiple patterns for better compatibility
-                const targetScript = scripts.find(script => 
-                    script.innerText.includes('var dashboard') ||
-                    script.innerText.includes('dashboard=') ||
-                    script.innerText.includes('dashboard :')
-                )
-
-                return targetScript?.innerText ? targetScript.innerText : null
-            })
+            let scriptContent = await this.extractDashboardScript(target)
 
             if (!scriptContent) {
                 this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', 'Dashboard script not found on first try, attempting recovery', 'warn')
-                await this.bot.browser.utils.captureDiagnostics(target, 'dashboard-data-missing').catch((e) => {
-                    this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Failed to capture diagnostics: ${e}`, 'warn')
-                })
+                await this.bot.browser.utils.captureDiagnostics(target, 'dashboard-data-missing').catch(() => {})
                 
                 // Force a navigation retry once before failing hard
-                try {
-                    await this.goHome(target)
-                    await target.waitForLoadState('domcontentloaded', { timeout: TIMEOUTS.VERY_LONG }).catch((e) => {
-                        this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Wait for load state failed: ${e}`, 'warn')
-                    })
-                    await this.bot.utils.wait(this.bot.isMobile ? TIMEOUTS.LONG : TIMEOUTS.MEDIUM)
-                } catch (e) {
-                    this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Recovery navigation failed: ${e}`, 'warn')
-                }
+                await this.goHome(target)
+                await target.waitForLoadState('domcontentloaded', { timeout: TIMEOUTS.VERY_LONG }).catch(() => {})
+                await this.bot.utils.wait(this.bot.isMobile ? TIMEOUTS.LONG : TIMEOUTS.MEDIUM)
                 
-                const retryContent = await target.evaluate(() => {
-                    const scripts = Array.from(document.querySelectorAll('script'))
-                    const targetScript = scripts.find(script => 
-                        script.innerText.includes('var dashboard') ||
-                        script.innerText.includes('dashboard=') ||
-                        script.innerText.includes('dashboard :')
-                    )
-                    return targetScript?.innerText ? targetScript.innerText : null
-                }).catch(()=>null)
+                scriptContent = await this.extractDashboardScript(target)
                 
-                if (!retryContent) {
-                    // Log additional debug info
-                    const scriptsDebug = await target.evaluate(() => {
-                        const scripts = Array.from(document.querySelectorAll('script'))
-                        return scripts.map(s => s.innerText.substring(0, 100)).join(' | ')
-                    }).catch(() => 'Unable to get script debug info')
-                    
-                    this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Available scripts preview: ${scriptsDebug}`, 'warn')
+                if (!scriptContent) {
                     this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', 'Dashboard data not found within script', 'error')
                     throw new Error('Dashboard data not found within script - check page structure')
                 }
-                scriptContent = retryContent
             }
 
             // Extract the dashboard object from the script content
-            const dashboardData = await target.evaluate((scriptContent: string) => {
-                // Try multiple regex patterns for better compatibility
-                const patterns = [
-                    /var dashboard = (\{.*?\});/s,           // Original pattern
-                    /var dashboard=(\{.*?\});/s,             // No spaces
-                    /var\s+dashboard\s*=\s*(\{.*?\});/s,     // Flexible whitespace
-                    /dashboard\s*=\s*(\{[\s\S]*?\});/        // More permissive
-                ]
-
-                for (const regex of patterns) {
-                    const match = regex.exec(scriptContent)
-                    if (match && match[1]) {
-                        try {
-                            return JSON.parse(match[1])
-                        } catch (e) {
-                            // Try next pattern if JSON parsing fails
-                            continue
-                        }
-                    }
-                }
-
-                return null
-
-            }, scriptContent)
+            const dashboardData = await this.parseDashboardFromScript(target, scriptContent)
 
             if (!dashboardData) {
-                // Log a snippet of the script content for debugging
-                const scriptPreview = scriptContent.substring(0, 200)
-                this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Script preview: ${scriptPreview}`, 'warn')
-                await this.bot.browser.utils.captureDiagnostics(target, 'dashboard-data-parse').catch((e) => {
-                    this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Failed to capture diagnostics: ${e}`, 'warn')
-                })
+                await this.bot.browser.utils.captureDiagnostics(target, 'dashboard-data-parse').catch(() => {})
                 this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', 'Unable to parse dashboard script', 'error')
                 throw new Error('Unable to parse dashboard script - check diagnostics')
             }
@@ -256,6 +161,81 @@ export default class BrowserFunc {
             throw new Error('Get dashboard data failed: ' + errorMessage)
         }
 
+    }
+
+    /**
+     * Reload page with retry logic
+     */
+    private async reloadPageWithRetry(page: Page, maxAttempts: number): Promise<void> {
+        let lastError: unknown = null
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                await page.reload({ waitUntil: 'domcontentloaded' })
+                await this.bot.utils.wait(this.bot.isMobile ? TIMEOUTS.LONG : TIMEOUTS.MEDIUM)
+                lastError = null
+                break
+            } catch (re) {
+                lastError = re
+                const msg = (re instanceof Error ? re.message : String(re))
+                this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Reload failed attempt ${attempt}: ${msg}`, 'warn')
+                if (msg.includes('has been closed')) {
+                    if (attempt === 1) {
+                        this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', 'Page appears closed; trying one navigation fallback', 'warn')
+                        try { await this.goHome(page) } catch {/* ignore */}
+                    } else {
+                        break
+                    }
+                }
+                if (attempt === maxAttempts) {
+                    await this.bot.utils.wait(1000)
+                }
+            }
+        }
+        
+        if (lastError) throw lastError
+    }
+
+    /**
+     * Extract dashboard script from page
+     */
+    private async extractDashboardScript(page: Page): Promise<string | null> {
+        return await page.evaluate(() => {
+            const scripts = Array.from(document.querySelectorAll('script'))
+            const targetScript = scripts.find(script => 
+                script.innerText.includes('var dashboard') ||
+                script.innerText.includes('dashboard=') ||
+                script.innerText.includes('dashboard :')
+            )
+            return targetScript?.innerText ? targetScript.innerText : null
+        })
+    }
+
+    /**
+     * Parse dashboard object from script content
+     */
+    private async parseDashboardFromScript(page: Page, scriptContent: string): Promise<DashboardData | null> {
+        return await page.evaluate((scriptContent: string) => {
+            const patterns = [
+                /var dashboard = (\{.*?\});/s,
+                /var dashboard=(\{.*?\});/s,
+                /var\s+dashboard\s*=\s*(\{.*?\});/s,
+                /dashboard\s*=\s*(\{[\s\S]*?\});/
+            ]
+
+            for (const regex of patterns) {
+                const match = regex.exec(scriptContent)
+                if (match && match[1]) {
+                    try {
+                        return JSON.parse(match[1])
+                    } catch (e) {
+                        continue
+                    }
+                }
+            }
+
+            return null
+
+        }, scriptContent)
     }
 
     /**

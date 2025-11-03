@@ -521,13 +521,13 @@ export class Login {
 
       // Step 1: expose alternative verification options if hidden
       if (!acted) {
-        acted = await this.clickFirstVisibleSelector(page, this.totpAltOptionSelectors())
+        acted = await this.clickFirstVisibleSelector(page, Login.TOTP_SELECTORS.altOptions)
         if (acted) await this.bot.utils.wait(900)
       }
 
       // Step 2: choose authenticator code option if available
       if (!acted) {
-        acted = await this.clickFirstVisibleSelector(page, this.totpChallengeSelectors())
+        acted = await this.clickFirstVisibleSelector(page, Login.TOTP_SELECTORS.challenge)
         if (acted) await this.bot.utils.wait(900)
       }
 
@@ -591,9 +591,7 @@ export class Login {
       'button:has-text("Enter a code from your authenticator app")',
       'button:has-text("Use code from your authentication app")',
       'button:has-text("Utiliser un code de vérification")',
-      'button:has-text("Utiliser un code de verification")',
       'button:has-text("Entrer un code depuis votre application")',
-      'button:has-text("Entrez un code depuis votre application")',
       'button:has-text("Entrez un code")',
       'div[role="button"]:has-text("Use a verification code")',
       'div[role="button"]:has-text("Enter a code")'
@@ -612,14 +610,10 @@ export class Login {
     ]
   } as const
 
-  private totpInputSelectors(): readonly string[] { return Login.TOTP_SELECTORS.input }
-  private totpAltOptionSelectors(): readonly string[] { return Login.TOTP_SELECTORS.altOptions }
-  private totpChallengeSelectors(): readonly string[] { return Login.TOTP_SELECTORS.challenge }
-
   // Locate the most likely authenticator input on the page using heuristics
   private async findFirstTotpInput(page: Page): Promise<string | null> {
     const headingHint = await this.detectTotpHeading(page)
-    for (const sel of this.totpInputSelectors()) {
+    for (const sel of Login.TOTP_SELECTORS.input) {
       const loc = page.locator(sel).first()
       if (await loc.isVisible().catch(() => false)) {
         if (await this.isLikelyTotpInput(page, loc, sel, headingHint)) {

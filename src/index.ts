@@ -55,9 +55,6 @@ export class MicrosoftRewardsBot {
     private isDesktopRunning: boolean = false
     private isMobileRunning: boolean = false
 
-    private pointsCanCollect: number = 0
-    private pointsInitial: number = 0
-
     private activeWorkers: number
     private browserFactory: Browser = new Browser(this)
     private accounts: Account[]
@@ -796,20 +793,11 @@ export class MicrosoftRewardsBot {
             const durationMs = accountEnd - accountStart
             const totalCollected = desktopCollected + mobileCollected
             
-            // Calculate initial total: use the lower value between desktop and mobile initial points
-            // to avoid double-counting. In sequential mode, mobile starts with desktop's earned points.
-            // In parallel mode, both should start from the same baseline.
-            let initialTotal = 0
-            if (desktopInitial > 0 && mobileInitial > 0) {
-                // Both flows completed: take minimum (true baseline before any earning)
-                initialTotal = Math.min(desktopInitial, mobileInitial)
-            } else if (desktopInitial > 0) {
-                // Only desktop completed
-                initialTotal = desktopInitial
-            } else if (mobileInitial > 0) {
-                // Only mobile completed
-                initialTotal = mobileInitial
-            }
+            // Sequential mode: desktop runs first, mobile starts with desktop's end points
+            // Parallel mode: both start from same baseline, take minimum to avoid double-count
+            const initialTotal = this.config.parallel 
+                ? Math.min(desktopInitial || Infinity, mobileInitial || Infinity)
+                : (desktopInitial || mobileInitial || 0)
             
             const endTotal = initialTotal + totalCollected
             if (!banned.status) {
@@ -1003,28 +991,27 @@ export class MicrosoftRewardsBot {
 
         const data = await this.browser.func.getDashboardData()
 
-        this.pointsInitial = data.userStatus.availablePoints
-        const initial = this.pointsInitial
+        const initial = data.userStatus.availablePoints
 
-        log(this.isMobile, 'MAIN-POINTS', `Current point count: ${this.pointsInitial}`)
+        log(this.isMobile, 'MAIN-POINTS', `Current point count: ${initial}`)
 
         const browserEnarablePoints = await this.browser.func.getBrowserEarnablePoints()
 
         // Tally all the desktop points
-        this.pointsCanCollect = browserEnarablePoints.dailySetPoints +
-            browserEnarablePoints.desktopSearchPoints
-            + browserEnarablePoints.morePromotionsPoints
+        const pointsCanCollect = browserEnarablePoints.dailySetPoints +
+            browserEnarablePoints.desktopSearchPoints +
+            browserEnarablePoints.morePromotionsPoints
 
-        log(this.isMobile, 'MAIN-POINTS', `You can earn ${this.pointsCanCollect} points today`)
+        log(this.isMobile, 'MAIN-POINTS', `You can earn ${pointsCanCollect} points today`)
 
-        if (this.pointsCanCollect === 0) {
+        if (pointsCanCollect === 0) {
             // Extra diagnostic breakdown so users know WHY it's zero
             log(this.isMobile, 'MAIN-POINTS', `Breakdown (desktop): dailySet=${browserEnarablePoints.dailySetPoints} search=${browserEnarablePoints.desktopSearchPoints} promotions=${browserEnarablePoints.morePromotionsPoints}`)
             log(this.isMobile, 'MAIN-POINTS', 'All desktop earnable buckets are zero. This usually means: tasks already completed today OR the daily reset has not happened yet for your time zone. If you still want to force run activities set execution.runOnZeroPoints=true in config.', 'log', 'yellow')
         }
 
         // If runOnZeroPoints is false and 0 points to earn, don't continue
-        if (!this.config.runOnZeroPoints && this.pointsCanCollect === 0) {
+        if (!this.config.runOnZeroPoints && pointsCanCollect === 0) {
             log(this.isMobile, 'MAIN', 'No points to earn and "runOnZeroPoints" is set to "false", stopping!', 'log', 'yellow')
 
             // Close desktop browser
@@ -1107,22 +1094,22 @@ export class MicrosoftRewardsBot {
         await this.browser.func.goHome(this.homePage)
 
         const data = await this.browser.func.getDashboardData()
-        const initialPoints = data.userStatus.availablePoints || this.pointsInitial || 0
+        const initialPoints = data.userStatus.availablePoints || 0
 
         const browserEnarablePoints = await this.browser.func.getBrowserEarnablePoints()
         const appEarnablePoints = await this.browser.func.getAppEarnablePoints(this.accessToken)
 
-        this.pointsCanCollect = browserEnarablePoints.mobileSearchPoints + appEarnablePoints.totalEarnablePoints
+        const pointsCanCollect = browserEnarablePoints.mobileSearchPoints + appEarnablePoints.totalEarnablePoints
 
-        log(this.isMobile, 'MAIN-POINTS', `You can earn ${this.pointsCanCollect} points today (Browser: ${browserEnarablePoints.mobileSearchPoints} points, App: ${appEarnablePoints.totalEarnablePoints} points)`)
+        log(this.isMobile, 'MAIN-POINTS', `You can earn ${pointsCanCollect} points today (Browser: ${browserEnarablePoints.mobileSearchPoints} points, App: ${appEarnablePoints.totalEarnablePoints} points)`)
 
-        if (this.pointsCanCollect === 0) {
+        if (pointsCanCollect === 0) {
             log(this.isMobile, 'MAIN-POINTS', `Breakdown (mobile): browserSearch=${browserEnarablePoints.mobileSearchPoints} appTotal=${appEarnablePoints.totalEarnablePoints}`)
             log(this.isMobile, 'MAIN-POINTS', 'All mobile earnable buckets are zero. Causes: mobile searches already maxed, daily set finished, or daily rollover not reached yet. You can force execution by setting execution.runOnZeroPoints=true.', 'log', 'yellow')
         }
 
         // If runOnZeroPoints is false and 0 points to earn, don't continue
-        if (!this.config.runOnZeroPoints && this.pointsCanCollect === 0) {
+        if (!this.config.runOnZeroPoints && pointsCanCollect === 0) {
             log(this.isMobile, 'MAIN', 'No points to earn and "runOnZeroPoints" is set to "false", stopping!', 'log', 'yellow')
 
             // Close mobile browser

@@ -51,20 +51,17 @@ export default class BrowserUtil {
     }
 
     async tryDismissAllMessages(page: Page): Promise<void> {
-        const maxRounds = 3
-        for (let round = 0; round < maxRounds; round++) {
-            const dismissCount = await this.dismissRound(page)
-            if (dismissCount === 0) break
-        }
+        // Single-pass dismissal with all checks combined
+        await this.dismissAllInterruptors(page)
     }
 
-    private async dismissRound(page: Page): Promise<number> {
-        let count = 0
-        count += await this.dismissStandardButtons(page)
-        count += await this.dismissOverlayButtons(page)
-        count += await this.dismissStreakDialog(page)
-        count += await this.dismissTermsUpdateDialog(page)
-        return count
+    private async dismissAllInterruptors(page: Page): Promise<void> {
+        await Promise.allSettled([
+            this.dismissStandardButtons(page),
+            this.dismissOverlayButtons(page),
+            this.dismissStreakDialog(page),
+            this.dismissTermsUpdateDialog(page)
+        ])
     }
 
     private async dismissStandardButtons(page: Page): Promise<number> {
