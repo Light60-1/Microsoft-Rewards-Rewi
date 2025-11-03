@@ -10,8 +10,19 @@ export const apiRouter = Router()
 // GET /api/status - Bot status
 apiRouter.get('/status', (_req: Request, res: Response) => {
   try {
-    const status = dashboardState.getStatus()
-    res.json(status)
+    const accounts = dashboardState.getAccounts()
+    
+    // If no accounts loaded yet, try to load them
+    if (accounts.length === 0) {
+      try {
+        const loadedAccounts = loadAccounts()
+        dashboardState.initializeAccounts(loadedAccounts.map(a => a.email))
+      } catch (error) {
+        console.error('[Dashboard] Failed to load accounts for status:', error)
+      }
+    }
+    
+    res.json(dashboardState.getStatus())
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
   }
@@ -20,7 +31,19 @@ apiRouter.get('/status', (_req: Request, res: Response) => {
 // GET /api/accounts - List all accounts with masked emails
 apiRouter.get('/accounts', (_req: Request, res: Response) => {
   try {
-    const accounts = dashboardState.getAccounts()
+    let accounts = dashboardState.getAccounts()
+    
+    // If no accounts in state, try to load from config
+    if (accounts.length === 0) {
+      try {
+        const loadedAccounts = loadAccounts()
+        dashboardState.initializeAccounts(loadedAccounts.map(a => a.email))
+        accounts = dashboardState.getAccounts()
+      } catch (error) {
+        console.error('[Dashboard] Failed to load accounts:', error)
+      }
+    }
+    
     res.json(accounts)
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })

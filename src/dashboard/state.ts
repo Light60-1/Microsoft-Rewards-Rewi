@@ -1,4 +1,5 @@
 import { MicrosoftRewardsBot } from '../index'
+import { loadAllPointsFromSessions, loadPointsFromJobState } from './SessionLoader'
 
 export interface DashboardStatus {
   running: boolean
@@ -133,12 +134,23 @@ class DashboardState {
 
   // Initialize accounts from config
   public initializeAccounts(emails: string[]): void {
+    // Load points from sessions if available
+    const pointsMap = loadAllPointsFromSessions()
+    
     for (const email of emails) {
       if (!this.accounts.has(email)) {
+        // Try to get points from session or job state
+        let points = pointsMap.get(email)
+        if (points === undefined) {
+          points = loadPointsFromJobState(email)
+        }
+        
         this.accounts.set(email, {
           email,
           maskedEmail: this.maskEmail(email),
-          status: 'idle'
+          status: 'idle',
+          points: points,
+          lastSync: points !== undefined ? new Date().toISOString() : undefined
         })
       }
     }
