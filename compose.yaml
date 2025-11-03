@@ -1,14 +1,14 @@
 services:
-  microsoft-rewards-script:
+  microsoft-rewards-bot:
     build: .
-    container_name: microsoft-rewards-script
+    container_name: microsoft-rewards-bot
     restart: unless-stopped
 
     # Volume mounts: Specify a location where you want to save the files on your local machine.
     volumes:
-      - ./src/accounts.jsonc:/usr/src/microsoft-rewards-script/src/accounts.jsonc:ro
-      - ./src/config.jsonc:/usr/src/microsoft-rewards-script/src/config.jsonc:ro
-      - ./sessions:/usr/src/microsoft-rewards-script/sessions # Optional, saves your login session
+      - ./src/accounts.jsonc:/app/src/accounts.jsonc:ro
+      - ./src/config.jsonc:/app/src/config.jsonc:ro
+      - ./sessions:/app/sessions
 
     environment:
       TZ: "America/Toronto" # Set your timezone for proper scheduling (used by image and scheduler)

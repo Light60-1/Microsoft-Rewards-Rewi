@@ -7,8 +7,8 @@
 **Automate your Microsoft Rewards points collection effortlessly**
 
 [![Discord](https://img.shields.io/badge/💬_Join_Discord-7289DA?style=for-the-badge&logo=discord)](https://discord.gg/h6Z69ZPPCz) 
-[![GitHub](https://img.shields.io/badge/⭐_Star_Project-yellow?style=for-the-badge&logo=github)](https://github.com/Light60-1/Microsoft-Rewards-Bot)
-[![Version](https://img.shields.io/badge/version-2.51.0-blue?style=for-the-badge)](https://github.com/Light60-1/Microsoft-Rewards-Bot/releases)
+[![GitHub](https://img.shields.io/badge/⭐_Star_Project-yellow?style=for-the-badge&logo=github)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot)
+[![Version](https://img.shields.io/badge/version-2.51.0-blue?style=for-the-badge)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/releases)
 [![License](https://img.shields.io/badge/license-CC_BY--NC--SA_4.0-green?style=for-the-badge)](LICENSE)
 
 </div>
@@ -48,7 +48,7 @@ This TypeScript-based automation bot helps you maximize your **Microsoft Rewards
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/Light60-1/Microsoft-Rewards-Bot.git
+   git clone https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot.git
    cd Microsoft-Rewards-Bot
    ```
 
@@ -107,7 +107,7 @@ For containerized deployment with automatic scheduling:
 docker compose up -d
 
 # View logs
-docker logs -f microsoft-rewards-script
+docker logs -f microsoft-rewards-bot
 ```
 
 **📖 [Full Docker Guide](docs/docker.md)**
@@ -178,7 +178,7 @@ All while maintaining **natural behavior patterns** to minimize detection risk.
 
 - 💬 **[Join our Discord](https://discord.gg/h6Z69ZPPCz)** — Community support and updates
 - 📖 **[Documentation Hub](docs/index.md)** — Complete guides and references
-- 🐛 **[Report Issues](https://github.com/Light60-1/Microsoft-Rewards-Bot/issues)** — Bug reports and feature requests
+- 🐛 **[Report Issues](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)** — Bug reports and feature requests
 - 📧 **[Diagnostics Guide](docs/diagnostics.md)** — Troubleshooting steps
 
 ---
@@ -222,7 +222,7 @@ See [LICENSE](LICENSE) for complete terms.
 ## 🙏 Acknowledgments
 
 - Built with [Playwright](https://playwright.dev/) and [ReBrowser](https://github.com/rebrowser/rebrowser-playwright)
-- Thanks to all [contributors](https://github.com/Light60-1/Microsoft-Rewards-Bot/graphs/contributors)
+- Thanks to all [contributors](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/graphs/contributors)
 - Community support via [Discord](https://discord.gg/h6Z69ZPPCz)
 
 ---
@@ -242,6 +242,6 @@ If you find this project helpful:
 
 **Made with ❤️ by the community**
 
-[Documentation](docs/index.md) • [Discord](https://discord.gg/h6Z69ZPPCz) • [Issues](https://github.com/Light60-1/Microsoft-Rewards-Bot/issues)
+[Documentation](docs/index.md) • [Discord](https://discord.gg/h6Z69ZPPCz) • [Issues](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)
 
 </div>

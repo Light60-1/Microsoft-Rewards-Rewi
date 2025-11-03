@@ -23,7 +23,7 @@ if [ "$USE_CRON" = "true" ] || [ "$USE_CRON" = "1" ]; then
   ENV_VARS=$(printenv | grep -E '^(TZ|NODE_ENV|FORCE_HEADLESS|PLAYWRIGHT_BROWSERS_PATH|ACCOUNTS_JSON|ACCOUNTS_FILE)=' | sed 's/^/export /' | tr '\n' ';')
   
   # Create cron job that runs the script
-  CRON_JOB="$CRON_SCHEDULE cd /usr/src/microsoft-rewards-script && $ENV_VARS node --enable-source-maps ./dist/index.js >> /var/log/cron.log 2>&1"
+  CRON_JOB="$CRON_SCHEDULE cd /app && $ENV_VARS node --enable-source-maps ./dist/index.js >> /var/log/cron.log 2>&1"
   
   echo "$CRON_JOB" > /etc/cron.d/microsoft-rewards
   chmod 0644 /etc/cron.d/microsoft-rewards
@@ -43,7 +43,7 @@ if [ "$USE_CRON" = "true" ] || [ "$USE_CRON" = "1" ]; then
   # Run once immediately if requested
   if [ "$RUN_ON_START" = "true" ] || [ "$RUN_ON_START" = "1" ]; then
     echo "==> Running initial execution (RUN_ON_START=true)..."
-    cd /usr/src/microsoft-rewards-script
+    cd /app
     node --enable-source-maps ./dist/index.js 2>&1 | tee -a /var/log/cron.log
     echo "==> Initial execution completed"
     echo ""

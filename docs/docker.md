@@ -21,7 +21,7 @@ docker compose up -d
 ### 3. View Logs
 
 ```bash
-docker logs -f microsoft-rewards-script
+docker logs -f microsoft-rewards-bot
 ```
 
 **That's it!** Script runs automatically.
@@ -80,7 +80,7 @@ docker run -e ACCOUNTS_FILE=/custom/path/accounts.json ...
 docker compose up -d
 
 # View logs
-docker logs -f microsoft-rewards-script
+docker logs -f microsoft-rewards-bot
 
 # Stop container
 docker compose down
@@ -108,16 +108,16 @@ docker compose restart
 
 ```bash
 # Enter container shell
-docker exec -it microsoft-rewards-script /bin/bash
+docker exec -it microsoft-rewards-bot /bin/bash
 
 # Check Node.js version
-docker exec -it microsoft-rewards-script node --version
+docker exec -it microsoft-rewards-bot node --version
 
 # View config (mounted in /src/)
-docker exec -it microsoft-rewards-script cat src/config.jsonc
+docker exec -it microsoft-rewards-bot cat src/config.jsonc
 
 # Check if cron is enabled
-docker exec -it microsoft-rewards-script printenv | grep USE_CRON
+docker exec -it microsoft-rewards-bot printenv | grep USE_CRON
 ```
 
 ---
@@ -197,12 +197,12 @@ docker compose up -d
 4. **Verify cron is running:**
 ```bash
 # Check container logs
-docker logs -f microsoft-rewards-script
+docker logs -f microsoft-rewards-bot
 
 # Should see: "==> Cron mode enabled"
 
 # View cron logs inside container
-docker exec microsoft-rewards-script tail -f /var/log/cron.log
+docker exec microsoft-rewards-bot tail -f /var/log/cron.log
 ```
 
 ### Option 3: Single Run (Manual)
@@ -244,7 +244,7 @@ services:
 
 ```bash
 # Enter container
-docker exec -it microsoft-rewards-script /bin/bash
+docker exec -it microsoft-rewards-bot /bin/bash
 
 # Check cron is running
 ps aux | grep cron

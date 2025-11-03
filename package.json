@@ -1,7 +1,7 @@
 {
-  "name": "microsoft-rewards-script",
+  "name": "microsoft-rewards-bot",
   "version": "2.51.0",
-  "description": "Automatically do tasks for Microsoft Rewards but in TS!",
+  "description": "Automate Microsoft Rewards points collection",
   "private": true,
   "main": "index.js",
   "engines": {
@@ -9,12 +9,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Light60-1/Microsoft-Rewards-Bot.git"
+    "url": "https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot.git"
   },
   "bugs": {
-    "url": "https://github.com/Light60-1/Microsoft-Rewards-Bot/issues"
+    "url": "https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues"
   },
-  "homepage": "https://github.com/Light60-1/Microsoft-Rewards-Bot#readme",
+  "homepage": "https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot#readme",
   "scripts": {
     "clean": "rimraf dist",
     "pre-build": "npm i && npm run clean && node -e \"process.exit(process.env.SKIP_PLAYWRIGHT_INSTALL?0:1)\" || npx playwright install chromium",
@@ -29,7 +29,7 @@
     "prepare": "npm run build",
     "setup": "node ./setup/update/setup.mjs",
     "kill-chrome-win": "powershell -Command \"Get-Process | Where-Object { $_.MainModule.FileVersionInfo.FileDescription -eq 'Google Chrome for Testing' } | ForEach-Object { Stop-Process -Id $_.Id -Force }\"",
-    "create-docker": "docker build -t microsoft-rewards-script-docker ."
+    "create-docker": "docker build -t microsoft-rewards-bot ."
   },
   "keywords": [
     "Bing Rewards",
@@ -40,14 +40,14 @@
     "Playwright",
     "Cheerio"
   ],
-  "author": "Light60-1",
+  "author": "Obsidian-wtf",
   "contributors": [
-    "Microsoft Rewards Bot Community (https://github.com/Light60-1/Microsoft-Rewards-Bot/graphs/contributors)"
+    "Microsoft Rewards Bot Community (https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/graphs/contributors)"
   ],
   "license": "CC-BY-NC-SA-4.0",
   "funding": {
     "type": "github",
-    "url": "https://github.com/sponsors/Light60-1"
+    "url": "https://github.com/sponsors/Obsidian-wtf"
   },
   "devDependencies": {
     "@types/ms": "^0.7.34",

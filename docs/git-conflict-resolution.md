@@ -168,7 +168,7 @@ cp src/accounts.json ~/backup-accounts.json
 # Nuclear option: fresh clone
 cd ..
 rm -rf Microsoft-Rewards-Bot
-git clone https://github.com/Light60-1/Microsoft-Rewards-Bot.git
+git clone https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot.git
 cd Microsoft-Rewards-Bot
 
 # Restore your files

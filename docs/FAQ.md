@@ -174,7 +174,7 @@ See [Accounts Troubleshooting](accounts.md#troubleshooting).
 
 ### Docker container exits immediately
 
-1. **Check logs:** `docker logs microsoft-rewards-script`
+1. **Check logs:** `docker logs microsoft-rewards-bot`
 2. **Verify mounts:** Ensure `accounts.jsonc` exists and is mounted
 3. **Check config:** `headless` must be `true` for Docker
 4. **Review environment variables:** Timezone, cron settings
@@ -311,14 +311,14 @@ See [Configuration Guide](config.md#risk-management--security).
 
 - 💬 **[Join our Discord](https://discord.gg/h6Z69ZPPCz)** — Ask the community
 - 📖 **[Documentation Hub](index.md)** — Browse all guides
-- 🐛 **[GitHub Issues](https://github.com/Light60-1/Microsoft-Rewards-Bot/issues)** — Report problems
+- 🐛 **[GitHub Issues](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)** — Report problems
 - 📧 **[Diagnostics Guide](diagnostics.md)** — Debug issues
 
 ---
 
 <div align="center">
 
-**Didn't find your answer?** [Ask on Discord](https://discord.gg/h6Z69ZPPCz) or [open an issue](https://github.com/Light60-1/Microsoft-Rewards-Bot/issues)!
+**Didn't find your answer?** [Ask on Discord](https://discord.gg/h6Z69ZPPCz) or [open an issue](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)!
 
 [← Back to Documentation](index.md)
 

@@ -99,7 +99,7 @@ If you prefer containers:
 docker compose up -d
 
 # Follow logs
-docker logs -f microsoft-rewards-script
+docker logs -f microsoft-rewards-bot
 ```
 
 **[Full Docker Guide →](./docker.md)**
@@ -125,7 +125,7 @@ Once running, explore these guides:
 **Login issues?** → [Accounts & 2FA Setup](./accounts.md)  
 **Want Docker?** → [Container Guide](./docker.md)  
 
-**Found a bug?** [Report it here](https://github.com/Light60-1/Microsoft-Rewards-Bot/issues)  
+**Found a bug?** [Report it here](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)  
 **Need support?** [Join our Discord](https://discord.gg/KRBFxxsU)
 
 ---

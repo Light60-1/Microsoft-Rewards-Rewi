@@ -1,90 +1,52 @@
 <div align="center">
 
-<img src="../assets/logo.png" alt="Microsoft Rewards Script Logo" width="150"/>
+# 📚 Documentation
 
-# 📚 Documentation Hub
+**Complete guide for Microsoft Rewards Bot**
 
-**Complete guide to automate Microsoft Rewards**
-
-[← Back to README](../README.md)
+[← Back to Main](../README.md)
 
 </div>
 
 ---
 
-## 🚀 Start Here (In Order)
+## 🚀 Quick Start (3 Steps)
 
-### For Complete Beginners
+1. **[Setup Accounts](accounts.md)** — Add credentials + 2FA
+2. **[Configure Bot](config.md)** — Essential settings
+3. **[Enable Scheduler](schedule.md)** — Daily automation
 
-1. **[Accounts & 2FA](./accounts.md)** — Add your Microsoft accounts
-2. **[Basic Config](./config.md#quick-start)** — 5 essential options
-3. **[Scheduler](./schedule.md#quick-start)** — Automate daily runs
-
-**You're all set! 🎉**
+**Done!** The bot will run automatically.
 
 ---
 
-## 🔥 Popular Features
+## � Feature Guides
 
-### Notifications & Monitoring
-- **[Discord Webhooks](./conclusionwebhook.md)** — Get run summaries
-- **[NTFY Push](./ntfy.md)** — Mobile alerts
-
-### Anti-Ban & Privacy
-- **[Humanization](./humanization.md)** — Natural behavior simulation
-- **[Proxy Setup](./proxy.md)** — Change your IP (optional)
-
-### Deployment
-- **[Docker](./docker.md)** — Container deployment
-- **[Diagnostics](./diagnostics.md)** — Troubleshooting
-
----
-
-## 📖 All Documentation
-
-### Quick References
-- [❓ FAQ (Frequently Asked Questions)](./FAQ.md) — Quick answers to common questions
-
-### Configuration & Setup
-- [Complete Configuration Reference](./config.md) — All options explained
-- [Scheduler Setup](./schedule.md) — Automated timing
-- [Job State](./jobstate.md) — Progress tracking
-- [Auto-Update](./update.md) — Keep script current
-
-### Advanced Features
-- [Buy Mode](./buy-mode.md) — Manual purchase monitoring
-- [Security Guide](./security.md) — Privacy & incident response
+| Feature | Description |
+|---------|-------------|
+| **[Configuration](config.md)** | All settings explained |
+| **[Scheduler](schedule.md)** | Automated daily runs |
+| **[Humanization](humanization.md)** | Anti-detection system |
+| **[Webhooks](conclusionwebhook.md)** | Discord notifications |
+| **[NTFY Alerts](ntfy.md)** | Mobile push notifications |
+| **[Proxy Setup](proxy.md)** | IP rotation (optional) |
+| **[Docker](docker.md)** | Container deployment |
+| **[Buy Mode](buy-mode.md)** | Manual purchase monitoring |
 
 ---
 
-## 🆘 Need Help?
+## 🆘 Troubleshooting
 
-**Technical issue?** → [Diagnostics Guide](./diagnostics.md)  
-**Login problem?** → [Accounts & 2FA](./accounts.md#troubleshooting)  
-**Banned?** → [Security Guide](./security.md)  
-**Want to contribute?** → [Contributing Guide](../CONTRIBUTING.md)
+| Issue | Solution |
+|-------|----------|
+| **Bot not working?** | [Diagnostics Guide](diagnostics.md) |
+| **Login failed?** | [Accounts & 2FA](accounts.md#troubleshooting) |
+| **Account banned?** | [Security Guide](security.md) |
+| **Git conflicts?** | [Conflict Resolution](git-conflict-resolution.md) |
+| **General questions?** | [FAQ](FAQ.md) |
 
-**Join Discord** → [Support Server](https://discord.gg/h6Z69ZPPCz)
-
----
-
-## 🎯 Quick Links by Use Case
-
-### "I just installed the script"
-→ [Getting Started](./getting-started.md) → [Accounts](./accounts.md) → [Scheduler](./schedule.md)
-
-### "I want daily automation"
-→ [Scheduler Guide](./schedule.md) → [Humanization](./humanization.md)
-
-### "I need notifications"
-→ [Discord Webhooks](./conclusionwebhook.md) or [NTFY](./ntfy.md)
-
-### "I want to use Docker"
-→ [Docker Guide](./docker.md)
-
-### "Something's broken"
-→ [Diagnostics](./diagnostics.md) → [Security](./security.md)
+**Need help?** → [Discord Community](https://discord.gg/h6Z69ZPPCz)
 
 ---
 
-**[← Back to README](../README.md)**
+[← Back to Main](../README.md)

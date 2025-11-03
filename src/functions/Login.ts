@@ -1248,7 +1248,7 @@ export class Login {
       await ConclusionWebhook(
         this.bot.config,
         `🔐 ${incident.kind}`,
-        '_Security check by @Light_',
+        Array.isArray(incident.details) ? incident.details.join('\n') : (incident.details || 'Security check detected unusual activity'),
         fields,
         severity === 'critical' ? 0xFF0000 : 0xFFAA00
       )
@@ -1256,7 +1256,7 @@ export class Login {
   }
 
   private getDocsUrl(anchor?: string) {
-    const base = process.env.DOCS_BASE?.trim() || 'https://github.com/Light60-1/Microsoft-Rewards-Bot/blob/main/docs/security.md'
+    const base = process.env.DOCS_BASE?.trim() || 'https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/blob/main/docs/security.md'
     const map: Record<string,string> = {
       'recovery-email-mismatch':'#recovery-email-mismatch',
       'we-cant-sign-you-in':'#we-cant-sign-you-in-blocked'
@@ -1267,7 +1267,7 @@ export class Login {
   private startCompromisedInterval() {
     if (this.compromisedInterval) clearInterval(this.compromisedInterval)
     this.compromisedInterval = setInterval(()=>{
-      try { this.bot.log(this.bot.isMobile,'SECURITY','Account in security standby. Review before proceeding. Security check by @Light','warn') } catch {/* ignore */}
+      try { this.bot.log(this.bot.isMobile,'SECURITY','Security standby active. Manual review required before proceeding.','warn') } catch {/* ignore */}
     }, 5*60*1000)
   }
 
