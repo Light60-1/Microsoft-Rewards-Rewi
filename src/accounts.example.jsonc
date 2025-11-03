@@ -23,7 +23,7 @@
       "email": "secondary_account@outlook.com",
       "password": "strong-password-2",
       "totp": "BASE32SECRETSECOND",
-      "recoveryRequired": false,
+      "recoveryRequired": true,
       "recoveryEmail": "secondary.backup@example.com",
       "proxy": {
         "proxyAxios": true,
@@ -35,7 +35,7 @@
     },
     {
       // Account #3 — dedicated proxy with credentials
-      "enabled": true,
+      "enabled": false,
       "email": "with_proxy@outlook.com",
       "password": "strong-password-3",
       "totp": "BASE32SECRETTHIRD",
@@ -51,11 +51,11 @@
     },
     {
       // Account #4 — recovery optional, no proxying through Axios layer
-      "enabled": true,
+      "enabled": false,
       "email": "no_proxy@outlook.com",
       "password": "strong-password-4",
       "totp": "BASE32SECRETFOUR",
-      "recoveryRequired": false,
+      "recoveryRequired": true,
       "recoveryEmail": "no.proxy.backup@example.com",
       "proxy": {
         "proxyAxios": false,
@@ -67,7 +67,7 @@
     },
     {
       // Account #5 — enabled with TOTP omitted (will rely on recovery email)
-      "enabled": true,
+      "enabled": false,
       "email": "totp_optional@outlook.com",
       "password": "strong-password-5",
       "totp": "",

@@ -65,17 +65,25 @@ export class Search extends Workers {
         }
 
         googleSearchQueries = this.bot.utils.shuffleArray(googleSearchQueries)
-        // Deduplicate topics (exact match)
-        const seen = new Set<string>()
-        googleSearchQueries = googleSearchQueries.filter(q => {
-            if (seen.has(q.topic.toLowerCase())) return false
-            seen.add(q.topic.toLowerCase())
-            return true
-        })
-
-        // Semantic deduplication: filter queries with high Jaccard similarity
+        
+        // Combined deduplication: exact + semantic in single pass for performance
         if (this.bot.config.searchSettings.semanticDedup !== false) {
-            googleSearchQueries = this.semanticDeduplication(googleSearchQueries, 0.65)
+            const threshold = this.bot.config.searchSettings.semanticDedupThreshold ?? 0.65
+            const validThreshold = Math.max(0, Math.min(1, threshold)) // clamp [0,1]
+            const originalCount = googleSearchQueries.length
+            googleSearchQueries = this.combinedDeduplication(googleSearchQueries, validThreshold)
+            const filtered = originalCount - googleSearchQueries.length
+            if (filtered > 0) {
+                this.bot.log(this.bot.isMobile, 'SEARCH-DEDUP', `Query dedup: removed ${filtered} duplicates (${originalCount} → ${googleSearchQueries.length})`)
+            }
+        } else {
+            // Fallback: exact dedup only if semantic disabled
+            const seen = new Set<string>()
+            googleSearchQueries = googleSearchQueries.filter(q => {
+                if (seen.has(q.topic.toLowerCase())) return false
+                seen.add(q.topic.toLowerCase())
+                return true
+            })
         }
 
         // Go to bing
@@ -144,8 +152,13 @@ export class Search extends Workers {
                 // Get related search terms to the Google search queries
                 const relatedTerms = await this.getRelatedTerms(query?.topic)
                 if (relatedTerms.length > 3) {
+                    // Filter related terms with semantic dedup to avoid Bing-provided duplicates
+                    const filteredRelated = this.bot.config.searchSettings.semanticDedup !== false
+                        ? this.semanticDedupStrings(relatedTerms, this.bot.config.searchSettings.semanticDedupThreshold ?? 0.65)
+                        : relatedTerms
+                    
                     // Search for the first 2 related terms
-                    for (const term of relatedTerms.slice(1, 3)) {
+                    for (const term of filteredRelated.slice(1, 3)) {
                         this.bot.log(this.bot.isMobile, 'SEARCH-BING-EXTRA', `${missingPoints} Points Remaining | Query: ${term}`)
 
                         searchCounters = await this.bingSearch(page, term)
@@ -473,17 +486,44 @@ export class Search extends Workers {
     }
 
     /**
-     * Semantic deduplication: filter queries with high similarity
-     * Prevents repetitive search patterns that may trigger detection
+     * Combined exact + semantic deduplication in single pass (performance optimized)
+     * Filters both case-insensitive exact duplicates and semantically similar queries
      */
-    private semanticDeduplication(queries: GoogleSearch[], threshold = 0.65): GoogleSearch[] {
+    private combinedDeduplication(queries: GoogleSearch[], threshold = 0.65): GoogleSearch[] {
         const result: GoogleSearch[] = []
+        const seen = new Set<string>() // Track exact duplicates (case-insensitive)
+        
         for (const query of queries) {
+            const lower = query.topic.toLowerCase()
+            
+            // Check exact duplicate first (faster)
+            if (seen.has(lower)) continue
+            
+            // Check semantic similarity with existing results
             const isSimilar = result.some(existing => 
                 this.jaccardSimilarity(query.topic, existing.topic) > threshold
             )
+            
             if (!isSimilar) {
                 result.push(query)
+                seen.add(lower)
+            }
+        }
+        
+        return result
+    }
+
+    /**
+     * Semantic deduplication for string arrays (used for related terms)
+     */
+    private semanticDedupStrings(terms: string[], threshold = 0.65): string[] {
+        const result: string[] = []
+        for (const term of terms) {
+            const isSimilar = result.some(existing => 
+                this.jaccardSimilarity(term, existing) > threshold
+            )
+            if (!isSimilar) {
+                result.push(term)
             }
         }
         return result

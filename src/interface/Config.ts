@@ -55,6 +55,7 @@ export interface ConfigSearchSettings {
     localFallbackCount?: number; // Number of local fallback queries to sample when trends fail
     extraFallbackRetries?: number; // Additional mini-retry loops with fallback terms
     semanticDedup?: boolean; // Filter queries with high semantic similarity (default: true)
+    semanticDedupThreshold?: number; // Jaccard similarity threshold 0-1 (default: 0.65, lower = stricter)
 }
 
 export interface ConfigSearchDelay {

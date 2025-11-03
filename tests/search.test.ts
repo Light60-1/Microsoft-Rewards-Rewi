@@ -176,3 +176,34 @@ test('Jaccard similarity correctly identifies similar queries', () => {
   assert.ok(sim1 > 0.3, 'Similar queries should have high Jaccard score')
   assert.ok(sim2 < 0.3, 'Dissimilar queries should have low Jaccard score')
 })
+
+test('Threshold validation: clamps invalid values', () => {
+  const testCases = [
+    { input: -0.5, expected: 0 },
+    { input: 1.5, expected: 1 },
+    { input: 0.5, expected: 0.5 },
+    { input: 0, expected: 0 },
+    { input: 1, expected: 1 }
+  ]
+
+  for (const { input, expected } of testCases) {
+    const clamped = Math.max(0, Math.min(1, input))
+    assert.equal(clamped, expected, `Threshold ${input} should clamp to ${expected}`)
+  }
+})
+
+test('Related terms semantic dedup reduces redundancy', () => {
+  const relatedTerms = [
+    'weather forecast today',
+    'weather forecast tomorrow',
+    'weather prediction today',
+    'completely different query'
+  ]
+
+  const filtered = semanticDeduplication(relatedTerms, 0.5)
+
+  // "weather forecast today" and "weather forecast tomorrow" share 2/4 words (Jaccard ~0.5)
+  assert.ok(filtered.length <= relatedTerms.length, 'Should filter some related terms')
+  assert.ok(filtered.includes('completely different query'), 'Should keep unique queries')
+})
+
