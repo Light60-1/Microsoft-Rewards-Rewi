@@ -154,8 +154,8 @@ async function fullSetup() {
   if (['yes', 'y'].includes(start)) {
     await runCommand(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'start']);
   } else {
-    log('\nFinished setup. To start later, run: npm start');
-    log('For automated scheduling, run: npm run start:schedule');
+  log('\nFinished setup. To start later, run: npm start');
+  log('For automated scheduling, use your OS scheduler (see docs/schedule.md).');
   }
 }
 
