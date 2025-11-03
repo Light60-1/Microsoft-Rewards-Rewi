@@ -65,13 +65,18 @@ export class Search extends Workers {
         }
 
         googleSearchQueries = this.bot.utils.shuffleArray(googleSearchQueries)
-        // Deduplicate topics
+        // Deduplicate topics (exact match)
         const seen = new Set<string>()
         googleSearchQueries = googleSearchQueries.filter(q => {
             if (seen.has(q.topic.toLowerCase())) return false
             seen.add(q.topic.toLowerCase())
             return true
         })
+
+        // Semantic deduplication: filter queries with high Jaccard similarity
+        if (this.bot.config.searchSettings.semanticDedup !== false) {
+            googleSearchQueries = this.semanticDeduplication(googleSearchQueries, 0.65)
+        }
 
         // Go to bing
         await page.goto(this.searchPageURL ? this.searchPageURL : this.bingHome)
@@ -453,6 +458,35 @@ export class Search extends Workers {
         } catch (error) {
             // Continue if element is not found or other error occurs
         }
+    }
+
+    /**
+     * Calculate Jaccard similarity between two strings (word-level)
+     * Used for semantic deduplication to avoid ban-pattern queries
+     */
+    private jaccardSimilarity(a: string, b: string): number {
+        const setA = new Set(a.toLowerCase().split(/\s+/))
+        const setB = new Set(b.toLowerCase().split(/\s+/))
+        const intersection = new Set([...setA].filter(x => setB.has(x)))
+        const union = new Set([...setA, ...setB])
+        return union.size === 0 ? 0 : intersection.size / union.size
+    }
+
+    /**
+     * Semantic deduplication: filter queries with high similarity
+     * Prevents repetitive search patterns that may trigger detection
+     */
+    private semanticDeduplication(queries: GoogleSearch[], threshold = 0.65): GoogleSearch[] {
+        const result: GoogleSearch[] = []
+        for (const query of queries) {
+            const isSimilar = result.some(existing => 
+                this.jaccardSimilarity(query.topic, existing.topic) > threshold
+            )
+            if (!isSimilar) {
+                result.push(query)
+            }
+        }
+        return result
     }
 
 }
