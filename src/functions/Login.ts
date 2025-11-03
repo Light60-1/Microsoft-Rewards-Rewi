@@ -1,10 +1,8 @@
-// Clean refactored Login implementation
-// Public API preserved: login(), getMobileAccessToken()
-
 import type { Page, Locator } from 'playwright'
 import * as crypto from 'crypto'
 import readline from 'readline'
 import { AxiosRequestConfig } from 'axios'
+
 import { generateTOTP } from '../util/Totp'
 import { saveSessionData } from '../util/Load'
 import { MicrosoftRewardsBot } from '../index'

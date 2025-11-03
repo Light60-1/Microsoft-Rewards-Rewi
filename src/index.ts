@@ -1,7 +1,9 @@
 import cluster from 'cluster'
 import type { Worker } from 'cluster'
-// Use Page type from playwright for typings; at runtime rebrowser-playwright extends playwright
 import type { Page } from 'playwright'
+import fs from 'fs'
+import path from 'path'
+import { spawn } from 'child_process'
 
 import Browser from './browser/Browser'
 import BrowserFunc from './browser/BrowserFunc'
@@ -10,17 +12,7 @@ import BrowserUtil from './browser/BrowserUtil'
 import { log } from './util/Logger'
 import Util from './util/Utils'
 import { loadAccounts, loadConfig, saveSessionData } from './util/Load'
-import { DISCORD } from './constants'
-
-import { Login } from './functions/Login'
-import { Workers } from './functions/Workers'
-import Activities from './functions/Activities'
-
-import { Account } from './interface/Account'
 import Axios from './util/Axios'
-import fs from 'fs'
-import path from 'path'
-import { spawn } from 'child_process'
 import Humanizer from './util/Humanizer'
 import { detectBanReason } from './util/BanDetector'
 import { RiskManager, RiskMetrics, RiskEvent } from './util/RiskManager'
@@ -29,6 +21,13 @@ import { QueryDiversityEngine } from './util/QueryDiversityEngine'
 import JobState from './util/JobState'
 import { StartupValidator } from './util/StartupValidator'
 import { MobileRetryTracker } from './util/MobileRetryTracker'
+
+import { Login } from './functions/Login'
+import { Workers } from './functions/Workers'
+import Activities from './functions/Activities'
+
+import { Account } from './interface/Account'
+import { DISCORD } from './constants'
 
 
 // Main bot class

@@ -1,6 +1,5 @@
 import { Page } from 'rebrowser-playwright'
 import { load } from 'cheerio'
-
 import { MicrosoftRewardsBot } from '../index'
 
 type DismissButton = { selector: string; label: string; isXPath?: boolean }

@@ -5,7 +5,6 @@ import { AxiosRequestConfig } from 'axios'
 import { MicrosoftRewardsBot } from '../index'
 import { saveSessionData } from '../util/Load'
 import { TIMEOUTS, RETRY_LIMITS, SELECTORS, URLS } from '../constants'
-
 import { Counters, DashboardData, MorePromotion, PromotionalItem } from '../interface/DashboardData'
 import { QuizData } from '../interface/QuizData'
 import { AppUserData } from '../interface/AppUserData'

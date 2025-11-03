@@ -1,10 +1,10 @@
 /**
- * Central constants file for the Microsoft Rewards Script
- * Defines timeouts, retry limits, and other magic numbers used throughout the application
+ * Central constants for the Microsoft Rewards Script
+ * All timeouts, retry limits, delays, selectors, and other magic numbers are defined here
  */
 
 /**
- * Safe environment variable parsing with validation
+ * Parse environment variable as number with validation
  */
 function parseEnvNumber(key: string, defaultValue: number, min: number, max: number): number {
   const raw = process.env[key]
