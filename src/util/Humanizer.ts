@@ -19,13 +19,19 @@ export class Humanizer {
       if (Math.random() < moveProb) {
         const x = Math.floor(Math.random() * 40) + 5
         const y = Math.floor(Math.random() * 30) + 5
-        await page.mouse.move(x, y, { steps: 2 }).catch(() => {})
+        await page.mouse.move(x, y, { steps: 2 }).catch(() => {
+          // Mouse move failed - page may be closed or unavailable
+        })
       }
       if (Math.random() < scrollProb) {
         const dy = (Math.random() < 0.5 ? 1 : -1) * (Math.floor(Math.random() * 150) + 50)
-        await page.mouse.wheel(0, dy).catch(() => {})
+        await page.mouse.wheel(0, dy).catch(() => {
+          // Mouse wheel failed - page may be closed or unavailable
+        })
       }
-    } catch {/* noop */}
+    } catch {
+      // Gesture execution failed - not critical for operation
+    }
   }
 
   async actionPause(): Promise<void> {
@@ -40,7 +46,10 @@ export class Humanizer {
         try {
           const n = this.util.stringToMs(String(v))
           return Math.max(0, Math.min(n, 10_000))
-        } catch { return defMin }
+        } catch (e) { 
+          // Parse failed - use default minimum
+          return defMin 
+        }
       }
       min = parse(this.cfg.actionDelay.min)
       max = parse(this.cfg.actionDelay.max)

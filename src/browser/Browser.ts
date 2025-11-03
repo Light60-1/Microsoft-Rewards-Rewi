@@ -21,7 +21,9 @@ class Browser {
                 // Dynamically import child_process to avoid overhead otherwise
                 const { execSync } = await import('child_process')
                 execSync('npx playwright install chromium', { stdio: 'ignore' })
-            } catch { /* silent */ }
+            } catch (e) { 
+                this.bot.log(this.bot.isMobile, 'BROWSER', `Auto-install failed: ${e instanceof Error ? e.message : String(e)}`, 'warn')
+            }
         }
 
         let browser: import('rebrowser-playwright').Browser
@@ -114,11 +116,18 @@ class Browser {
                               }
                             `
                             document.documentElement.appendChild(style)
-                        } catch { /* ignore */ }
+                        } catch (e) { 
+                            // Style injection failed - not critical, page will still function
+                        }
                     })
-                } catch { /* ignore */ }
+                } catch (e) { 
+                    // Viewport/script setup failed - log for debugging but continue
+                    this.bot.log(this.bot.isMobile, 'BROWSER', `Page setup warning: ${e instanceof Error ? e.message : String(e)}`, 'warn')
+                }
             })
-        } catch { /* ignore */ }
+        } catch (e) { 
+            this.bot.log(this.bot.isMobile, 'BROWSER', `Context event handler setup warning: ${e instanceof Error ? e.message : String(e)}`, 'warn')
+        }
 
         await context.addCookies(sessionData.cookies)
 

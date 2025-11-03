@@ -300,7 +300,9 @@ export class MicrosoftRewardsBot {
                         this.log(false, 'BUY-MODE', 'Monitor tab was closed; reopening in background...', 'warn')
                         await recreateMonitor()
                     }
-                } catch { /* ignore */ }
+                } catch (e) {
+                    this.log(false, 'BUY-MODE', `Failed to check/recreate monitor tab: ${e instanceof Error ? e.message : String(e)}`, 'warn')
+                }
 
                 try {
                     const data = await this.browser.func.getDashboardData(monitor)
@@ -321,9 +323,14 @@ export class MicrosoftRewardsBot {
                     const msg = err instanceof Error ? err.message : String(err)
                     if (/Target closed|page has been closed|browser has been closed/i.test(msg)) {
                         this.log(false, 'BUY-MODE', 'Monitor page closed or lost; recreating...', 'warn')
-                        try { await recreateMonitor() } catch { /* ignore */ }
+                        try { 
+                            await recreateMonitor() 
+                        } catch (e) {
+                            this.log(false, 'BUY-MODE', `Failed to recreate monitor: ${e instanceof Error ? e.message : String(e)}`, 'warn')
+                        }
+                    } else {
+                        this.log(false, 'BUY-MODE', `Dashboard check error: ${msg}`, 'warn')
                     }
-                    // Swallow other errors to avoid disrupting the user
                 }
             }
 
@@ -333,7 +340,11 @@ export class MicrosoftRewardsBot {
             } catch (e) { 
                 log(false, 'BUY-MODE', `Failed to save session: ${e instanceof Error ? e.message : String(e)}`, 'warn')
             }
-            try { if (!monitor.isClosed()) await monitor.close() } catch {/* ignore */}
+            try { 
+                if (!monitor.isClosed()) await monitor.close() 
+            } catch (e) {
+                log(false, 'BUY-MODE', `Failed to close monitor tab: ${e instanceof Error ? e.message : String(e)}`, 'warn')
+            }
 
             // Send a final minimal conclusion webhook for this manual session
             const summary: AccountSummary = {
@@ -351,7 +362,7 @@ export class MicrosoftRewardsBot {
 
             this.log(false, 'BUY-MODE', 'Buy mode session finished (monitoring period ended). You can close the browser when done.')
         } catch (e) {
-            this.log(false, 'BUY-MODE', `Error in buy mode: ${e instanceof Error ? e.message : e}`, 'error')
+            this.log(false, 'BUY-MODE', `Error in buy mode: ${e instanceof Error ? e.message : String(e)}`, 'error')
         }
     }
 
@@ -506,10 +517,14 @@ export class MicrosoftRewardsBot {
                 (async () => {
                     try {
                         await this.sendConclusion(this.accountSummaries)
-                    } catch {/* ignore */}
+                    } catch (e) {
+                        log('main', 'CONCLUSION', `Failed to send conclusion: ${e instanceof Error ? e.message : String(e)}`, 'warn')
+                    }
                     try {
                         await this.runAutoUpdate()
-                    } catch {/* ignore */}
+                    } catch (e) {
+                        log('main', 'UPDATE', `Auto-update failed: ${e instanceof Error ? e.message : String(e)}`, 'warn')
+                    }
                     log('main', 'MAIN-WORKER', 'All workers destroyed. Exiting main process!', 'warn')
                     process.exit(0)
                 })()
@@ -806,7 +821,9 @@ export class MicrosoftRewardsBot {
             // Single process mode -> build and send conclusion directly
             await this.sendConclusion(this.accountSummaries)
             // After conclusion, run optional auto-update
-            await this.runAutoUpdate().catch(() => {/* ignore update errors */})
+            await this.runAutoUpdate().catch((e) => {
+                log('main', 'UPDATE', `Auto-update failed: ${e instanceof Error ? e.message : String(e)}`, 'warn')
+            })
         }
         process.exit()
     }
