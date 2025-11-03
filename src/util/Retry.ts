@@ -22,7 +22,7 @@ export class Retry {
       multiplier: 2,
       jitter: 0.2
     }
-  const merged: ConfigRetryPolicy = { ...(policy || {}) }
+    const merged: ConfigRetryPolicy = { ...(policy || {}) }
     // normalize string durations
     const util = new Util()
     const parse = (v: number | string) => {
@@ -42,7 +42,8 @@ export class Retry {
     let attempt = 0
     let delay = this.policy.baseDelay
     let lastErr: unknown
-  while (attempt < this.policy.maxAttempts) {
+    
+    while (attempt < this.policy.maxAttempts) {
       try {
         return await fn()
       } catch (e) {

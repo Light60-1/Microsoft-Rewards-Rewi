@@ -80,7 +80,7 @@ export class Search extends Workers {
 
         await this.bot.browser.utils.tryDismissAllMessages(page)
 
-    let stagnation = 0 // consecutive searches without point progress
+        let stagnation = 0 // consecutive searches without point progress
 
         const queries: string[] = []
         // Mobile search doesn't seem to like related queries?
@@ -166,7 +166,7 @@ export class Search extends Workers {
                             return
                         }
                     }
-                fallbackRounds++
+                    fallbackRounds++
                 }
             }
         }

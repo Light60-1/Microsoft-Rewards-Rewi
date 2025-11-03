@@ -359,7 +359,8 @@ export function loadConfig(): Config {
                 candidates.push(path.join(base, name))
             }
         }
-    let cfgPath: string | null = null
+        
+        let cfgPath: string | null = null
         for (const p of candidates) {
             try { if (fs.existsSync(p)) { cfgPath = p; break } } catch { /* ignore */ }
         }
@@ -367,11 +368,11 @@ export function loadConfig(): Config {
         const config = fs.readFileSync(cfgPath, 'utf-8')
         const text = config.replace(/^\uFEFF/, '')
         const raw = JSON.parse(stripJsonComments(text))
-    const normalized = normalizeConfig(raw)
-    configCache = normalized // Set as cache
-    configSourcePath = cfgPath
+        const normalized = normalizeConfig(raw)
+        configCache = normalized
+        configSourcePath = cfgPath
 
-    return normalized
+        return normalized
     } catch (error) {
         throw new Error(error as string)
     }
@@ -447,12 +448,12 @@ export async function saveFingerprintData(sessionPath: string, email: string, is
             await fs.promises.mkdir(sessionDir, { recursive: true })
         }
 
-    // Save fingerprint to files (write both legacy and corrected names for compatibility)
-    const legacy = path.join(sessionDir, `${isMobile ? 'mobile_fingerpint' : 'desktop_fingerpint'}.json`)
-    const correct = path.join(sessionDir, `${isMobile ? 'mobile_fingerprint' : 'desktop_fingerprint'}.json`)
-    const payload = JSON.stringify(fingerprint)
-    await fs.promises.writeFile(correct, payload)
-    try { await fs.promises.writeFile(legacy, payload) } catch { /* ignore */ }
+        // Save fingerprint to files (write both legacy and corrected names for compatibility)
+        const legacy = path.join(sessionDir, `${isMobile ? 'mobile_fingerpint' : 'desktop_fingerpint'}.json`)
+        const correct = path.join(sessionDir, `${isMobile ? 'mobile_fingerprint' : 'desktop_fingerprint'}.json`)
+        const payload = JSON.stringify(fingerprint)
+        await fs.promises.writeFile(correct, payload)
+        try { await fs.promises.writeFile(legacy, payload) } catch { /* ignore */ }
 
         return sessionDir
     } catch (error) {

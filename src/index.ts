@@ -459,7 +459,7 @@ export class MicrosoftRewardsBot {
                     const time12Val = typeof srec['time12'] === 'string' ? String(srec['time12']) : undefined
                     const time24Val = typeof srec['time24'] === 'string' ? String(srec['time24']) : undefined
 
-                    if (useAmPmVal === true) {
+                    if (useAmPmVal) {
                         formatName = '12h'
                         timeShown = time12Val || sched.time || '9:00 AM'
                     } else if (useAmPmVal === false) {
