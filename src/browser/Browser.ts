@@ -7,14 +7,6 @@ import { loadSessionData, saveFingerprintData } from '../util/Load'
 import { updateFingerprintUserAgent } from '../util/UserAgent'
 import { AccountProxy } from '../interface/Account'
 
-/* Test Stuff
-https://abrahamjuliot.github.io/creepjs/
-https://botcheck.luminati.io/
-https://fv.pro/
-https://pixelscan.net/
-https://www.browserscan.net/
-*/
-
 class Browser {
     private bot: MicrosoftRewardsBot
 

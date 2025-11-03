@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { Util } from './Utils'
 
 export interface QuerySource {
   name: string
@@ -21,6 +22,7 @@ export interface QueryDiversityConfig {
 export class QueryDiversityEngine {
   private config: QueryDiversityConfig
   private cache: Map<string, { queries: string[]; expires: number }> = new Map()
+  private util: Util = new Util()
 
   constructor(config?: Partial<QueryDiversityConfig>) {
     this.config = {
@@ -56,7 +58,7 @@ export class QueryDiversityEngine {
     }
 
     // Shuffle and limit to requested count
-    final = this.shuffleArray(final).slice(0, count)
+    final = this.util.shuffleArray(final).slice(0, count)
 
     return final.length > 0 ? final : this.getLocalFallback(count)
   }
@@ -275,7 +277,7 @@ export class QueryDiversityEngine {
       'education resources'
     ]
 
-    return this.shuffleArray(fallback).slice(0, count)
+    return this.util.shuffleArray(fallback).slice(0, count)
   }
 
   /**
@@ -317,18 +319,6 @@ export class QueryDiversityEngine {
     if (query.length > 80) return 'reddit'
     if (/how to|what is|why/i.test(query)) return 'local'
     return 'trends'
-  }
-
-  /**
-   * Shuffle array (Fisher-Yates)
-   */
-  private shuffleArray<T>(array: T[]): T[] {
-    const shuffled = [...array]
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!]
-    }
-    return shuffled
   }
 
   /**

@@ -1,5 +1,5 @@
 import { Page } from 'rebrowser-playwright'
-import Util from './Utils'
+import { Util } from './Utils'
 import type { ConfigHumanization } from '../interface/Config'
 
 export class Humanizer {

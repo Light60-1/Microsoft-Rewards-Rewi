@@ -25,7 +25,7 @@ type ActivityKind =
     | { type: 'unsupported' }
 
 
-export default class Activities {
+export class Activities {
     private bot: MicrosoftRewardsBot
     private handlers: ActivityHandler[] = []
 

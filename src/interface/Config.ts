@@ -30,7 +30,6 @@ export interface Config {
     riskManagement?: ConfigRiskManagement; // NEW: Risk-aware throttling and ban prediction
     dryRun?: boolean; // NEW: Dry-run mode (simulate without executing)
     queryDiversity?: ConfigQueryDiversity; // NEW: Multi-source query generation
-    legacy?: ConfigLegacyFlags; // Track legacy config usage for warnings
 }
 
 export interface ConfigSaveFingerprint {
@@ -187,9 +186,3 @@ export interface ConfigQueryDiversity {
     maxQueriesPerSource?: number; // limit per source
     cacheMinutes?: number; // cache duration
 }
-
-export interface ConfigLegacyFlags {
-    diagnosticsConfigured?: boolean;
-    analyticsConfigured?: boolean;
-}
-

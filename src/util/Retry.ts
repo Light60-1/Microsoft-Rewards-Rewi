@@ -1,5 +1,5 @@
 import type { ConfigRetryPolicy } from '../interface/Config'
-import Util from './Utils'
+import { Util } from './Utils'
 
 type NumericPolicy = {
   maxAttempts: number
@@ -60,5 +60,3 @@ export class Retry {
     throw lastErr instanceof Error ? lastErr : new Error(String(lastErr))
   }
 }
-
-export default Retry

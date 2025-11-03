@@ -10,7 +10,7 @@ import BrowserFunc from './browser/BrowserFunc'
 import BrowserUtil from './browser/BrowserUtil'
 
 import { log } from './util/Logger'
-import Util from './util/Utils'
+import { Util } from './util/Utils'
 import { loadAccounts, loadConfig, saveSessionData } from './util/Load'
 import Axios from './util/Axios'
 import Humanizer from './util/Humanizer'
@@ -24,7 +24,7 @@ import { MobileRetryTracker } from './util/MobileRetryTracker'
 
 import { Login } from './functions/Login'
 import { Workers } from './functions/Workers'
-import Activities from './functions/Activities'
+import { Activities } from './functions/Activities'
 
 import { Account } from './interface/Account'
 import { DISCORD } from './constants'
@@ -48,7 +48,6 @@ export class MicrosoftRewardsBot {
     public queryEngine?: QueryDiversityEngine
     public compromisedModeActive: boolean = false
     public compromisedReason?: string
-    public compromisedEmail?: string
     // Mutex-like flag to prevent parallel execution when config.parallel is accidentally misconfigured
     private isDesktopRunning: boolean = false
     private isMobileRunning: boolean = false
@@ -58,7 +57,6 @@ export class MicrosoftRewardsBot {
     private accounts: Account[]
     private workers: Workers
     private login = new Login(this)
-    private accessToken: string = ''
     // Buy mode (manual spending) tracking
     private buyMode: { enabled: boolean; email?: string } = { enabled: false }
 
@@ -547,7 +545,6 @@ export class MicrosoftRewardsBot {
             // Reset compromised state per account
             this.compromisedModeActive = false
             this.compromisedReason = undefined
-            this.compromisedEmail = undefined
             this.resetRiskTracking()
             
             // If humanization allowed windows are configured, wait until within a window
@@ -1004,14 +1001,14 @@ export class MicrosoftRewardsBot {
             }
             return { initialPoints: 0, collectedPoints: 0 }
         }
-        this.accessToken = await this.login.getMobileAccessToken(this.homePage, account.email, account.totp)
+        const accessToken = await this.login.getMobileAccessToken(this.homePage, account.email, account.totp)
         await this.browser.func.goHome(this.homePage)
 
         const data = await this.browser.func.getDashboardData()
         const initialPoints = data.userStatus.availablePoints || 0
 
         const browserEnarablePoints = await this.browser.func.getBrowserEarnablePoints()
-        const appEarnablePoints = await this.browser.func.getAppEarnablePoints(this.accessToken)
+        const appEarnablePoints = await this.browser.func.getAppEarnablePoints(accessToken)
 
         const pointsCanCollect = browserEnarablePoints.mobileSearchPoints + appEarnablePoints.totalEarnablePoints
 
@@ -1035,12 +1032,12 @@ export class MicrosoftRewardsBot {
         }
         // Do daily check in
         if (this.config.workers.doDailyCheckIn) {
-            await this.activities.doDailyCheckIn(this.accessToken, data)
+            await this.activities.doDailyCheckIn(accessToken, data)
         }
 
         // Do read to earn
         if (this.config.workers.doReadToEarn) {
-            await this.activities.doReadToEarn(this.accessToken, data)
+            await this.activities.doReadToEarn(accessToken, data)
         }
 
         // Do mobile searches

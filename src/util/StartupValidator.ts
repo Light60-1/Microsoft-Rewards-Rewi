@@ -338,15 +338,6 @@ export class StartupValidator {
         }
       }
     }
-
-    if (config.legacy?.diagnosticsConfigured || config.legacy?.analyticsConfigured) {
-      this.addWarning(
-        'filesystem',
-        'Unrecognized diagnostics/analytics block detected in config.jsonc',
-        'Remove those sections to keep the file aligned with the current schema.',
-        'docs/diagnostics.md'
-      )
-    }
   }
 
   private validateBrowserSettings(config: Config): void {

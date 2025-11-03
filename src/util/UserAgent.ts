@@ -2,7 +2,7 @@ import axios from 'axios'
 import { BrowserFingerprintWithHeaders } from 'fingerprint-generator'
 
 import { log } from './Logger'
-import Retry from './Retry'
+import { Retry } from './Retry'
 
 import { ChromeVersion, EdgeVersion, Architecture, Platform } from '../interface/UserAgentUtil'
 

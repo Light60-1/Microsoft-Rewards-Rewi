@@ -1,6 +1,6 @@
 import ms from 'ms'
 
-export default class Util {
+export class Util {
 
     async wait(ms: number): Promise<void> {
         // Safety check: prevent extremely long or negative waits

@@ -4,7 +4,7 @@ import { DashboardData, MorePromotion, PromotionalItem, PunchCard } from '../int
 
 import { MicrosoftRewardsBot } from '../index'
 import JobState from '../util/JobState'
-import Retry from '../util/Retry'
+import { Retry } from '../util/Retry'
 import { AdaptiveThrottler } from '../util/AdaptiveThrottler'
 
 export class Workers {

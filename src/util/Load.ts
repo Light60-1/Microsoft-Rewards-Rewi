@@ -3,9 +3,8 @@ import { BrowserFingerprintWithHeaders } from 'fingerprint-generator'
 import fs from 'fs'
 import path from 'path'
 
-
 import { Account } from '../interface/Account'
-import { Config, ConfigLegacyFlags, ConfigSaveFingerprint } from '../interface/Config'
+import { Config, ConfigSaveFingerprint } from '../interface/Config'
 
 let configCache: Config
 let configSourcePath = ''
@@ -188,15 +187,6 @@ function normalizeConfig(raw: unknown): Config {
         skipCompletedAccounts: jobStateRaw.skipCompletedAccounts !== false
     }
 
-    const legacy: ConfigLegacyFlags = {}
-    if (typeof n.diagnostics !== 'undefined') {
-        legacy.diagnosticsConfigured = true
-    }
-    if (typeof n.analytics !== 'undefined') {
-        legacy.analyticsConfigured = true
-    }
-    const hasLegacyFlags = legacy.diagnosticsConfigured === true || legacy.analyticsConfigured === true
-
     const cfg: Config = {
         baseURL: n.baseURL ?? 'https://rewards.bing.com',
         sessionPath: n.sessionPath ?? 'sessions',
@@ -226,8 +216,7 @@ function normalizeConfig(raw: unknown): Config {
         crashRecovery: n.crashRecovery || {},
         riskManagement,
         dryRun,
-        queryDiversity,
-        legacy: hasLegacyFlags ? legacy : undefined
+        queryDiversity
     }
 
     return cfg

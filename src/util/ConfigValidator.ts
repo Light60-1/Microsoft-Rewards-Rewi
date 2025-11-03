@@ -207,24 +207,6 @@ export class ConfigValidator {
       })
     }
 
-    if (config.legacy?.diagnosticsConfigured) {
-      issues.push({
-        severity: 'warning',
-        field: 'diagnostics',
-        message: 'Unrecognized diagnostics.* block in config.jsonc.',
-        suggestion: 'Delete the diagnostics section; logs and webhooks now cover troubleshooting.'
-      })
-    }
-
-    if (config.legacy?.analyticsConfigured) {
-      issues.push({
-        severity: 'warning',
-        field: 'analytics',
-        message: 'Unrecognized analytics.* block in config.jsonc.',
-        suggestion: 'Delete the analytics section because those values are ignored.'
-      })
-    }
-
     // Check workers
     if (config.workers) {
       const allDisabled = !config.workers.doDailySet && 
