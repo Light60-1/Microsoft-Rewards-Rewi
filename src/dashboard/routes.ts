@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express'
 import fs from 'fs'
 import path from 'path'
+import { spawn } from 'child_process'
 import { dashboardState } from './state'
 import { loadAccounts, loadConfig, getConfigPath } from '../util/Load'
-import { spawn } from 'child_process'
+import { botController } from './BotController'
 
 export const apiRouter = Router()
 
@@ -144,46 +145,65 @@ apiRouter.post('/config', (req: Request, res: Response): void => {
 })
 
 // POST /api/start - Start bot in background
-apiRouter.post('/start', (_req: Request, res: Response): void => {
+apiRouter.post('/start', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const status = dashboardState.getStatus()
+    const status = botController.getStatus()
     if (status.running) {
-      res.status(400).json({ error: 'Bot already running' })
+      res.status(400).json({ error: 'Bot already running', pid: status.pid })
       return
     }
 
-    // Set running state
-    dashboardState.setRunning(true)
+    const result = await botController.start()
     
-    // Log the start
-    dashboardState.addLog({
-      timestamp: new Date().toISOString(),
-      level: 'log',
-      platform: 'MAIN',
-      title: 'DASHBOARD',
-      message: 'Bot start requested from dashboard'
-    })
-
-    res.json({ success: true, message: 'Bot start requested. Check logs for progress.' })
+    if (result.success) {
+      res.json({ 
+        success: true, 
+        message: 'Bot started successfully', 
+        pid: result.pid 
+      })
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        error: result.error || 'Failed to start bot' 
+      })
+    }
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
   }
 })
 
 // POST /api/stop - Stop bot
-apiRouter.post('/stop', (_req: Request, res: Response) => {
+apiRouter.post('/stop', (_req: Request, res: Response): void => {
   try {
-    dashboardState.setRunning(false)
+    const result = botController.stop()
     
-    dashboardState.addLog({
-      timestamp: new Date().toISOString(),
-      level: 'warn',
-      platform: 'MAIN',
-      title: 'DASHBOARD',
-      message: 'Bot stop requested from dashboard'
-    })
+    if (result.success) {
+      res.json({ success: true, message: 'Bot stopped successfully' })
+    } else {
+      res.status(400).json({ success: false, error: result.error || 'Failed to stop bot' })
+    }
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+// POST /api/restart - Restart bot
+apiRouter.post('/restart', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await botController.restart()
     
-    res.json({ success: true, message: 'Bot will stop after current task completes' })
+    if (result.success) {
+      res.json({ 
+        success: true, 
+        message: 'Bot restarted successfully', 
+        pid: result.pid 
+      })
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        error: result.error || 'Failed to restart bot' 
+      })
+    }
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
   }

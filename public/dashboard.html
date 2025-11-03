@@ -574,6 +574,10 @@
       border-left: 4px solid var(--danger);
     }
     
+    .toast-info {
+      border-left: 4px solid var(--primary);
+    }
+    
     /* Responsive */
     @media (max-width: 768px) {
       .app-container {
@@ -623,7 +627,7 @@
 
       const showToast = (message, type = 'success') => {
         setToast({ message, type });
-        setTimeout(() => setToast(null), 3000);
+        setTimeout(() => setToast(null), 5000);
       };
 
       const fetchData = useCallback(async () => {
@@ -663,18 +667,36 @@
         };
 
         websocket.onmessage = (event) => {
-          const data = JSON.parse(event.data);
-          
-          if (data.type === 'init') {
-            setLogs(data.data.logs || []);
-            setStatus(data.data.status || status);
-            setAccounts(data.data.accounts || []);
-          } else if (data.type === 'log') {
-            setLogs(prev => [...prev.slice(-99), data.log]);
-          } else if (data.type === 'status') {
-            setStatus(data.data);
-          } else if (data.type === 'accounts') {
-            setAccounts(data.data);
+          try {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === 'init') {
+              setLogs((data.data.logs || []).filter(log => log && log.timestamp));
+              setStatus(data.data.status || status);
+              setAccounts((data.data.accounts || []).filter(acc => acc && acc.email));
+            } else if (data.type === 'log') {
+              if (data.log && data.log.timestamp) {
+                setLogs(prev => [...prev.slice(-99), data.log].filter(log => log && log.timestamp));
+              }
+            } else if (data.type === 'status') {
+              setStatus(data.data);
+            } else if (data.type === 'accounts') {
+              setAccounts((data.data || []).filter(acc => acc && acc.email));
+            } else if (data.type === 'account_update') {
+              if (data.data && data.data.email) {
+                setAccounts(prev => {
+                  const index = prev.findIndex(acc => acc.email === data.data.email);
+                  if (index >= 0) {
+                    const updated = [...prev];
+                    updated[index] = data.data;
+                    return updated;
+                  }
+                  return [...prev, data.data];
+                });
+              }
+            }
+          } catch (error) {
+            console.error('Error processing WebSocket message:', error);
           }
         };
 
@@ -700,43 +722,61 @@
 
       const startBot = async () => {
         try {
-          const res = await fetch('/api/start', { method: 'POST' });
-          const data = await res.json();
+          showToast('Starting bot...', 'info')
+          const res = await fetch('/api/start', { method: 'POST' })
+          const data = await res.json()
           if (data.success) {
-            showToast('Bot started successfully');
-            fetchData();
+            showToast(`Bot started successfully! (PID: ${data.pid})`)
+            setTimeout(fetchData, 1000)
           } else {
-            showToast(data.error || 'Failed to start bot', 'error');
+            showToast(data.error || 'Failed to start bot', 'error')
           }
         } catch (error) {
-          showToast('Failed to start bot', 'error');
+          showToast('Failed to start bot: ' + error.message, 'error')
         }
-      };
+      }
 
       const stopBot = async () => {
         try {
-          const res = await fetch('/api/stop', { method: 'POST' });
-          const data = await res.json();
+          showToast('Stopping bot...', 'info')
+          const res = await fetch('/api/stop', { method: 'POST' })
+          const data = await res.json()
           if (data.success) {
-            showToast('Bot stop requested');
-            fetchData();
+            showToast('Bot stopped successfully')
+            setTimeout(fetchData, 1000)
           } else {
-            showToast(data.error || 'Failed to stop bot', 'error');
+            showToast(data.error || 'Failed to stop bot', 'error')
           }
         } catch (error) {
-          showToast('Failed to stop bot', 'error');
+          showToast('Failed to stop bot: ' + error.message, 'error')
         }
-      };
+      }
+
+      const restartBot = async () => {
+        try {
+          showToast('Restarting bot...', 'info')
+          const res = await fetch('/api/restart', { method: 'POST' })
+          const data = await res.json()
+          if (data.success) {
+            showToast(`Bot restarted successfully! (PID: ${data.pid})`)
+            setTimeout(fetchData, 1000)
+          } else {
+            showToast(data.error || 'Failed to restart bot', 'error')
+          }
+        } catch (error) {
+          showToast('Failed to restart bot: ' + error.message, 'error')
+        }
+      }
 
       const clearLogs = async () => {
         try {
-          await fetch('/api/logs', { method: 'DELETE' });
-          setLogs([]);
-          showToast('Logs cleared');
+          await fetch('/api/logs', { method: 'DELETE' })
+          setLogs([])
+          showToast('Logs cleared')
         } catch (error) {
-          showToast('Failed to clear logs', 'error');
+          showToast('Failed to clear logs', 'error')
         }
-      };
+      }
 
       if (loading) {
         return (
@@ -839,6 +879,13 @@
               </button>
               <button 
                 className="btn btn-primary" 
+                onClick={restartBot}
+              >
+                <i className="fas fa-redo"></i>
+                Restart Bot
+              </button>
+              <button 
+                className="btn btn-primary" 
                 onClick={fetchData}
               >
                 <i className="fas fa-sync-alt"></i>
@@ -913,7 +960,7 @@
                   <i className="fas fa-stream"></i> No logs yet...
                 </div>
               ) : (
-                logs.map((log, index) => (
+                logs.filter(log => log && log.timestamp && log.level).map((log, index) => (
                   <div key={index} className={`log-entry log-level-${log.level}`}>
                     <span className="log-timestamp">
                       [{new Date(log.timestamp).toLocaleTimeString()}]
@@ -932,7 +979,11 @@
           {/* Toast */}
           {toast && (
             <div className={`toast toast-${toast.type}`}>
-              <i className={`fas fa-${toast.type === 'success' ? 'check-circle' : 'exclamation-circle'}`}></i>
+              <i className={`fas fa-${
+                toast.type === 'success' ? 'check-circle' : 
+                toast.type === 'error' ? 'exclamation-circle' :
+                'info-circle'
+              }`}></i>
               <span>{toast.message}</span>
             </div>
           )}

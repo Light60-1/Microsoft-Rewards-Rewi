@@ -574,6 +574,10 @@
       border-left: 4px solid var(--danger);
     }
     
+    .toast-info {
+      border-left: 4px solid var(--primary);
+    }
+    
     /* Responsive */
     @media (max-width: 768px) {
       .app-container {
@@ -623,7 +627,7 @@
 
       const showToast = (message, type = 'success') => {
         setToast({ message, type });
-        setTimeout(() => setToast(null), 3000);
+        setTimeout(() => setToast(null), 5000);
       };
 
       const fetchData = useCallback(async () => {
@@ -718,43 +722,61 @@
 
       const startBot = async () => {
         try {
-          const res = await fetch('/api/start', { method: 'POST' });
-          const data = await res.json();
+          showToast('Starting bot...', 'info')
+          const res = await fetch('/api/start', { method: 'POST' })
+          const data = await res.json()
           if (data.success) {
-            showToast('Bot started successfully');
-            fetchData();
+            showToast(`Bot started successfully! (PID: ${data.pid})`)
+            setTimeout(fetchData, 1000)
           } else {
-            showToast(data.error || 'Failed to start bot', 'error');
+            showToast(data.error || 'Failed to start bot', 'error')
           }
         } catch (error) {
-          showToast('Failed to start bot', 'error');
+          showToast('Failed to start bot: ' + error.message, 'error')
         }
-      };
+      }
 
       const stopBot = async () => {
         try {
-          const res = await fetch('/api/stop', { method: 'POST' });
-          const data = await res.json();
+          showToast('Stopping bot...', 'info')
+          const res = await fetch('/api/stop', { method: 'POST' })
+          const data = await res.json()
           if (data.success) {
-            showToast('Bot stop requested');
-            fetchData();
+            showToast('Bot stopped successfully')
+            setTimeout(fetchData, 1000)
           } else {
-            showToast(data.error || 'Failed to stop bot', 'error');
+            showToast(data.error || 'Failed to stop bot', 'error')
           }
         } catch (error) {
-          showToast('Failed to stop bot', 'error');
+          showToast('Failed to stop bot: ' + error.message, 'error')
         }
-      };
+      }
+
+      const restartBot = async () => {
+        try {
+          showToast('Restarting bot...', 'info')
+          const res = await fetch('/api/restart', { method: 'POST' })
+          const data = await res.json()
+          if (data.success) {
+            showToast(`Bot restarted successfully! (PID: ${data.pid})`)
+            setTimeout(fetchData, 1000)
+          } else {
+            showToast(data.error || 'Failed to restart bot', 'error')
+          }
+        } catch (error) {
+          showToast('Failed to restart bot: ' + error.message, 'error')
+        }
+      }
 
       const clearLogs = async () => {
         try {
-          await fetch('/api/logs', { method: 'DELETE' });
-          setLogs([]);
-          showToast('Logs cleared');
+          await fetch('/api/logs', { method: 'DELETE' })
+          setLogs([])
+          showToast('Logs cleared')
         } catch (error) {
-          showToast('Failed to clear logs', 'error');
+          showToast('Failed to clear logs', 'error')
         }
-      };
+      }
 
       if (loading) {
         return (
@@ -857,6 +879,13 @@
               </button>
               <button 
                 className="btn btn-primary" 
+                onClick={restartBot}
+              >
+                <i className="fas fa-redo"></i>
+                Restart Bot
+              </button>
+              <button 
+                className="btn btn-primary" 
                 onClick={fetchData}
               >
                 <i className="fas fa-sync-alt"></i>
@@ -950,7 +979,11 @@
           {/* Toast */}
           {toast && (
             <div className={`toast toast-${toast.type}`}>
-              <i className={`fas fa-${toast.type === 'success' ? 'check-circle' : 'exclamation-circle'}`}></i>
+              <i className={`fas fa-${
+                toast.type === 'success' ? 'check-circle' : 
+                toast.type === 'error' ? 'exclamation-circle' :
+                'info-circle'
+              }`}></i>
               <span>{toast.message}</span>
             </div>
           )}
