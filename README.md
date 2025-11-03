@@ -174,6 +174,12 @@ All while maintaining **natural behavior patterns** to minimize detection risk.
 
 ---
 
+## ✅ Tests
+
+- `npm run test`: runs the node:test suite with ts-node to validate critical utilities.
+
+---
+
 ## 🆘 Getting Help
 
 - 💬 **[Join our Discord](https://discord.gg/h6Z69ZPPCz)** — Community support and updates

@@ -29,6 +29,7 @@ import { Analytics } from './util/Analytics'
 import { QueryDiversityEngine } from './util/QueryDiversityEngine'
 import JobState from './util/JobState'
 import { StartupValidator } from './util/StartupValidator'
+import { MobileRetryTracker } from './util/MobileRetryTracker'
 
 
 // Main bot class
@@ -58,7 +59,6 @@ export class MicrosoftRewardsBot {
     private pointsInitial: number = 0
 
     private activeWorkers: number
-    private mobileRetryAttempts: number
     private browserFactory: Browser = new Browser(this)
     private accounts: Account[]
     private workers: Workers
@@ -103,7 +103,6 @@ export class MicrosoftRewardsBot {
         this.workers = new Workers(this)
         this.humanizer = new Humanizer(this.utils, this.config.humanization)
         this.activeWorkers = this.config.clusters
-        this.mobileRetryAttempts = 0
 
         if (this.config.queryDiversity?.enabled) {
             this.queryEngine = new QueryDiversityEngine({
@@ -1070,7 +1069,10 @@ export class MicrosoftRewardsBot {
         }
     }
 
-    async Mobile(account: Account): Promise<{ initialPoints: number; collectedPoints: number }> {
+    async Mobile(
+        account: Account,
+        retryTracker = new MobileRetryTracker(this.config.searchSettings.retryMobileSearchAmount)
+    ): Promise<{ initialPoints: number; collectedPoints: number }> {
         log(true,'FLOW','Mobile() invoked')
         const browser = await this.browserFactory.createBrowser(account.proxy, account.email)
         this.homePage = await browser.newPage()
@@ -1139,6 +1141,9 @@ export class MicrosoftRewardsBot {
         }
 
         // Do mobile searches
+        const configuredRetries = Number(this.config.searchSettings.retryMobileSearchAmount ?? 0)
+        const maxMobileRetries = Number.isFinite(configuredRetries) ? configuredRetries : 0
+
         if (this.config.workers.doMobileSearch) {
             // If no mobile searches data found, stop (Does not always exist on new accounts)
             if (data.userStatus.counters.mobileSearch) {
@@ -1154,21 +1159,21 @@ export class MicrosoftRewardsBot {
                 const mobileSearchPoints = (await this.browser.func.getSearchPoints()).mobileSearch?.[0]
 
                 if (mobileSearchPoints && (mobileSearchPoints.pointProgressMax - mobileSearchPoints.pointProgress) > 0) {
-                    // Increment retry count
-                    this.mobileRetryAttempts++
-                }
+                    const shouldRetry = retryTracker.registerFailure()
 
-                // Exit if retries are exhausted
-                if (this.mobileRetryAttempts > this.config.searchSettings.retryMobileSearchAmount) {
-                    log(this.isMobile, 'MAIN', `Max retry limit of ${this.config.searchSettings.retryMobileSearchAmount} reached. Exiting retry loop`, 'warn')
-                } else if (this.mobileRetryAttempts !== 0) {
-                    log(this.isMobile, 'MAIN', `Attempt ${this.mobileRetryAttempts}/${this.config.searchSettings.retryMobileSearchAmount}: Unable to complete mobile searches, bad User-Agent? Increase search delay? Retrying...`, 'log', 'yellow')
+                    if (!shouldRetry) {
+                        const exhaustedAttempts = retryTracker.getAttemptCount()
+                        log(this.isMobile, 'MAIN', `Max retry limit of ${maxMobileRetries} reached after ${exhaustedAttempts} attempt(s). Exiting retry loop`, 'warn')
+                    } else {
+                        const attempt = retryTracker.getAttemptCount()
+                        log(this.isMobile, 'MAIN', `Attempt ${attempt}/${maxMobileRetries}: Unable to complete mobile searches, bad User-Agent? Increase search delay? Retrying...`, 'log', 'yellow')
 
-                    // Close mobile browser
-                    await this.browser.func.closeBrowser(browser, account.email)
+                        // Close mobile browser before retrying to release resources
+                        await this.browser.func.closeBrowser(browser, account.email)
 
-                    // Create a new browser and try
-                    return await this.Mobile(account)
+                        // Create a new browser and try again with the same tracker
+                        return await this.Mobile(account, retryTracker)
+                    }
                 }
             } else {
                 log(this.isMobile, 'MAIN', 'Unable to fetch search points, your account is most likely too "new" for this! Try again later!', 'warn')
