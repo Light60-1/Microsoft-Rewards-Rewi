@@ -14,18 +14,18 @@
 
 1. **[Setup Accounts](accounts.md)** — Add credentials + 2FA
 2. **[Configure Bot](config.md)** — Essential settings
-3. **[Enable Scheduler](schedule.md)** — Daily automation
+3. **[Schedule Runs](schedule.md)** — Use OS-level automation
 
 **Done!** The bot will run automatically.
 
 ---
 
-## � Feature Guides
+## ✨ Feature Guides
 
 | Feature | Description |
 |---------|-------------|
 | **[Configuration](config.md)** | All settings explained |
-| **[Scheduler](schedule.md)** | Automated daily runs |
+| **[External Scheduling](schedule.md)** | Automate with cron or Task Scheduler |
 | **[Humanization](humanization.md)** | Anti-detection system |
 | **[Webhooks](conclusionwebhook.md)** | Discord notifications |
 | **[NTFY Alerts](ntfy.md)** | Mobile push notifications |
@@ -39,7 +39,7 @@
 
 | Issue | Solution |
 |-------|----------|
-| **Bot not working?** | [Diagnostics Guide](diagnostics.md) |
+| **Bot not working?** | [Troubleshooting Guide](diagnostics.md) |
 | **Login failed?** | [Accounts & 2FA](accounts.md#troubleshooting) |
 | **Account banned?** | [Security Guide](security.md) |
 | **Git conflicts?** | [Conflict Resolution](git-conflict-resolution.md) |

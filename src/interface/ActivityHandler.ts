@@ -7,7 +7,7 @@ import type { Page } from 'playwright'
  * and perform all required steps on the provided page.
  */
 export interface ActivityHandler {
-  /** Optional identifier for diagnostics */
+  /** Optional identifier used in logging output */
   id?: string
   /**
    * Return true if this handler knows how to process the given activity.

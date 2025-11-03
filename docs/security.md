@@ -21,7 +21,7 @@ Your accounts **may be banned**. Use at your own risk.
 - **Run 1-2x daily max** — Don't be greedy
 - **Test on secondary accounts** — Never risk your main account
 - **Enable vacation mode** — Random off days look natural
-- **Monitor regularly** — Check diagnostics and logs
+- **Monitor regularly** — Check logs and webhook alerts
 
 ### ❌ DON'T
 
@@ -131,20 +131,6 @@ chmod 600 src/accounts.json
 
 ## 📊 Monitoring
 
-### Enable Diagnostics
-
-```jsonc
-{
-  "diagnostics": {
-    "enabled": true,
-    "saveScreenshot": true,
-    "saveHtml": true
-  }
-}
-```
-
-→ **[Diagnostics Guide](./diagnostics.md)**
-
 ### Enable Notifications
 
 ```jsonc
@@ -187,7 +173,7 @@ chmod 600 src/accounts.json
 - 🚫 **No telemetry** — Script doesn't phone home
 - 📁 **File security** — Restrict permissions
 - 🔄 **Regular backups** — Keep config backups
-- 🗑️ **Clean logs** — Delete old diagnostics
+- 🗑️ **Clean logs** — Rotate or delete old log files
 
 ---
 
@@ -200,7 +186,7 @@ chmod 600 src/accounts.json
 → **[Proxy Guide](./proxy.md)**
 
 **Want monitoring?**  
-→ **[Diagnostics](./diagnostics.md)**
+→ **[Notifications Guide](./conclusionwebhook.md)**
 
 ---
 

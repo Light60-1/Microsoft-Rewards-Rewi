@@ -115,7 +115,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"content":"Test message"}'
 → **[NTFY Push Notifications](./ntfy.md)**
 
 **Need detailed logs?**  
-→ **[Diagnostics Guide](./diagnostics.md)**
+→ **[Troubleshooting Guide](./diagnostics.md)**
 
 ---
 

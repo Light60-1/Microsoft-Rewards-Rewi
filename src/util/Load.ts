@@ -5,7 +5,7 @@ import path from 'path'
 
 
 import { Account } from '../interface/Account'
-import { Config, ConfigSaveFingerprint } from '../interface/Config'
+import { Config, ConfigLegacyFlags, ConfigSaveFingerprint } from '../interface/Config'
 
 let configCache: Config
 let configSourcePath = ''
@@ -168,15 +168,6 @@ function normalizeConfig(raw: unknown): Config {
         riskThreshold: typeof riskRaw.riskThreshold === 'number' ? riskRaw.riskThreshold : undefined
     } : undefined
 
-    const analyticsRaw = (n.analytics ?? {}) as Record<string, unknown>
-    const hasAnalyticsCfg = Object.keys(analyticsRaw).length > 0
-    const analytics = hasAnalyticsCfg ? {
-        enabled: analyticsRaw.enabled === true,
-        retentionDays: typeof analyticsRaw.retentionDays === 'number' ? analyticsRaw.retentionDays : undefined,
-        exportMarkdown: analyticsRaw.exportMarkdown === true,
-        webhookSummary: analyticsRaw.webhookSummary === true
-    } : undefined
-
     const queryDiversityRaw = (n.queryDiversity ?? {}) as Record<string, unknown>
     const hasQueryCfg = Object.keys(queryDiversityRaw).length > 0
     const queryDiversity = hasQueryCfg ? {
@@ -196,6 +187,15 @@ function normalizeConfig(raw: unknown): Config {
         dir: typeof jobStateRaw.dir === 'string' ? jobStateRaw.dir : undefined,
         skipCompletedAccounts: jobStateRaw.skipCompletedAccounts !== false
     }
+
+    const legacy: ConfigLegacyFlags = {}
+    if (typeof n.diagnostics !== 'undefined') {
+        legacy.diagnosticsConfigured = true
+    }
+    if (typeof n.analytics !== 'undefined') {
+        legacy.analyticsConfigured = true
+    }
+    const hasLegacyFlags = legacy.diagnosticsConfigured === true || legacy.analyticsConfigured === true
 
     const cfg: Config = {
         baseURL: n.baseURL ?? 'https://rewards.bing.com',
@@ -219,17 +219,15 @@ function normalizeConfig(raw: unknown): Config {
         webhook,
         conclusionWebhook,
         ntfy,
-        diagnostics: n.diagnostics,
         update: n.update,
-        schedule: n.schedule,
         passesPerRun: passesPerRun,
         vacation: n.vacation,
         buyMode: { enabled: buyModeEnabled, maxMinutes: buyModeMax },
         crashRecovery: n.crashRecovery || {},
         riskManagement,
-        analytics,
         dryRun,
-        queryDiversity
+        queryDiversity,
+        legacy: hasLegacyFlags ? legacy : undefined
     }
 
     return cfg

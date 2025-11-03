@@ -32,7 +32,6 @@ export class StartupValidator {
     this.validateEnvironment()
     this.validateFileSystem(config)
     this.validateBrowserSettings(config)
-    this.validateScheduleSettings(config)
     this.validateNetworkSettings(config)
     this.validateWorkerSettings(config)
     this.validateSearchSettings(config)
@@ -173,6 +172,16 @@ export class StartupValidator {
   }
 
   private validateConfig(config: Config): void {
+    const maybeSchedule = (config as unknown as { schedule?: unknown }).schedule
+    if (maybeSchedule !== undefined) {
+        this.addWarning(
+          'config',
+          'Legacy schedule settings detected in config.jsonc.',
+          'Remove schedule.* entries and use your operating system scheduler.',
+          'docs/schedule.md'
+        )
+    }
+
     // Headless mode in Docker
     if (process.env.FORCE_HEADLESS === '1' && config.headless === false) {
       this.addWarning(
@@ -330,20 +339,13 @@ export class StartupValidator {
       }
     }
 
-    // Check diagnostics directory if enabled
-    if (config.diagnostics?.enabled === true) {
-      const diagPath = path.join(process.cwd(), 'diagnostics')
-      if (!fs.existsSync(diagPath)) {
-        try {
-          fs.mkdirSync(diagPath, { recursive: true })
-        } catch (error) {
-          this.addWarning(
-            'filesystem',
-            'Cannot create diagnostics directory',
-            'Screenshots and HTML snapshots will not be saved'
-          )
-        }
-      }
+    if (config.legacy?.diagnosticsConfigured || config.legacy?.analyticsConfigured) {
+      this.addWarning(
+        'filesystem',
+        'Unrecognized diagnostics/analytics block detected in config.jsonc',
+        'Remove those sections to keep the file aligned with the current schema.',
+        'docs/diagnostics.md'
+      )
     }
   }
 
@@ -365,60 +367,6 @@ export class StartupValidator {
         'Fingerprint saving is completely disabled',
         'Each run will generate new fingerprints, which may look suspicious'
       )
-    }
-  }
-
-  private validateScheduleSettings(config: Config): void {
-    if (config.schedule?.enabled === true) {
-      // Time format validation
-      const schedRec = config.schedule as Record<string, unknown>
-      const useAmPm = schedRec.useAmPm
-      const time12 = typeof schedRec.time12 === 'string' ? schedRec.time12 : ''
-      const time24 = typeof schedRec.time24 === 'string' ? schedRec.time24 : ''
-      
-      if (useAmPm === true && (!time12 || time12.trim() === '')) {
-        this.addError(
-          'schedule',
-          'Schedule enabled with useAmPm=true but time12 is missing',
-          'Add time12 field (e.g., "9:00 AM") or set useAmPm=false',
-          'docs/schedule.md'
-        )
-      }
-      
-      if (useAmPm === false && (!time24 || time24.trim() === '')) {
-        this.addError(
-          'schedule',
-          'Schedule enabled with useAmPm=false but time24 is missing',
-          'Add time24 field (e.g., "09:00") or set useAmPm=true',
-          'docs/schedule.md'
-        )
-      }
-
-      // Timezone validation
-      const tz = config.schedule.timeZone || 'UTC'
-      try {
-        Intl.DateTimeFormat(undefined, { timeZone: tz })
-      } catch {
-        this.addError(
-          'schedule',
-          `Invalid timezone: ${tz}`,
-          'Use a valid IANA timezone (e.g., "America/New_York", "Europe/Paris")',
-          'docs/schedule.md'
-        )
-      }
-
-      // Vacation mode check
-      if (config.vacation?.enabled === true) {
-        if (config.vacation.minDays && config.vacation.maxDays) {
-          if (config.vacation.minDays > config.vacation.maxDays) {
-            this.addError(
-              'schedule',
-              `Vacation minDays (${config.vacation.minDays}) > maxDays (${config.vacation.maxDays})`,
-              'Set minDays <= maxDays (e.g., minDays: 2, maxDays: 4)'
-            )
-          }
-        }
-      }
     }
   }
 
@@ -650,8 +598,6 @@ export class StartupValidator {
         'docs/security.md'
       )
     }
-
-    // Removed diagnostics warning - reports/ folder with masked emails is safe for debugging
 
     // Proxy exposure check
     if (config.proxy?.proxyGoogleTrends === false && config.proxy?.proxyBingTerms === false) {

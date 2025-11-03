@@ -1,12 +1,12 @@
 #!/bin/bash
 set -e
 
-# Docker entrypoint with cron support
+# Docker entrypoint with optional cron support
 # Usage:
-#   Default (scheduler): npm run start:schedule
+#   Default: node --enable-source-maps ./dist/index.js
 #   Cron mode: set USE_CRON=true
 
-# If USE_CRON is set, configure cron instead of using built-in scheduler
+# If USE_CRON is set, configure cron for repeated runs
 if [ "$USE_CRON" = "true" ] || [ "$USE_CRON" = "1" ]; then
   echo "==> Cron mode enabled"
   
@@ -57,10 +57,10 @@ if [ "$USE_CRON" = "true" ] || [ "$USE_CRON" = "1" ]; then
   # Start cron in foreground and tail logs
   cron && tail -f /var/log/cron.log
 else
-  echo "==> Using built-in scheduler (JavaScript)"
-  echo "==> To use cron instead, set USE_CRON=true"
+  echo "==> Running single execution"
+  echo "==> To run on a schedule inside the container, set USE_CRON=true"
   echo ""
   
-  # Execute passed command (default: npm run start:schedule)
+  # Execute passed command (default: node --enable-source-maps ./dist/index.js)
   exec "$@"
 fi

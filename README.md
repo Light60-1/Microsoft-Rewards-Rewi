@@ -21,12 +21,11 @@ This TypeScript-based automation bot helps you maximize your **Microsoft Rewards
 
 ### ✨ Key Features
 
-- � **Automated Searches** — Desktop and mobile Bing searches with natural patterns
+- 🔍 **Automated Searches** — Desktop and mobile Bing searches with natural patterns
 - 📅 **Daily Activities** — Quizzes, polls, daily sets, and punch cards
 - 🤖 **Human-like Behavior** — Advanced humanization system to avoid detection
 - 🛡️ **Risk Management** — Built-in ban detection and prediction with ML algorithms
-- 📊 **Analytics Dashboard** — Track performance and points collection over time
-- ⏰ **Smart Scheduling** — Built-in scheduler with timezone support
+- ⏰ **External Scheduling** — Ready for cron, systemd timers, and Windows Task Scheduler
 - 🔔 **Notifications** — Discord webhooks and NTFY push alerts
 - 🐳 **Docker Support** — Easy containerized deployment
 - 🔐 **Multi-Account** — Manage multiple accounts with parallel execution
@@ -89,18 +88,18 @@ For detailed configuration, advanced features, and troubleshooting, visit our co
 | **[Getting Started](docs/getting-started.md)** | Detailed installation and first-run guide |
 | **[Configuration](docs/config.md)** | Complete configuration options reference |
 | **[Accounts & 2FA](docs/accounts.md)** | Setting up accounts with TOTP authentication |
-| **[Scheduling](docs/schedule.md)** | Automated daily execution setup |
+| **[External Scheduling](docs/schedule.md)** | Use OS schedulers for automation |
 | **[Docker Deployment](docs/docker.md)** | Running in containers |
 | **[Humanization](docs/humanization.md)** | Anti-detection and natural behavior |
 | **[Notifications](docs/conclusionwebhook.md)** | Discord webhooks and NTFY setup |
 | **[Proxy Setup](docs/proxy.md)** | Configuring proxies for privacy |
-| **[Diagnostics](docs/diagnostics.md)** | Troubleshooting and debugging |
+| **[Troubleshooting](docs/diagnostics.md)** | Debug common issues and capture logs |
 
 ---
 
-## � Docker Quick Start
+## Docker Quick Start
 
-For containerized deployment with automatic scheduling:
+For containerized deployment:
 
 ```bash
 # Ensure accounts.jsonc exists in src/
@@ -123,11 +122,6 @@ The script works great with default settings, but you can customize everything i
   "humanization": {
     "enabled": true,              // Enable natural behavior patterns
     "stopOnBan": true             // Stop on ban detection
-  },
-  "schedule": {
-    "enabled": true,              // Built-in scheduler
-    "time24": "09:00",            // Daily run time
-    "timeZone": "Europe/Paris"    // Your timezone
   },
   "workers": {
     "doDesktopSearch": true,      // Desktop Bing searches
@@ -165,12 +159,12 @@ All while maintaining **natural behavior patterns** to minimize detection risk.
 
 ## 💡 Usage Tips
 
-- **Run regularly:** Set up the built-in scheduler for daily automation
+- **Run regularly:** Use cron, systemd timers, or Windows Task Scheduler (see docs)
 - **Use humanization:** Always keep `humanization.enabled: true` for safety
 - **Monitor logs:** Check for ban warnings and adjust settings if needed
 - **Multiple accounts:** Use the `clusters` setting to run accounts in parallel
 - **Start small:** Test with one account before scaling up
-- **Review diagnostics:** Enable screenshot/HTML capture for troubleshooting
+- **Capture logs:** Pipe output to a file or webhook for later review
 
 ---
 
@@ -185,7 +179,7 @@ All while maintaining **natural behavior patterns** to minimize detection risk.
 - 💬 **[Join our Discord](https://discord.gg/k5uHkx9mne)** — Community support and updates
 - 📖 **[Documentation Hub](docs/index.md)** — Complete guides and references
 - 🐛 **[Report Issues](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)** — Bug reports and feature requests
-- 📧 **[Diagnostics Guide](docs/diagnostics.md)** — Troubleshooting steps
+- 📧 **[Troubleshooting Guide](docs/diagnostics.md)** — Debug common issues
 
 ---
 

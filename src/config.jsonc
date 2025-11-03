@@ -23,14 +23,6 @@
         "clusters": 1,
         "passesPerRun": 1
     },
-    "schedule": {
-        "enabled": false,
-        "useAmPm": false,
-        "time12": "9:00 AM",
-        "time24": "09:00",
-        "timeZone": "Europe/Paris",
-        "runImmediatelyOnStart": true
-    },
     "jobState": {
         "enabled": true,
         "dir": ""
@@ -126,7 +118,7 @@
         "authToken": ""
     },
 
-    // Logging & diagnostics
+    // Logging
     "logging": {
         "excludeFunc": [
             "SEARCH-CLOSE-TABS",
@@ -139,19 +131,6 @@
             "FLOW"
         ],
         "redactEmails": true
-    },
-    "diagnostics": {
-        "enabled": true,
-        "saveScreenshot": true,
-        "saveHtml": true,
-        "maxPerRun": 2,
-        "retentionDays": 7
-    },
-    "analytics": {
-        "enabled": true,
-        "retentionDays": 30,
-        "exportMarkdown": true,
-        "webhookSummary": true
     },
 
     // Buy mode

@@ -68,8 +68,8 @@ npm run build
 # Single run (test it works)
 npm start
 
-# Automated daily scheduler (set and forget)
-npm run start:schedule
+# Schedule it (Task Scheduler, cron, etc.)
+# See docs/schedule.md for examples
 ```
 
 </details>
@@ -113,7 +113,7 @@ Once running, explore these guides:
 | Priority | Guide | Why Important |
 |----------|-------|---------------|
 | **High** | **[Accounts & 2FA](./accounts.md)** | Set up TOTP for secure automation |
-| **High** | **[Scheduling](./schedule.md)** | Configure automated daily runs |
+| **High** | **[External Scheduling](./schedule.md)** | Automate with Task Scheduler or cron |
 | **Medium** | **[Notifications](./ntfy.md)** | Get alerts on your phone |
 | **Low** | **[Humanization](./humanization.md)** | Advanced anti-detection |
 
@@ -134,5 +134,5 @@ Once running, explore these guides:
 
 - **[Accounts & 2FA](./accounts.md)** — Add Microsoft accounts with TOTP
 - **[Docker](./docker.md)** — Deploy with containers  
-- **[Scheduler](./schedule.md)** — Automate daily execution
+- **[External Scheduling](./schedule.md)** — Automate daily execution
 - **[Discord Webhooks](./conclusionwebhook.md)** — Get run summaries

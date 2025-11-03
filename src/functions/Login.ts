@@ -8,7 +8,6 @@ import { AxiosRequestConfig } from 'axios'
 import { generateTOTP } from '../util/Totp'
 import { saveSessionData } from '../util/Load'
 import { MicrosoftRewardsBot } from '../index'
-import { captureDiagnostics } from '../util/Diagnostics'
 import { OAuth } from '../interface/OAuth'
 import { Retry } from '../util/Retry'
 
@@ -202,10 +201,7 @@ export class Login {
       const currentUrl = page.url()
       this.bot.log(this.bot.isMobile, 'LOGIN-APP', `OAuth code not received after ${elapsed}s (timeout: ${DEFAULT_TIMEOUTS.oauthMaxMs / 1000}s). Current URL: ${currentUrl}`, 'error')
       
-      // Save diagnostics for debugging
-      await this.saveIncidentArtifacts(page, 'oauth-timeout').catch(() => {})
-      
-      throw new Error(`OAuth code not received within ${DEFAULT_TIMEOUTS.oauthMaxMs / 1000}s - mobile token acquisition failed. Check diagnostics in reports/`)
+  throw new Error(`OAuth code not received within ${DEFAULT_TIMEOUTS.oauthMaxMs / 1000}s - mobile token acquisition failed. Check recent logs for details.`)
     }
     
     this.bot.log(this.bot.isMobile, 'LOGIN-APP', `OAuth code received in ${Math.round((Date.now() - start) / 1000)}s`)
@@ -897,10 +893,8 @@ export class Login {
           }
         }).catch(() => ({ title: 'unknown', bodyLength: 0, hasRewardsText: false, visibleElements: 0 }))
         
-        this.bot.log(this.bot.isMobile, 'LOGIN', `Page info: ${JSON.stringify(pageContent)}`, 'error')
-        
-        await this.bot.browser.utils.captureDiagnostics(page, 'login-portal-missing').catch(()=>{})
-        this.bot.log(this.bot.isMobile, 'LOGIN', 'Portal element missing (diagnostics saved)', 'error')
+  this.bot.log(this.bot.isMobile, 'LOGIN', `Page info: ${JSON.stringify(pageContent)}`, 'error')
+  this.bot.log(this.bot.isMobile, 'LOGIN', 'Portal element missing', 'error')
         throw new Error(`Rewards portal not detected. URL: ${currentUrl}. Check reports/ folder`)
       }
       this.bot.log(this.bot.isMobile, 'LOGIN', `Portal found via fallback (${fallbackSelector})`)
@@ -1092,7 +1086,6 @@ export class Login {
       this.bot.compromisedReason = 'sign-in-blocked'
       this.startCompromisedInterval()
       await this.bot.engageGlobalStandby('sign-in-blocked', email).catch(()=>{})
-      await this.saveIncidentArtifacts(page,'sign-in-blocked').catch(()=>{})
       // Open security docs for immediate guidance (best-effort)
       await this.openDocsTab(page, docsUrl).catch(()=>{})
       return true
@@ -1203,7 +1196,6 @@ export class Login {
         this.bot.compromisedReason = 'recovery-mismatch'
         this.startCompromisedInterval()
         await this.bot.engageGlobalStandby('recovery-mismatch', email).catch(()=>{})
-        await this.saveIncidentArtifacts(page,'recovery-mismatch').catch(()=>{})
         await this.openDocsTab(page, docsUrl).catch(()=>{})
       } else {
         const mode = observedPrefix.length === 1 ? 'lenient' : 'strict'
@@ -1270,10 +1262,6 @@ export class Login {
       clearInterval(this.compromisedInterval)
       this.compromisedInterval = undefined
     }
-  }
-
-  private async saveIncidentArtifacts(page: Page, slug: string) {
-    await captureDiagnostics(this.bot, page, slug, { scope: 'security', skipSlot: true, force: true })
   }
 
   private async openDocsTab(page: Page, url: string) {

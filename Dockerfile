@@ -80,8 +80,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Use entrypoint that supports both scheduler and cron
+# Use entrypoint that supports single-run and optional cron mode
 ENTRYPOINT ["docker-entrypoint.sh"]
 
-# Default: use built-in scheduler
-CMD ["npm", "run", "start:schedule"]
+# Default: single execution
+CMD ["node", "--enable-source-maps", "./dist/index.js"]

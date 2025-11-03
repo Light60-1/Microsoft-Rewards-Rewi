@@ -22,17 +22,15 @@ export interface Config {
     webhook: ConfigWebhook;
     conclusionWebhook?: ConfigWebhook; // Optional secondary webhook for final summary
     ntfy: ConfigNtfy;
-    diagnostics?: ConfigDiagnostics;
     update?: ConfigUpdate;
-    schedule?: ConfigSchedule;
     passesPerRun?: number;
     buyMode?: ConfigBuyMode; // Optional manual spending mode
     vacation?: ConfigVacation; // Optional monthly contiguous off-days
     crashRecovery?: ConfigCrashRecovery; // Automatic restart / graceful shutdown
     riskManagement?: ConfigRiskManagement; // NEW: Risk-aware throttling and ban prediction
-    analytics?: ConfigAnalytics; // NEW: Performance dashboard and metrics tracking
     dryRun?: boolean; // NEW: Dry-run mode (simulate without executing)
     queryDiversity?: ConfigQueryDiversity; // NEW: Multi-source query generation
+    legacy?: ConfigLegacyFlags; // Track legacy config usage for warnings
 }
 
 export interface ConfigSaveFingerprint {
@@ -81,14 +79,6 @@ export interface ConfigProxy {
     proxyBingTerms: boolean;
 }
 
-export interface ConfigDiagnostics {
-    enabled?: boolean; // master toggle
-    saveScreenshot?: boolean; // capture .png
-    saveHtml?: boolean; // capture .html
-    maxPerRun?: number; // cap number of captures per run
-    retentionDays?: number; // delete older diagnostic folders
-}
-
 export interface ConfigUpdate {
     git?: boolean; // if true, run git pull + npm ci + npm run build after completion
     docker?: boolean; // if true, run docker update routine (compose pull/up) after completion
@@ -100,18 +90,6 @@ export interface ConfigUpdate {
 export interface ConfigBuyMode {
     enabled?: boolean; // if true, force buy mode session
     maxMinutes?: number; // session duration cap
-}
-
-export interface ConfigSchedule {
-    enabled?: boolean;
-    time?: string; // Back-compat: accepts "HH:mm" or "h:mm AM/PM"
-    // New optional explicit times
-    time12?: string; // e.g., "9:00 AM"
-    time24?: string; // e.g., "09:00"
-    timeZone?: string; // IANA TZ e.g., "America/New_York"
-    useAmPm?: boolean; // If true, prefer time12 + AM/PM style; if false, prefer time24. If undefined, back-compat behavior.
-    runImmediatelyOnStart?: boolean; // if true, run once immediately when process starts
-    cron?: string | string[]; // Optional cron expression(s) (standard 5-field or 6-field) for advanced scheduling
 }
 
 export interface ConfigVacation {
@@ -192,9 +170,9 @@ export interface ConfigLogging {
     [key: string]: unknown; // forward compatibility
 }
 
-// CommunityHelp removed (privacy-first policy)
+// CommunityHelp intentionally omitted (privacy-first policy)
 
-// NEW FEATURES: Risk Management, Analytics, Query Diversity
+// NEW FEATURES: Risk Management and Query Diversity
 export interface ConfigRiskManagement {
     enabled?: boolean; // master toggle for risk-aware throttling
     autoAdjustDelays?: boolean; // automatically increase delays when risk is high
@@ -203,17 +181,15 @@ export interface ConfigRiskManagement {
     riskThreshold?: number; // 0-100, pause if risk exceeds this
 }
 
-export interface ConfigAnalytics {
-    enabled?: boolean; // track performance metrics
-    retentionDays?: number; // how long to keep analytics data
-    exportMarkdown?: boolean; // generate markdown reports
-    webhookSummary?: boolean; // send analytics via webhook
-}
-
 export interface ConfigQueryDiversity {
     enabled?: boolean; // use multi-source query generation
     sources?: Array<'google-trends' | 'reddit' | 'news' | 'wikipedia' | 'local-fallback'>; // which sources to use
     maxQueriesPerSource?: number; // limit per source
     cacheMinutes?: number; // cache duration
+}
+
+export interface ConfigLegacyFlags {
+    diagnosticsConfigured?: boolean;
+    analyticsConfigured?: boolean;
 }
 

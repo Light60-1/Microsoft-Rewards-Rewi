@@ -32,7 +32,7 @@
 ### Why Use TOTP?
 - ✅ **Automated login** — No manual code entry
 - ✅ **More secure** — Better than SMS
-- ✅ **Works 24/7** — Scheduler-friendly
+- ✅ **Works 24/7** — Ready for external schedulers
 
 ### How to Get Your TOTP Secret
 
@@ -178,7 +178,7 @@ export ACCOUNTS_JSON='{"accounts":[{"email":"test@example.com","password":"pass"
 → **[Security Guide](./security.md)** for best practices
 
 **Ready for automation?**  
-→ **[Scheduler Setup](./schedule.md)**
+→ **[External Scheduling](./schedule.md)**
 
 **Need proxies?**  
 → **[Proxy Guide](./proxy.md)**

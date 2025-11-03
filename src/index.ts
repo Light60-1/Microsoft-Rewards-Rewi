@@ -25,7 +25,6 @@ import Humanizer from './util/Humanizer'
 import { detectBanReason } from './util/BanDetector'
 import { RiskManager, RiskMetrics, RiskEvent } from './util/RiskManager'
 import { BanPredictor } from './util/BanPredictor'
-import { Analytics } from './util/Analytics'
 import { QueryDiversityEngine } from './util/QueryDiversityEngine'
 import JobState from './util/JobState'
 import { StartupValidator } from './util/StartupValidator'
@@ -67,17 +66,12 @@ export class MicrosoftRewardsBot {
     // Summary collection (per process)
     private accountSummaries: AccountSummary[] = []
     private runId: string = Math.random().toString(36).slice(2)
-    private diagCount: number = 0
     private bannedTriggered: { email: string; reason: string } | null = null
     private globalStandby: { active: boolean; reason?: string } = { active: false }
-    // Scheduler heartbeat integration
-    private heartbeatFile?: string
-    private heartbeatTimer?: NodeJS.Timeout
     private riskManager?: RiskManager
     private lastRiskMetrics?: RiskMetrics
     private riskThresholdTriggered: boolean = false
     private banPredictor?: BanPredictor
-    private analytics?: Analytics
     private accountJobState?: JobState
     private accountRunCounts: Map<string, number> = new Map()
 
@@ -107,10 +101,6 @@ export class MicrosoftRewardsBot {
                 maxQueriesPerSource: this.config.queryDiversity.maxQueriesPerSource,
                 cacheMinutes: this.config.queryDiversity.cacheMinutes
             })
-        }
-
-        if (this.config.analytics?.enabled) {
-            this.analytics = new Analytics()
         }
 
         if (this.config.riskManagement?.enabled) {
@@ -190,29 +180,6 @@ export class MicrosoftRewardsBot {
         return this.lastRiskMetrics?.delayMultiplier ?? 1
     }
 
-    private trackAnalytics(summary: AccountSummary, riskScore?: number): void {
-        if (!this.analytics || this.config.analytics?.enabled !== true) return
-        const today = new Date().toISOString().slice(0, 10)
-        try {
-            this.analytics.recordRun({
-                date: today,
-                email: summary.email,
-                pointsEarned: summary.totalCollected,
-                pointsInitial: summary.initialTotal,
-                pointsEnd: summary.endTotal,
-                desktopPoints: summary.desktopCollected,
-                mobilePoints: summary.mobileCollected,
-                executionTimeMs: summary.durationMs,
-                successRate: summary.errors.length ? 0 : 1,
-                errorsCount: summary.errors.length,
-                banned: !!summary.banned?.status,
-                riskScore
-            })
-        } catch (e) {
-            log('main', 'ANALYTICS', `Failed to record analytics for ${summary.email}: ${e instanceof Error ? e.message : e}`, 'warn')
-        }
-    }
-
     private shouldSkipAccount(email: string, dayKey: string): boolean {
         if (!this.accountJobState) return false
         if (this.config.jobState?.skipCompletedAccounts === false) return false
@@ -244,20 +211,6 @@ export class MicrosoftRewardsBot {
     async run() {
         this.printBanner()
         log('main', 'MAIN', `Bot started with ${this.config.clusters} clusters`)
-
-        // If scheduler provided a heartbeat file, update it periodically to signal liveness
-        const hbFile = process.env.SCHEDULER_HEARTBEAT_FILE
-        if (hbFile) {
-            try {
-                const dir = path.dirname(hbFile)
-                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-                fs.writeFileSync(hbFile, String(Date.now()))
-                this.heartbeatFile = hbFile
-                this.heartbeatTimer = setInterval(() => {
-                    try { fs.writeFileSync(hbFile, String(Date.now())) } catch { /* ignore */ }
-                }, 60_000)
-            } catch { /* ignore */ }
-        }
 
         // If buy mode is enabled, run single-account interactive session without automation
         if (this.buyMode.enabled) {
@@ -446,32 +399,7 @@ export class MicrosoftRewardsBot {
                     console.log(`  Auto-Update: ${updTargets.join(', ')}`)
                 }
 
-                const sched = this.config.schedule || {}
-                const schedEnabled = !!sched.enabled
-                if (!schedEnabled) {
-                    console.log('  Scheduler: Disabled')
-                } else {
-                    const tz = sched.timeZone || 'UTC'
-                    let formatName = ''
-                    let timeShown = ''
-                    const srec: Record<string, unknown> = sched as unknown as Record<string, unknown>
-                    const useAmPmVal = typeof srec['useAmPm'] === 'boolean' ? (srec['useAmPm'] as boolean) : undefined
-                    const time12Val = typeof srec['time12'] === 'string' ? String(srec['time12']) : undefined
-                    const time24Val = typeof srec['time24'] === 'string' ? String(srec['time24']) : undefined
-
-                    if (useAmPmVal) {
-                        formatName = '12h'
-                        timeShown = time12Val || sched.time || '9:00 AM'
-                    } else if (useAmPmVal === false) {
-                        formatName = '24h'
-                        timeShown = time24Val || sched.time || '09:00'
-                    } else {
-                        if (time24Val && time24Val.trim()) { formatName = '24h'; timeShown = time24Val }
-                        else if (time12Val && time12Val.trim()) { formatName = '12h'; timeShown = time12Val }
-                        else { formatName = 'auto'; timeShown = sched.time || '09:00' }
-                    }
-                    console.log(`  Scheduler: ${timeShown} (${formatName}, ${tz})`)
-                }
+                console.log('  Scheduler: External (see docs)')
             }
             console.log('─'.repeat(60) + '\n')
     }
@@ -585,13 +513,8 @@ export class MicrosoftRewardsBot {
                     try {
                         await this.runAutoUpdate()
                     } catch {/* ignore */}
-                    // Only exit if not spawned by scheduler
-                    if (!process.env.SCHEDULER_HEARTBEAT_FILE) {
-                        log('main', 'MAIN-WORKER', 'All workers destroyed. Exiting main process!', 'warn')
-                        process.exit(0)
-                    } else {
-                        log('main', 'MAIN-WORKER', 'All workers destroyed. Scheduler mode: returning control to scheduler.')
-                    }
+                    log('main', 'MAIN-WORKER', 'All workers destroyed. Exiting main process!', 'warn')
+                    process.exit(0)
                 })()
             }
         })
@@ -681,7 +604,6 @@ export class MicrosoftRewardsBot {
                     riskLevel: 'safe'
                 }
                 this.accountSummaries.push(summary)
-                this.trackAnalytics(summary, summary.riskScore)
                 this.persistAccountCompletion(account.email, accountDayKey, summary)
                 continue
             }
@@ -846,7 +768,6 @@ export class MicrosoftRewardsBot {
             }
 
             this.accountSummaries.push(summary)
-            this.trackAnalytics(summary, riskScore)
             this.persistAccountCompletion(account.email, accountDayKey, summary)
 
             if (banned.status) {
@@ -888,16 +809,10 @@ export class MicrosoftRewardsBot {
         } else {
             // Single process mode -> build and send conclusion directly
             await this.sendConclusion(this.accountSummaries)
-            // Cleanup heartbeat timer/file at end of run
-            if (this.heartbeatTimer) { try { clearInterval(this.heartbeatTimer) } catch { /* ignore */ } }
-            if (this.heartbeatFile) { try { if (fs.existsSync(this.heartbeatFile)) fs.unlinkSync(this.heartbeatFile) } catch { /* ignore */ } }
             // After conclusion, run optional auto-update
             await this.runAutoUpdate().catch(() => {/* ignore update errors */})
         }
-        // Only exit if not spawned by scheduler
-        if (!process.env.SCHEDULER_HEARTBEAT_FILE) {
-            process.exit()
-        }
+        process.exit()
     }
 
     /** Send immediate ban alert if configured. */
@@ -1336,83 +1251,6 @@ export class MicrosoftRewardsBot {
             log('main','REPORT',`Failed to save report: ${e instanceof Error ? e.message : e}`,'warn')
         }
 
-        // Cleanup old diagnostics
-        try {
-            const days = cfg.diagnostics?.retentionDays
-            if (typeof days === 'number' && days > 0) {
-                await this.cleanupOldDiagnostics(days)
-            }
-        } catch (e) {
-            log('main','REPORT',`Failed diagnostics cleanup: ${e instanceof Error ? e.message : e}`,'warn')
-        }
-
-        await this.publishAnalyticsArtifacts().catch(e => {
-            log('main','ANALYTICS',`Failed analytics post-processing: ${e instanceof Error ? e.message : e}`,'warn')
-        })
-
-    }
-
-    /** Reserve one diagnostics slot for this run (caps captures). */
-    public tryReserveDiagSlot(maxPerRun: number): boolean {
-        if (this.diagCount >= Math.max(0, maxPerRun || 0)) return false
-        this.diagCount += 1
-        return true
-    }
-
-    /** Delete diagnostics folders older than N days under ./reports */
-    private async cleanupOldDiagnostics(retentionDays: number) {
-        const base = path.join(process.cwd(), 'reports')
-        if (!fs.existsSync(base)) return
-        const entries = fs.readdirSync(base, { withFileTypes: true })
-        const now = Date.now()
-        const keepMs = retentionDays * 24 * 60 * 60 * 1000
-        for (const e of entries) {
-            if (!e.isDirectory()) continue
-            const name = e.name // expect YYYY-MM-DD
-            const parts = name.split('-').map((n: string) => parseInt(n, 10))
-            if (parts.length !== 3 || parts.some(isNaN)) continue
-            const [yy, mm, dd] = parts
-            if (yy === undefined || mm === undefined || dd === undefined) continue
-            const dirDate = new Date(yy, mm - 1, dd).getTime()
-            if (isNaN(dirDate)) continue
-            if (now - dirDate > keepMs) {
-                const dirPath = path.join(base, name)
-                try { fs.rmSync(dirPath, { recursive: true, force: true }) } catch { /* ignore */ }
-            }
-        }
-    }
-
-    private async publishAnalyticsArtifacts(): Promise<void> {
-        if (!this.analytics || this.config.analytics?.enabled !== true) return
-
-        const retention = this.config.analytics.retentionDays
-        if (typeof retention === 'number' && retention > 0) {
-            this.analytics.cleanup(retention)
-        }
-
-        if (this.config.analytics.exportMarkdown || this.config.analytics.webhookSummary) {
-            const markdown = this.analytics.exportMarkdown(30)
-            if (this.config.analytics.exportMarkdown) {
-                const now = new Date()
-                const day = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
-                const baseDir = path.join(process.cwd(), 'reports', day)
-                if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true })
-                const mdPath = path.join(baseDir, `analytics_${this.runId}.md`)
-                fs.writeFileSync(mdPath, markdown, 'utf-8')
-                log('main','ANALYTICS',`Saved analytics summary to ${mdPath}`)
-            }
-
-            if (this.config.analytics.webhookSummary) {
-                const { ConclusionWebhook } = await import('./util/ConclusionWebhook')
-                await ConclusionWebhook(
-                    this.config,
-                    '📈 Performance Report',
-                    ['```markdown', markdown, '```'].join('\n'),
-                    undefined,
-                    DISCORD.COLOR_BLUE
-                )
-            }
-        }
     }
 
     // Run optional auto-update script based on configuration flags.
@@ -1501,24 +1339,6 @@ function formatDuration(ms: number): string {
 }
 
 async function main() {
-    const initialConfig = loadConfig()
-    const scheduleEnabled = initialConfig?.schedule?.enabled === true
-    const skipScheduler = process.argv.some((arg: string) => arg === '--no-scheduler' || arg === '--single-run')
-        || process.env.REWARDS_FORCE_SINGLE_RUN === '1'
-    const buyModeRequested = process.argv.includes('-buy')
-    const invokedByScheduler = !!process.env.SCHEDULER_HEARTBEAT_FILE
-
-    if (scheduleEnabled && !skipScheduler && !buyModeRequested && !invokedByScheduler) {
-        log('main', 'SCHEDULER', 'Schedule enabled → handing off to in-process scheduler. Use --no-scheduler for a single pass.', 'log', 'green')
-        try {
-            await import('./scheduler')
-            return
-        } catch (err) {
-            const message = err instanceof Error ? err.message : String(err)
-            log('main', 'SCHEDULER', `Failed to start scheduler inline: ${message}. Continuing with single-run fallback.`, 'warn', 'yellow')
-        }
-    }
-
     const rewardsBot = new MicrosoftRewardsBot(false)
 
     const crashState = { restarts: 0 }
@@ -1538,7 +1358,6 @@ async function main() {
     }
 
     const gracefulExit = (code: number) => {
-        try { rewardsBot['heartbeatTimer'] && clearInterval(rewardsBot['heartbeatTimer']) } catch { /* ignore */ }
         if (config?.crashRecovery?.autoRestart && code !== 0) {
             const max = config.crashRecovery.maxRestarts ?? 2
             if (crashState.restarts < max) {

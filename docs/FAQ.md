@@ -80,7 +80,7 @@ npm run setup
 
 ### Can I run this on a server 24/7?
 
-Yes! Use Docker with the built-in scheduler for unattended operation. See the [Docker Guide](docker.md).
+Yes! Use Docker with your preferred scheduler (cron, Kubernetes CronJob, etc.) or enable the image's optional cron mode. See the [Docker Guide](docker.md).
 
 ---
 
@@ -97,27 +97,23 @@ In `src/accounts.jsonc`. Copy `src/accounts.example.jsonc` as a template.
 Not required, but **highly recommended** for:
 - Automated login without manual code entry
 - Better security
-- 24/7 scheduler compatibility
+- 24/7 automation compatibility
 
 See the [Accounts & 2FA Guide](accounts.md).
 
 ### How do I schedule automatic runs?
 
-Enable the built-in scheduler in `src/config.jsonc`:
+Use your operating system's scheduler. For example, Task Scheduler on Windows or `cron`/systemd timers on Linux:
 
-```jsonc
-{
-  "schedule": {
-    "enabled": true,
-    "time24": "09:00",
-    "timeZone": "America/New_York"
-  }
-}
+```bash
+# Windows Task Scheduler action (PowerShell)
+powershell.exe -NoProfile -Command "cd 'C:\\Path\\To\\Microsoft-Rewards-Script'; npm run start"
+
+# Linux cron example (daily at 09:15)
+15 9 * * * cd /home/you/Microsoft-Rewards-Script && /usr/bin/env npm run start >> /home/you/rewards.log 2>&1
 ```
 
-Then run: `npm run start:schedule`
-
-See the [Scheduling Guide](schedule.md).
+See the [External Scheduling Guide](schedule.md) for detailed steps.
 
 ### Can I run multiple accounts?
 
@@ -312,7 +308,7 @@ See [Configuration Guide](config.md#risk-management--security).
 - 💬 **[Join our Discord](https://discord.gg/k5uHkx9mne)** — Ask the community
 - 📖 **[Documentation Hub](index.md)** — Browse all guides
 - 🐛 **[GitHub Issues](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)** — Report problems
-- 📧 **[Diagnostics Guide](diagnostics.md)** — Debug issues
+- 📧 **[Troubleshooting Guide](diagnostics.md)** — Debug common issues
 
 ---
 

@@ -96,8 +96,8 @@ npm run build
 **Need security tips?**  
 → **[Security Guide](./security.md)**
 
-**Setup scheduler?**  
-→ **[Scheduler Guide](./schedule.md)**
+**Need automation?**  
+→ **[External Scheduling](./schedule.md)**
 
 ---
 

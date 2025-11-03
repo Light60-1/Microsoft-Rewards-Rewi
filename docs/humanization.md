@@ -147,10 +147,10 @@ Skip random days per week:
 ## 📚 Next Steps
 
 **Need vacation mode?**  
-→ See [Scheduler Vacation](./schedule.md#vacation-mode)
+→ See [Vacation settings](./config.md#vacation)
 
 **Want scheduling?**  
-→ **[Scheduler Guide](./schedule.md)**
+→ **[External Scheduling](./schedule.md)**
 
 **More security?**  
 → **[Security Guide](./security.md)**

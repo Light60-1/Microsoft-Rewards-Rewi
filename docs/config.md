@@ -20,7 +20,6 @@ This guide explains **how to adjust `src/config.jsonc` safely** and when to touc
 | Section | Keys to check | Why it matters |
 | --- | --- | --- |
 | `execution` | `parallel`, `runOnZeroPoints`, `clusters`, `passesPerRun` | Determines concurrency and whether accounts repeat during the same day. Leave `passesPerRun` at `1` unless you knowingly want additional passes (job-state skip is disabled otherwise). |
-| `schedule` | `enabled`, `time12`/`time24`, `timeZone`, `runImmediatelyOnStart` | Controls unattended runs. Test manual runs before enabling the scheduler. |
 | `workers` | `doDesktopSearch`, `doMobileSearch`, `doDailySet`, etc. | Disable tasks you never want to run to shorten execution time. |
 | `humanization` | `enabled`, `stopOnBan`, `actionDelay` | Keep enabled for safer automation. Tweaks here influence ban resilience. |
 | `proxy` | `proxyGoogleTrends`, `proxyBingTerms` | Tell the bot whether to route outbound API calls through your proxy. |
@@ -29,19 +28,7 @@ Once these are set, most users can leave the rest alone.
 
 ---
 
-## 3. Scheduler & Humanization Coordination
-
-The scheduler honours humanization constraints:
-
-- Weekly off-days: controlled by `humanization.randomOffDaysPerWeek` (defaults to 1). The scheduler samples new days each ISO week.
-- Allowed windows: if `humanization.allowedWindows` contains time ranges, the bot delays execution until the next window.
-- Vacation mode: `vacation.enabled` selects a random contiguous block (between `minDays` and `maxDays`) and skips the entire period.
-
-If you enable the scheduler (`schedule.enabled: true`), review these limits so the run does not surprise you by skipping on specific days.
-
----
-
-## 4. Handling Updates Safely
+## 3. Handling Updates Safely
 
 The `update` block defines how the post-run updater behaves:
 
@@ -53,17 +40,15 @@ When running inside Docker, you can instead rely on `update.docker: true` so the
 
 ---
 
-## 5. Diagnostics, Logging, and Analytics
+## 4. Logging and Notifications
 
-Three sections determine observability:
-
-- `logging`: adjust `excludeFunc` and `webhookExcludeFunc` if certain log buckets are too noisy. `redactEmails` should stay `true` in most setups.
-- `diagnostics`: captures screenshots/HTML when failures occur. Reduce `maxPerRun` or switch off entirely only if storage is constrained.
-- `analytics`: when enabled, daily metrics are persisted under `analytics/` and optional markdown summaries go to `reports/<date>/`. Disable if you do not want local history or webhook summaries.
+- `logging`: adjust `excludeFunc` and `webhookExcludeFunc` if certain log buckets are too noisy. Keeping `redactEmails: true` prevents leaks when sharing logs.
+- `notifications`: use `webhook`, `conclusionWebhook`, or `ntfy` for live updates. All three share the same `{ enabled, url }` structure.
+- The validator flags unknown keys automatically, so old sections can be trimmed safely.
 
 ---
 
-## 6. Advanced Tips
+## 5. Advanced Tips
 
 - **Risk management**: Leave `riskManagement.enabled` and `banPrediction` on unless you have a reason to reduce telemetry. Raising `riskThreshold` (>75) makes alerts rarer.
 - **Search pacing**: The delay window (`search.settings.delay.min` / `max`) accepts either numbers (ms) or strings like `"2min"`. Keep the range wide enough for natural behaviour.
@@ -72,15 +57,15 @@ Three sections determine observability:
 
 ---
 
-## 7. Validation & Troubleshooting
+## 6. Validation & Troubleshooting
 
 - The startup validator (`StartupValidator`) emits warnings/errors when config or accounts look suspicious. It never blocks execution but should be read carefully.
 - For syntax issues, run `npm run typecheck` or open the JSONC file in VS Code to surface parsing errors immediately.
-- Diagnostics are written to `reports/` (failures) and `analytics/` (metrics). Clean up periodically or adjust `diagnostics.retentionDays` and `analytics.retentionDays`.
+- Keep `logging` focused on the buckets you care about and rely on external log storage if you need long-term retention.
 
 ---
 
-## 8. Reference
+## 7. Reference
 
 For complete field defaults and descriptions, open [`config-reference.md`](./config-reference.md). Additional topic-specific guides:
 

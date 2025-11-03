@@ -113,7 +113,7 @@ curl --proxy http://user:pass@proxy.com:8080 http://httpbin.org/ip
 ## 📚 Next Steps
 
 **Proxy working?**  
-→ **[Setup Scheduler](./schedule.md)**
+→ **[Schedule Runs](./schedule.md)**
 
 **Need humanization?**  
 → **[Humanization Guide](./humanization.md)**

@@ -1,12 +1,14 @@
 {
-  // Sample accounts configuration. Copy to accounts.jsonc and fill in real values.
+  // Sample accounts configuration. Copy to accounts.jsonc and replace with real values.
   "accounts": [
     {
+      // Account #1 — enabled with TOTP and recovery email required
       "enabled": true,
-      "email": "email_1@outlook.com",
-      "password": "password_1",
-      "totp": "",
-      "recoveryEmail": "backup_1@example.com",
+      "email": "primary_account@outlook.com",
+      "password": "strong-password-1",
+      "totp": "BASE32SECRETPRIMARY",
+      "recoveryRequired": true,
+      "recoveryEmail": "primary.backup@example.com",
       "proxy": {
         "proxyAxios": true,
         "url": "",
@@ -16,11 +18,61 @@
       }
     },
     {
+      // Account #2 — disabled account kept for later use (recovery optional)
       "enabled": false,
-      "email": "email_2@outlook.com",
-      "password": "password_2",
-      "totp": "",
+      "email": "secondary_account@outlook.com",
+      "password": "strong-password-2",
+      "totp": "BASE32SECRETSECOND",
       "recoveryRequired": false,
+      "recoveryEmail": "secondary.backup@example.com",
+      "proxy": {
+        "proxyAxios": true,
+        "url": "",
+        "port": 0,
+        "username": "",
+        "password": ""
+      }
+    },
+    {
+      // Account #3 — dedicated proxy with credentials
+      "enabled": true,
+      "email": "with_proxy@outlook.com",
+      "password": "strong-password-3",
+      "totp": "BASE32SECRETTHIRD",
+      "recoveryRequired": true,
+      "recoveryEmail": "proxy.backup@example.com",
+      "proxy": {
+        "proxyAxios": true,
+        "url": "proxy.example.com",
+        "port": 3128,
+        "username": "proxyuser",
+        "password": "proxypass"
+      }
+    },
+    {
+      // Account #4 — recovery optional, no proxying through Axios layer
+      "enabled": true,
+      "email": "no_proxy@outlook.com",
+      "password": "strong-password-4",
+      "totp": "BASE32SECRETFOUR",
+      "recoveryRequired": false,
+      "recoveryEmail": "no.proxy.backup@example.com",
+      "proxy": {
+        "proxyAxios": false,
+        "url": "",
+        "port": 0,
+        "username": "",
+        "password": ""
+      }
+    },
+    {
+      // Account #5 — enabled with TOTP omitted (will rely on recovery email)
+      "enabled": true,
+      "email": "totp_optional@outlook.com",
+      "password": "strong-password-5",
+      "totp": "",
+      "recoveryRequired": true,
+      "recoveryEmail": "totp.optional.backup@example.com",
       "proxy": {
         "proxyAxios": true,
         "url": "",

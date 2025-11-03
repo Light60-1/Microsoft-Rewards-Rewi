@@ -400,8 +400,7 @@ async function main() {
     code = await updateDocker()
   }
   
-  // CRITICAL FIX: Always exit with code, even from scheduler
-  // The scheduler expects the update script to complete and exit
+  // CRITICAL: Always exit with code so external schedulers can react correctly
   // Otherwise the process hangs indefinitely and gets killed by watchdog
   process.exit(code)
 }

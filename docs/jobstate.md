@@ -107,11 +107,11 @@ Get-ChildItem sessions/job-state -Recurse -Filter "*.json" | Where-Object {$_.La
 
 ## 📚 Next Steps
 
-**Need scheduler?**  
-→ **[Scheduler Guide](./schedule.md)**
+**Need automation?**  
+→ **[External Scheduling](./schedule.md)**
 
-**Want diagnostics?**  
-→ **[Diagnostics Guide](./diagnostics.md)**
+**Need troubleshooting tips?**  
+→ **[Troubleshooting Guide](./diagnostics.md)**
 
 ---
 

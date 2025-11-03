@@ -110,8 +110,8 @@ curl -d "Test from rewards script" https://ntfy.sh/your-topic
 **Want Discord too?**  
 → **[Discord Webhooks](./conclusionwebhook.md)**
 
-**Need detailed logs?**  
-→ **[Diagnostics Guide](./diagnostics.md)**
+**Need troubleshooting tips?**  
+→ **[Troubleshooting Guide](./diagnostics.md)**
 
 ---
 

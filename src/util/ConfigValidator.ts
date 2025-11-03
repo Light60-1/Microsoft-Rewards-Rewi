@@ -197,35 +197,32 @@ export class ConfigValidator {
       }
     }
 
-    // Check schedule
-    if (config.schedule?.enabled) {
-      if (!config.schedule.timeZone) {
-        issues.push({
-          severity: 'warning',
-          field: 'schedule.timeZone',
-          message: 'No timeZone specified, defaulting to UTC',
-          suggestion: 'Set your local timezone (e.g., America/New_York)'
-        })
-      }
+    const legacySchedule = (config as unknown as { schedule?: unknown }).schedule
+    if (legacySchedule !== undefined) {
+      issues.push({
+        severity: 'warning',
+        field: 'schedule',
+        message: 'Legacy schedule block detected.',
+        suggestion: 'Remove schedule.* entries and configure OS-level scheduling (docs/schedule.md).'
+      })
+    }
 
-      const useAmPm = config.schedule.useAmPm
-      const time12 = (config.schedule as unknown as Record<string, unknown>)['time12']
-      const time24 = (config.schedule as unknown as Record<string, unknown>)['time24']
+    if (config.legacy?.diagnosticsConfigured) {
+      issues.push({
+        severity: 'warning',
+        field: 'diagnostics',
+        message: 'Unrecognized diagnostics.* block in config.jsonc.',
+        suggestion: 'Delete the diagnostics section; logs and webhooks now cover troubleshooting.'
+      })
+    }
 
-      if (useAmPm === true && (!time12 || (typeof time12 === 'string' && time12.trim() === ''))) {
-        issues.push({
-          severity: 'error',
-          field: 'schedule.time12',
-          message: 'useAmPm is true but time12 is empty'
-        })
-      }
-      if (useAmPm === false && (!time24 || (typeof time24 === 'string' && time24.trim() === ''))) {
-        issues.push({
-          severity: 'error',
-          field: 'schedule.time24',
-          message: 'useAmPm is false but time24 is empty'
-        })
-      }
+    if (config.legacy?.analyticsConfigured) {
+      issues.push({
+        severity: 'warning',
+        field: 'analytics',
+        message: 'Unrecognized analytics.* block in config.jsonc.',
+        suggestion: 'Delete the analytics section because those values are ignored.'
+      })
     }
 
     // Check workers
@@ -244,27 +241,6 @@ export class ConfigValidator {
           field: 'workers',
           message: 'All workers are disabled - bot will not perform any tasks',
           suggestion: 'Enable at least one worker type'
-        })
-      }
-    }
-
-    // Check diagnostics
-    if (config.diagnostics?.enabled) {
-      const maxPerRun = config.diagnostics.maxPerRun || 2
-      if (maxPerRun > 20) {
-        issues.push({
-          severity: 'warning',
-          field: 'diagnostics.maxPerRun',
-          message: 'Very high maxPerRun may fill disk quickly'
-        })
-      }
-
-      const retention = config.diagnostics.retentionDays || 7
-      if (retention > 90) {
-        issues.push({
-          severity: 'info',
-          field: 'diagnostics.retentionDays',
-          message: 'Long retention period - monitor disk usage'
         })
       }
     }

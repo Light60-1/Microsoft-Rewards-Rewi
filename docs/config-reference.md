@@ -40,22 +40,6 @@ This page mirrors the defaults that ship in `src/config.jsonc` and explains what
 
 ---
 
-## Scheduler
-
-| Key | Default | Notes |
-| --- | --- | --- |
-| `schedule.enabled` | `false` | Enable built-in scheduler loop. |
-| `schedule.useAmPm` | `false` | Toggle between `time12` (12h) and `time24` (24h). |
-| `schedule.time12` | `"9:00 AM"` | Used when `useAmPm` is `true`. |
-| `schedule.time24` | `"09:00"` | Used when `useAmPm` is `false`. |
-| `schedule.timeZone` | `Europe/Paris` | IANA timezone for scheduling. |
-| `schedule.runImmediatelyOnStart` | `true` | Execute one pass right after startup. |
-| `schedule.cron` | - | Optional cron expression(s).
-
-See `docs/schedule.md` for jitter, cron patterns, and vacation integration.
-
----
-
 ## Workers
 
 | Key | Default | Notes |
@@ -133,13 +117,6 @@ See `docs/schedule.md` for jitter, cron patterns, and vacation integration.
 | `logging.excludeFunc` | `["SEARCH-CLOSE-TABS", "LOGIN-NO-PROMPT", "FLOW"]` | Buckets skipped locally. |
 | `logging.webhookExcludeFunc` | same | Buckets skipped in webhook payloads. |
 | `logging.redactEmails` | `true` | Mask email addresses in logs. |
-| `diagnostics.enabled` | `true` | Capture screenshots/HTML on failure. |
-| `diagnostics.maxPerRun` | `2` | Limit capture count per run. |
-| `diagnostics.retentionDays` | `7` | Auto-clean old diagnostics. |
-| `analytics.enabled` | `true` | Persist account metrics. |
-| `analytics.retentionDays` | `30` | Keep analytics data for N days. |
-| `analytics.exportMarkdown` | `true` | Write markdown summaries to `reports/`. |
-| `analytics.webhookSummary` | `true` | Send analytics summary via webhook.
 
 ---
 
@@ -160,7 +137,7 @@ See `docs/schedule.md` for jitter, cron patterns, and vacation integration.
 
 1. Start from the default config and copy it if you need a local override.
 2. Leave `passesPerRun` at `1` so job-state can skip accounts automatically.
-3. Enable the scheduler only after testing manual runs.
+3. Configure your external scheduler after validating manual runs.
 4. Document any changes you make (without storing credentials in git).
 
 Related docs: [`accounts.md`](./accounts.md), [`schedule.md`](./schedule.md), [`proxy.md`](./proxy.md), [`humanization.md`](./humanization.md), [`security.md`](./security.md).
