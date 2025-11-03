@@ -85,5 +85,5 @@ export const DISCORD = {
   COLOR_ORANGE: 0xFFA500,
   COLOR_BLUE: 0x3498DB,
   COLOR_GREEN: 0x00D26A,
-  AVATAR_URL: 'https://media.discordapp.net/attachments/1421163952972369931/1434299121098952958/v2.50.5.png?ex=6907d2a6&is=69068126&hm=1a11362e2c2c40fc9f8b67762abf17e5bae72e4b70567d4331de195a880ba043&=&format=png&quality=lossless&width=1024&height=1076'
+  AVATAR_URL: 'https://media.discordapp.net/attachments/1421163952972369931/1434918661235282144/logo.png?ex=690a13a4&is=6908c224&hm=6bae81966da32e73a647f46fde268011fcf460c7071082dd5fd76cf22d04af65&=&format=png&quality=lossless&width=653&height=638'
 } as const
