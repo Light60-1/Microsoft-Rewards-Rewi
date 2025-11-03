@@ -1,5 +1,7 @@
 # ⚙️ Configuration Guide# ⚙️ Configuration Guide
 
+> Looking for the stripped-down key-by-key table? See [`config-reference.md`](./config-reference.md).
+
 
 
 **Customize script behavior in `src/config.jsonc`**This page documents every field in the configuration file. The default ships as `src/config.jsonc` so you get inline `//` guidance without editor warnings, and the loader still accepts traditional `config.json` files if you prefer plain JSON.

@@ -91,26 +91,43 @@ export class StartupValidator {
         )
       }
 
-      // Required: recoveryEmail (NEW - mandatory field)
-      if (!account.recoveryEmail || typeof account.recoveryEmail !== 'string') {
-        this.addError(
-          'accounts',
-          `${prefix}: Missing required field "recoveryEmail"`,
-          'Add your recovery/backup email address. This is MANDATORY for security checks.\nExample: "recoveryEmail": "backup@gmail.com"',
-          'docs/accounts.md'
-        )
-      } else if (!/@/.test(account.recoveryEmail)) {
-        this.addError(
-          'accounts',
-          `${prefix}: Recovery email format is invalid`,
-          'Recovery email must be a valid email address (e.g., backup@gmail.com)'
-        )
-      } else if (account.recoveryEmail.trim() === '') {
-        this.addError(
-          'accounts',
-          `${prefix}: Recovery email cannot be empty`,
-          'Provide the actual recovery email associated with this Microsoft account'
-        )
+      const recoveryRequired = account.recoveryRequired !== false
+      if (recoveryRequired) {
+        if (!account.recoveryEmail || typeof account.recoveryEmail !== 'string') {
+          this.addError(
+            'accounts',
+            `${prefix}: Missing required field "recoveryEmail"`,
+            'Add your recovery/backup email address. This is required for security checks unless you explicitly disable it.\nExample: "recoveryEmail": "backup@gmail.com"',
+            'docs/accounts.md'
+          )
+        } else if (!/@/.test(account.recoveryEmail)) {
+          this.addError(
+            'accounts',
+            `${prefix}: Recovery email format is invalid`,
+            'Recovery email must be a valid email address (e.g., backup@gmail.com)'
+          )
+        } else if (account.recoveryEmail.trim() === '') {
+          this.addError(
+            'accounts',
+            `${prefix}: Recovery email cannot be empty`,
+            'Provide the actual recovery email associated with this Microsoft account'
+          )
+        }
+      } else {
+        if (!account.recoveryEmail || account.recoveryEmail.trim() === '') {
+          this.addWarning(
+            'accounts',
+            `${prefix}: Recovery email checks disabled`,
+            'The bot will skip recovery-email mismatch detection for this account. Re-enable by removing "recoveryRequired": false.',
+            'docs/accounts.md'
+          )
+        } else if (!/@/.test(account.recoveryEmail)) {
+          this.addError(
+            'accounts',
+            `${prefix}: Recovery email format is invalid`,
+            'Recovery email must be a valid email address (e.g., backup@gmail.com)'
+          )
+        }
       }
 
       // Optional but recommended: TOTP

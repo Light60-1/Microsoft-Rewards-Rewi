@@ -294,12 +294,37 @@ export function loadAccounts(): Account[] {
             }
             a.email = String(a.email).trim()
             a.password = String(a.password)
-            if (typeof a.recoveryEmail !== 'string') {
-                throw new Error(`account ${a.email || '<unknown>'} must include a recoveryEmail string`)
+            const recoveryRequired = a.recoveryRequired !== false
+            a.recoveryRequired = recoveryRequired
+
+            if (recoveryRequired) {
+                if (typeof a.recoveryEmail !== 'string') {
+                    throw new Error(`account ${a.email || '<unknown>'} must include a recoveryEmail string`)
+                }
+                a.recoveryEmail = String(a.recoveryEmail).trim()
+                if (!a.recoveryEmail || !/@/.test(a.recoveryEmail)) {
+                    throw new Error(`account ${a.email} recoveryEmail must be a valid email address`)
+                }
+            } else {
+                if (typeof a.recoveryEmail === 'string' && a.recoveryEmail.trim() !== '') {
+                    const trimmed = a.recoveryEmail.trim()
+                    if (!/@/.test(trimmed)) {
+                        throw new Error(`account ${a.email} recoveryEmail must be a valid email address`)
+                    }
+                    a.recoveryEmail = trimmed
+                } else {
+                    a.recoveryEmail = undefined
+                }
             }
-            a.recoveryEmail = String(a.recoveryEmail).trim()
-            if (!a.recoveryEmail || !/@/.test(a.recoveryEmail)) {
-                throw new Error(`account ${a.email} recoveryEmail must be a valid email address`)
+
+            if (!a.proxy || typeof a.proxy !== 'object') {
+                a.proxy = { proxyAxios: true, url: '', port: 0, username: '', password: '' }
+            } else {
+                a.proxy.proxyAxios = a.proxy.proxyAxios !== false
+                a.proxy.url = typeof a.proxy.url === 'string' ? a.proxy.url : ''
+                a.proxy.port = typeof a.proxy.port === 'number' ? a.proxy.port : 0
+                a.proxy.username = typeof a.proxy.username === 'string' ? a.proxy.username : ''
+                a.proxy.password = typeof a.proxy.password === 'string' ? a.proxy.password : ''
             }
         }
         // Filter out disabled accounts (enabled: false)

@@ -643,7 +643,9 @@ export class MicrosoftRewardsBot {
                 }
             } catch {/* ignore */}
             this.currentAccountEmail = account.email
-            this.currentAccountRecoveryEmail = account.recoveryEmail
+            this.currentAccountRecoveryEmail = (typeof account.recoveryEmail === 'string' && account.recoveryEmail.trim() !== '')
+                ? account.recoveryEmail.trim()
+                : undefined
             const runNumber = (this.accountRunCounts.get(account.email) ?? 0) + 1
             this.accountRunCounts.set(account.email, runNumber)
             log('main', 'MAIN-WORKER', `Started tasks for account ${account.email}`)
