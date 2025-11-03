@@ -8,6 +8,7 @@ import { saveSessionData } from '../util/Load'
 import { MicrosoftRewardsBot } from '../index'
 import { OAuth } from '../interface/OAuth'
 import { Retry } from '../util/Retry'
+import { LoginState, LoginStateDetector } from '../util/LoginStateDetector'
 
 // -------------------------------
 // Constants / Tunables
@@ -246,7 +247,17 @@ export class Login {
       await this.bot.browser.utils.reloadBadPage(page)
       await this.bot.utils.wait(250)
 
-      const portalSelector = await this.waitForRewardsRoot(page, 3500)
+      // IMPROVED: Increased timeout from 3.5s to 8s for slow connections
+      let portalSelector = await this.waitForRewardsRoot(page, 8000)
+      
+      // IMPROVED: Retry once if initial check failed
+      if (!portalSelector) {
+        this.bot.log(this.bot.isMobile, 'LOGIN', 'Portal not detected (8s), retrying once...', 'warn')
+        await this.bot.utils.wait(1000)
+        await this.bot.browser.utils.reloadBadPage(page)
+        portalSelector = await this.waitForRewardsRoot(page, 5000)
+      }
+      
       if (portalSelector) {
         // Additional validation: make sure we're not just on the page but actually logged in
         // Check if we're redirected to login
@@ -256,7 +267,7 @@ export class Login {
           return false
         }
         
-        this.bot.log(this.bot.isMobile, 'LOGIN', `Existing session still valid (${portalSelector})`)
+        this.bot.log(this.bot.isMobile, 'LOGIN', `✅ Existing session still valid (${portalSelector}) — saved 2-3 minutes!`)
         await this.checkAccountLocked(page)
         return true
       }
@@ -280,22 +291,49 @@ export class Login {
   }
 
   private async performLoginFlow(page: Page, email: string, password: string) {
+    // Step 1: Input email
     await this.inputEmail(page, email)
-    await this.bot.utils.wait(1000)
-    await this.bot.browser.utils.reloadBadPage(page)
+    
+    // Step 2: Wait for transition to password page (VALIDATION PROGRESSIVE)
+    this.bot.log(this.bot.isMobile, 'LOGIN', 'Waiting for password page transition...')
+    const passwordPageReached = await LoginStateDetector.waitForAnyState(
+      page,
+      [LoginState.PasswordPage, LoginState.TwoFactorRequired, LoginState.LoggedIn],
+      8000
+    )
+    
+    if (passwordPageReached === LoginState.LoggedIn) {
+      this.bot.log(this.bot.isMobile, 'LOGIN', 'Already authenticated after email (fast path)')
+      return
+    }
+    
+    if (!passwordPageReached) {
+      this.bot.log(this.bot.isMobile, 'LOGIN', 'Password page not reached after 8s, continuing anyway...', 'warn')
+    } else {
+      this.bot.log(this.bot.isMobile, 'LOGIN', `Transitioned to state: ${passwordPageReached}`)
+    }
+    
     await this.bot.utils.wait(500)
+    await this.bot.browser.utils.reloadBadPage(page)
+    
+    // Step 3: Recovery mismatch check
     await this.tryRecoveryMismatchCheck(page, email)
     if (this.bot.compromisedModeActive && this.bot.compromisedReason === 'recovery-mismatch') {
       this.bot.log(this.bot.isMobile,'LOGIN','Recovery mismatch detected – stopping before password entry','warn')
       return
     }
-    // Try switching to password if a locale link is present (FR/EN)
+    
+    // Step 4: Try switching to password if needed
     await this.switchToPasswordLink(page)
+    
+    // Step 5: Input password or handle 2FA
     await this.inputPasswordOr2FA(page, password)
     if (this.bot.compromisedModeActive && this.bot.compromisedReason === 'sign-in-blocked') {
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Blocked sign-in detected — halting.', 'warn')
       return
     }
+    
+    // Step 6: Final checks
     await this.checkAccountLocked(page)
     await this.awaitRewardsPortal(page)
   }
@@ -460,17 +498,26 @@ export class Login {
     const usedTotp = await this.tryAutoTotp(page, 'manual 2FA entry')
     if (usedTotp) return
 
-    // Manual prompt - simplified without interval checking
+    // Manual prompt with 120s timeout
     this.bot.log(this.bot.isMobile, 'LOGIN', 'Waiting for user 2FA code (SMS / Email / App fallback)')
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
     
     try {
-      const code = await new Promise<string>(res => {
-        rl.question('Enter 2FA code:\n', ans => {
-          rl.close()
-          res(ans.trim())
+      // IMPROVED: Add 120s timeout to prevent infinite blocking
+      const code = await Promise.race([
+        new Promise<string>(res => {
+          rl.question('Enter 2FA code:\n', ans => {
+            rl.close()
+            res(ans.trim())
+          })
+        }),
+        new Promise<string>((_, reject) => {
+          setTimeout(() => {
+            rl.close()
+            reject(new Error('2FA code input timeout after 120s'))
+          }, 120000)
         })
-      })
+      ])
 
       // Check if input field still exists before trying to fill
       const inputExists = await page.locator('input[name="otc"]').first().isVisible({ timeout: 1000 }).catch(() => false)
@@ -483,6 +530,13 @@ export class Login {
       await page.fill('input[name="otc"]', code)
       await page.keyboard.press('Enter')
       this.bot.log(this.bot.isMobile, 'LOGIN', '2FA code submitted')
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('timeout')) {
+        this.bot.log(this.bot.isMobile, 'LOGIN', '2FA code input timeout (120s) - user AFK', 'error')
+        throw error
+      }
+      // Other errors, just log and continue
+      this.bot.log(this.bot.isMobile, 'LOGIN', '2FA code entry error: ' + error, 'warn')
     } finally {
       try { rl.close() } catch {/* ignore */}
     }
@@ -811,6 +865,13 @@ export class Login {
     let lastUrl = ''
     let checkCount = 0
     
+    // EARLY EXIT: Check if already logged in immediately
+    const initialState = await LoginStateDetector.detectState(page)
+    if (initialState.state === LoginState.LoggedIn) {
+      this.bot.log(this.bot.isMobile, 'LOGIN', 'Already on rewards portal (early exit)')
+      return
+    }
+    
     while (Date.now() - start < DEFAULT_TIMEOUTS.loginMaxMs) {
       checkCount++
       
@@ -818,6 +879,19 @@ export class Login {
       if (currentUrl !== lastUrl) {
         this.bot.log(this.bot.isMobile, 'LOGIN', `Navigation: ${currentUrl}`)
         lastUrl = currentUrl
+      }
+      
+      // SMART CHECK: Use LoginStateDetector every 5 iterations for fast detection
+      if (checkCount % 5 === 0) {
+        const state = await LoginStateDetector.detectState(page)
+        if (state.state === LoginState.LoggedIn) {
+          this.bot.log(this.bot.isMobile, 'LOGIN', `State detector confirmed: ${state.state} (confidence: ${state.confidence})`)
+          break
+        }
+        if (state.state === LoginState.Blocked) {
+          this.bot.log(this.bot.isMobile, 'LOGIN', 'Blocked state detected during portal wait', 'error')
+          throw new Error('Account blocked during login')
+        }
       }
       
       // OPTIMIZATION: Quick URL check first
