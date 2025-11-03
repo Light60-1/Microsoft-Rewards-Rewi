@@ -45,7 +45,7 @@
 | **Git conflicts?** | [Conflict Resolution](git-conflict-resolution.md) |
 | **General questions?** | [FAQ](FAQ.md) |
 
-**Need help?** → [Discord Community](https://discord.gg/h6Z69ZPPCz)
+**Need help?** → [Discord Community](https://discord.gg/k5uHkx9mne)
 
 ---
 

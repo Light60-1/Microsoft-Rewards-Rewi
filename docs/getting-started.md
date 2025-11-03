@@ -126,7 +126,7 @@ Once running, explore these guides:
 **Want Docker?** → [Container Guide](./docker.md)  
 
 **Found a bug?** [Report it here](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)  
-**Need support?** [Join our Discord](https://discord.gg/KRBFxxsU)
+**Need support?** [Join our Discord](https://discord.gg/k5uHkx9mne)
 
 ---
 

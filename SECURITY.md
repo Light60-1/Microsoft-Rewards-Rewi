@@ -352,7 +352,7 @@ Security contributors will be credited in the changelog (with permission).— St
 ## 📞 Contact
 
 - **Security issues:** Open a GitHub issue with "Security" label
-- **General support:** [Discord community](https://discord.gg/h6Z69ZPPCz)
+- **General support:** [Discord community](https://discord.gg/k5uHkx9mne)
 - **Bug reports:** [GitHub Issues](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)
 
 ---
