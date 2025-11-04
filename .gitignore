@@ -16,3 +16,7 @@ accounts.main.jsonc
 .playwright-chromium-installed
 *.log
 .update-backup/
+
+# Exclude package-lock.json from repo for cross-platform compatibility
+# Each platform (Windows/Linux/Raspberry Pi/Docker) generates its own
+package-lock.json

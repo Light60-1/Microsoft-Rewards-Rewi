@@ -3,6 +3,8 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+# Let Docker generate platform-specific lockfile
+package-lock.json
 
 # Build outputs
 dist/

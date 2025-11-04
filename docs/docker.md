@@ -186,6 +186,21 @@ docker inspect --format='{{.State.Health.Status}}' microsoft-rewards-script
 
 ## ⚠️ Important Notes
 
+### Platform Compatibility
+
+The Docker build **automatically generates platform-specific dependencies** for the target architecture:
+
+- ✅ **Windows (x86_64)** — Fully supported
+- ✅ **Linux (x86_64)** — Fully supported
+- ✅ **Raspberry Pi (ARM64)** — Fully supported
+- ✅ **macOS (ARM64/Apple Silicon)** — Fully supported
+
+The build process regenerates `package-lock.json` inside the container to ensure native dependencies (Playwright, etc.) match the target platform. This means:
+
+- **No cross-platform compatibility issues**
+- **Native performance on all architectures**
+- **Raspberry Pi users won't encounter binary mismatch errors**
+
 ### Buy Mode Not Supported
 
 **Buy Mode cannot be used in Docker** because it requires interactive terminal input. Use Buy Mode only in local installations:
