@@ -20,6 +20,7 @@ import JobState from './util/JobState'
 import { StartupValidator } from './util/StartupValidator'
 import { MobileRetryTracker } from './util/MobileRetryTracker'
 import { SchedulerManager } from './util/SchedulerManager'
+import { BuyModeSelector, BuyModeMonitor } from './util/BuyMode'
 
 import { Login } from './functions/Login'
 import { Workers } from './functions/Workers'
@@ -53,7 +54,8 @@ export class MicrosoftRewardsBot {
     private accounts: Account[]
     private workers: Workers
     private login = new Login(this)
-    private buyMode: { enabled: boolean; email?: string } = { enabled: false }
+    private buyModeEnabled: boolean = false
+    private buyModeArgument?: string
 
     // Summary collection (per process)
     private accountSummaries: AccountSummary[] = []
@@ -94,25 +96,23 @@ export class MicrosoftRewardsBot {
         // Buy mode: CLI args take precedence over config
         const idx = process.argv.indexOf('-buy')
         if (idx >= 0) {
-            const target = process.argv[idx + 1]
-            this.buyMode = target && /@/.test(target) 
-                ? { enabled: true, email: target }
-                : { enabled: true }
+            this.buyModeEnabled = true
+            this.buyModeArgument = process.argv[idx + 1]
         } else {
             // Fallback to config if no CLI flag
             const buyModeConfig = this.config.buyMode as { enabled?: boolean } | undefined
             if (buyModeConfig?.enabled === true) {
-                this.buyMode.enabled = true
+                this.buyModeEnabled = true
             }
         }
     }
 
     public isBuyModeEnabled(): boolean {
-        return this.buyMode.enabled === true
+        return this.buyModeEnabled === true
     }
 
     public getBuyModeTarget(): string | undefined {
-        return this.buyMode.email
+        return this.buyModeArgument
     }
 
     async initialize() {
@@ -168,10 +168,7 @@ export class MicrosoftRewardsBot {
         log('main', 'MAIN', `Bot started with ${this.config.clusters} clusters`)
 
         // If buy mode is enabled, run single-account interactive session without automation
-        if (this.buyMode.enabled) {
-            const targetInfo = this.buyMode.email ? ` for ${this.buyMode.email}` : ''
-            log('main', 'BUY-MODE', `Buy mode ENABLED${targetInfo}. We'll open 2 tabs: (1) a monitor tab that auto-refreshes to track points, (2) your browsing tab to redeem/purchase freely.`, 'log', 'green')
-            log('main', 'BUY-MODE', 'The monitor tab may refresh every ~10s. Use the other tab for your actions; monitoring is passive and non-intrusive.', 'log', 'yellow')
+        if (this.buyModeEnabled) {
             await this.runBuyMode()
             return
         }
@@ -192,9 +189,22 @@ export class MicrosoftRewardsBot {
     private async runBuyMode() {
         try {
             await this.initialize()
-            const email = this.buyMode.email || (this.accounts[0]?.email)
-            const account = this.accounts.find(a => a.email === email) || this.accounts[0]
-            if (!account) throw new Error('No account available for buy mode')
+            
+            const buyModeConfig = this.config.buyMode as { maxMinutes?: number } | undefined
+            const maxMinutes = buyModeConfig?.maxMinutes ?? 45
+            
+            const selector = new BuyModeSelector(this.accounts)
+            const selection = await selector.selectAccount(this.buyModeArgument, maxMinutes)
+            
+            if (!selection) {
+                log('main', 'BUY-MODE', 'Buy mode cancelled: no account selected', 'warn')
+                return
+            }
+            
+            const { account, maxMinutes: sessionMaxMinutes } = selection
+            
+            log('main', 'BUY-MODE', `Buy mode ENABLED for ${account.email}. Opening 2 tabs: (1) monitor tab (auto-refresh), (2) your browsing tab`, 'log', 'green')
+            log('main', 'BUY-MODE', `Session duration: ${sessionMaxMinutes} minutes. Monitor tab refreshes every ~10s. Use the other tab for your actions.`, 'log', 'yellow')
 
             this.isMobile = false
             this.axios = new Axios(account.proxy)
@@ -232,22 +242,21 @@ export class MicrosoftRewardsBot {
                     this.log(false, 'BUY-MODE', `Failed to send spend notice: ${e instanceof Error ? e.message : e}`, 'warn')
                 }
             }
+            
+            // Get initial points
             let initial = 0
             try {
                 const data = await this.browser.func.getDashboardData(monitor)
                 initial = data.userStatus.availablePoints || 0
             } catch {/* ignore */}
 
-            this.log(false, 'BUY-MODE', `Logged in as ${account.email}. Buy mode is active: monitor tab auto-refreshes; user tab is free for your actions. We'll observe points passively.`)
+            const pointMonitor = new BuyModeMonitor(initial)
+
+            this.log(false, 'BUY-MODE', `Logged in as ${account.email}. Starting passive point monitoring (session: ${sessionMaxMinutes} min)`)
 
             // Passive watcher: poll points periodically without clicking.
             const start = Date.now()
-            let last = initial
-            let spent = 0
-
-            const buyModeConfig = this.config.buyMode as { maxMinutes?: number } | undefined
-            const maxMinutes = Math.max(10, buyModeConfig?.maxMinutes ?? 45)
-            const endAt = start + maxMinutes * 60 * 1000
+            const endAt = start + sessionMaxMinutes * 60 * 1000
 
             while (Date.now() < endAt) {
                 await this.utils.wait(10000)
@@ -265,16 +274,11 @@ export class MicrosoftRewardsBot {
                 try {
                     const data = await this.browser.func.getDashboardData(monitor)
                     const nowPts = data.userStatus.availablePoints || 0
-                    if (nowPts < last) {
-                        // Points decreased -> likely spent
-                        const delta = last - nowPts
-                        spent += delta
-                        last = nowPts
-                        this.log(false, 'BUY-MODE', `Detected spend: -${delta} points (current: ${nowPts})`)
-                        // Immediate spend notice
-                        await sendSpendNotice(delta, nowPts, spent)
-                    } else if (nowPts > last) {
-                        last = nowPts
+                    
+                    const spendInfo = pointMonitor.checkSpending(nowPts)
+                    if (spendInfo) {
+                        this.log(false, 'BUY-MODE', `Detected spend: -${spendInfo.spent} points (current: ${spendInfo.current})`)
+                        await sendSpendNotice(spendInfo.spent, spendInfo.current, spendInfo.total)
                     }
                 } catch (err) {
                     // If we lost the page context, recreate the monitor tab and continue
@@ -305,14 +309,15 @@ export class MicrosoftRewardsBot {
             }
 
             // Send a final minimal conclusion webhook for this manual session
+            const monitorSummary = pointMonitor.getSummary()
             const summary: AccountSummary = {
                 email: account.email,
-                durationMs: Date.now() - start,
+                durationMs: monitorSummary.duration,
                 desktopCollected: 0,
                 mobileCollected: 0,
-                totalCollected: -spent, // negative indicates spend
-                initialTotal: initial,
-                endTotal: last,
+                totalCollected: -monitorSummary.spent, // negative indicates spend
+                initialTotal: monitorSummary.initial,
+                endTotal: monitorSummary.current,
                 errors: [],
                 banned: { status: false, reason: '' }
             }
@@ -328,13 +333,13 @@ export class MicrosoftRewardsBot {
         if (this.config.clusters > 1 && !cluster.isPrimary) return
         
         const version = this.getVersion()
-        const mode = this.buyMode.enabled ? 'Manual Mode' : 'Automated Mode'
+        const mode = this.buyModeEnabled ? 'Manual Mode' : 'Automated Mode'
         
         log('main', 'BANNER', `Microsoft Rewards Bot v${version} - ${mode}`)
         log('main', 'BANNER', `PID: ${process.pid} | Workers: ${this.config.clusters}`)
         
-        if (this.buyMode.enabled) {
-            log('main', 'BANNER', `Target: ${this.buyMode.email || 'First account'}`)
+        if (this.buyModeEnabled) {
+            log('main', 'BANNER', `Target: ${this.buyModeArgument || 'Interactive selection'}`)
         } else {
             const upd = this.config.update || {}
             const updTargets: string[] = []

@@ -88,6 +88,7 @@ For detailed configuration, advanced features, and troubleshooting, visit our co
 | **[Getting Started](docs/getting-started.md)** | Detailed installation and first-run guide |
 | **[Configuration](docs/config.md)** | Complete configuration options reference |
 | **[Accounts & 2FA](docs/accounts.md)** | Setting up accounts with TOTP authentication |
+| **[Buy Mode](docs/buy-mode.md)** | 💳 Manual purchase monitoring with point tracking |
 | **[Dashboard](src/dashboard/README.md)** | 🆕 Local web dashboard for monitoring and control |
 | **[External Scheduling](docs/schedule.md)** | Use OS schedulers for automation |
 | **[Docker Deployment](docs/docker.md)** | Running in containers |
@@ -123,6 +124,29 @@ Access at `http://localhost:3000` to:
 - 📊 View historical run summaries and metrics
 
 **[📖 Full Dashboard API Documentation](src/dashboard/README.md)**
+
+---
+
+## 💳 Buy Mode
+
+Monitor your points in real-time while manually redeeming rewards:
+
+```bash
+# Interactive account selection (recommended)
+npm run buy
+
+# Or specify account directly
+npm run buy your@email.com
+npm run buy 1  # By account number
+```
+
+**What it does:**
+- Opens browser with 2 tabs: monitoring + your browsing tab
+- Tracks point changes every ~10 seconds
+- Sends alerts when points are spent
+- Completely passive - you control the redemption
+
+**[📖 Full Buy Mode Guide](docs/buy-mode.md)**
 
 ---
 
