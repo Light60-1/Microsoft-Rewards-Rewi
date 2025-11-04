@@ -105,33 +105,25 @@ export class Login {
       const isLinux = process.platform === 'linux'
       const navigationTimeout = isLinux ? 60000 : 30000
       
-      // Retry mechanism for Linux DNS issues
-      let lastError: Error | null = null
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          await page.goto('https://www.bing.com/rewards/dashboard', { 
-            waitUntil: 'domcontentloaded',
-            timeout: navigationTimeout
-          })
-          lastError = null
-          break
-        } catch (e) {
-          lastError = e as Error
-          const errorMsg = e instanceof Error ? e.message : String(e)
-          
-          // Only retry on chrome-error or timeout, not on HTTP errors (400, 403, etc.)
-          if (errorMsg.includes('chrome-error://chromewebdata/') || errorMsg.includes('Timeout')) {
-            if (attempt < 3) {
-              this.bot.log(this.bot.isMobile, 'LOGIN', `Navigation failed (attempt ${attempt}/3), retrying...`, 'warn')
-              await this.bot.utils.wait(2000 * attempt)
-              continue
-            }
-          }
-          throw e
-        }
+      // Navigate to dashboard
+      await page.goto('https://www.bing.com/rewards/dashboard', { 
+        waitUntil: 'domcontentloaded',
+        timeout: navigationTimeout
+      })
+      
+      // PATCH: Check for HTTP 400 error and auto-reload (Linux first-load issue)
+      await this.bot.utils.wait(500)
+      const content = await page.content().catch(() => '')
+      const hasHttp400 = content.includes('HTTP ERROR 400') || 
+                        content.includes('This page isn\'t working') ||
+                        content.includes('Cette page ne fonctionne pas')
+      
+      if (hasHttp400) {
+        this.bot.log(this.bot.isMobile, 'LOGIN', 'HTTP 400 detected on first load, reloading page...', 'warn')
+        await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
+        await this.bot.utils.wait(1000)
       }
       
-      if (lastError) throw lastError
       await this.disableFido(page)
       
       const [, , portalCheck] = await Promise.allSettled([
@@ -183,20 +175,19 @@ export class Login {
     const isLinux = process.platform === 'linux'
     const navigationTimeout = isLinux ? 60000 : 30000
     
-    // Retry for Linux DNS issues
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: navigationTimeout })
-        break
-      } catch (e) {
-        const errorMsg = e instanceof Error ? e.message : String(e)
-        if ((errorMsg.includes('chrome-error://chromewebdata/') || errorMsg.includes('Timeout')) && attempt < 3) {
-          this.bot.log(this.bot.isMobile, 'LOGIN-APP', `OAuth navigation failed (attempt ${attempt}/3), retrying...`, 'warn')
-          await this.bot.utils.wait(2000 * attempt)
-          continue
-        }
-        throw e
-      }
+    await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: navigationTimeout })
+    
+    // PATCH: Check for HTTP 400 and auto-reload
+    await this.bot.utils.wait(500)
+    const content = await page.content().catch(() => '')
+    const hasHttp400 = content.includes('HTTP ERROR 400') || 
+                      content.includes('This page isn\'t working') ||
+                      content.includes('Cette page ne fonctionne pas')
+    
+    if (hasHttp400) {
+      this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'HTTP 400 detected on OAuth page, reloading...', 'warn')
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
+      await this.bot.utils.wait(1000)
     }
     const start = Date.now()
     this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'Authorizing mobile scope...')
@@ -292,23 +283,21 @@ export class Login {
       const isLinux = process.platform === 'linux'
       const navigationTimeout = isLinux ? 60000 : 30000
       
-      // Retry for Linux DNS issues
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-          await page.goto(homeUrl, { timeout: navigationTimeout })
-          break
-        } catch (e) {
-          const errorMsg = e instanceof Error ? e.message : String(e)
-          if ((errorMsg.includes('chrome-error://chromewebdata/') || errorMsg.includes('Timeout')) && attempt < 2) {
-            this.bot.log(this.bot.isMobile, 'LOGIN', 'Session check navigation failed, retrying...', 'warn')
-            await this.bot.utils.wait(2000)
-            continue
-          }
-          throw e
-        }
-      }
-      
+      await page.goto(homeUrl, { timeout: navigationTimeout })
       await page.waitForLoadState('domcontentloaded').catch(logError('LOGIN', 'DOMContentLoaded timeout', this.bot.isMobile))
+      
+      // PATCH: Check for HTTP 400 and auto-reload
+      await this.bot.utils.wait(500)
+      const content = await page.content().catch(() => '')
+      const hasHttp400 = content.includes('HTTP ERROR 400') || 
+                        content.includes('This page isn\'t working') ||
+                        content.includes('Cette page ne fonctionne pas')
+      
+      if (hasHttp400) {
+        this.bot.log(this.bot.isMobile, 'LOGIN', 'HTTP 400 on session check, reloading...', 'warn')
+        await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
+        await this.bot.utils.wait(1000)
+      }
       await this.bot.browser.utils.reloadBadPage(page)
       await this.bot.utils.wait(250)
 

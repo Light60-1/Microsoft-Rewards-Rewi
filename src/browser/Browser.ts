@@ -52,11 +52,12 @@ class Browser {
                 '--ignore-ssl-errors'
             ]
             
-            // Minimal Linux fixes for DNS/network issues without detection risk
-            // Only adds essential stability flags that don't trigger bot detection
+            // Linux stability fixes without detection risk
             const linuxStabilityArgs = isLinux ? [
                 '--disable-dev-shm-usage',
-                '--disable-software-rasterizer'
+                '--disable-software-rasterizer',
+                '--disable-http-cache',
+                '--disk-cache-size=1'
             ] : []
 
             browser = await playwright.chromium.launch({

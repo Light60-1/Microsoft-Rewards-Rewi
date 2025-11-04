@@ -194,10 +194,15 @@ export default class BrowserUtil {
             const $ = load(html)
 
             const isNetworkError = $('body.neterror').length
+            const hasHttp400Error = html.includes('HTTP ERROR 400') || 
+                                   html.includes('This page isn\'t working') ||
+                                   html.includes('Cette page ne fonctionne pas')
 
-            if (isNetworkError) {
-                this.bot.log(this.bot.isMobile, 'RELOAD-BAD-PAGE', 'Bad page detected, reloading!')
-                await page.reload()
+            if (isNetworkError || hasHttp400Error) {
+                const errorType = hasHttp400Error ? 'HTTP 400' : 'network error'
+                this.bot.log(this.bot.isMobile, 'RELOAD-BAD-PAGE', `Bad page detected (${errorType}), reloading!`)
+                await page.reload({ waitUntil: 'domcontentloaded' })
+                await this.bot.utils.wait(1500)
             }
 
         } catch (error) {
