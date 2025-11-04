@@ -130,11 +130,9 @@ export class MicrosoftRewardsBot {
             this.accountJobState = new JobState(this.config)
         }
 
-        // Setup automatic scheduler if enabled
-        if (this.config.scheduling?.enabled) {
-            const scheduler = new SchedulerManager(this.config)
-            await scheduler.setup()
-        }
+        // Setup or remove automatic scheduler based on config
+        const scheduler = new SchedulerManager(this.config)
+        await scheduler.setup()
     }
 
     private shouldSkipAccount(email: string, dayKey: string): boolean {

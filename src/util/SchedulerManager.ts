@@ -19,7 +19,9 @@ export class SchedulerManager {
   async setup(): Promise<void> {
     const scheduling = this.config.scheduling
     if (!scheduling?.enabled) {
-      log('main', 'SCHEDULER', 'Automatic scheduling is disabled in config', 'log')
+      // If scheduling is disabled, remove any existing scheduled tasks
+      log('main', 'SCHEDULER', 'Automatic scheduling is disabled, checking for existing tasks to remove...')
+      await this.remove()
       return
     }
 
@@ -291,13 +293,13 @@ export class SchedulerManager {
       try {
         currentCrontab = execSync('crontab -l', { encoding: 'utf-8' })
       } catch {
-        log('main', 'SCHEDULER', 'No crontab found', 'log')
+        // No crontab exists, nothing to remove
         return
       }
 
       const jobMarker = '# Microsoft-Rewards-Bot'
       if (!currentCrontab.includes(jobMarker)) {
-        log('main', 'SCHEDULER', 'No Microsoft Rewards Bot cron job found', 'log')
+        // No job found, nothing to remove
         return
       }
 
@@ -325,58 +327,8 @@ export class SchedulerManager {
     try {
       execSync(`schtasks /Delete /TN "${taskName}" /F`, { stdio: 'ignore' })
       log('main', 'SCHEDULER', '✅ Windows Task removed successfully', 'log', 'green')
-    } catch (error) {
-      log('main', 'SCHEDULER', `Task "${taskName}" not found or already removed`, 'log')
-    }
-  }
-
-  async status(): Promise<void> {
-    const platform = os.platform()
-    log('main', 'SCHEDULER', 'Checking scheduler status...')
-
-    try {
-      if (platform === 'win32') {
-        await this.statusWindowsTask()
-      } else if (platform === 'linux' || platform === 'darwin') {
-        await this.statusCron()
-      }
-    } catch (error) {
-      log('main', 'SCHEDULER', `Failed to check status: ${error instanceof Error ? error.message : String(error)}`, 'error')
-    }
-  }
-
-  private async statusCron(): Promise<void> {
-    try {
-      const currentCrontab = execSync('crontab -l', { encoding: 'utf-8' })
-      const jobMarker = '# Microsoft-Rewards-Bot'
-      
-      if (currentCrontab.includes(jobMarker)) {
-        const lines = currentCrontab.split('\n')
-        const jobIndex = lines.findIndex(line => line.includes(jobMarker))
-        if (jobIndex >= 0 && jobIndex + 1 < lines.length) {
-          log('main', 'SCHEDULER', '✅ Cron job is active', 'log', 'green')
-          log('main', 'SCHEDULER', `Job: ${lines[jobIndex + 1]}`, 'log')
-        }
-      } else {
-        log('main', 'SCHEDULER', '❌ No cron job found', 'warn')
-      }
     } catch {
-      log('main', 'SCHEDULER', '❌ No crontab configured', 'warn')
-    }
-  }
-
-  private async statusWindowsTask(): Promise<void> {
-    const taskConfig = this.config.scheduling?.taskScheduler || {}
-    const taskName = taskConfig.taskName || 'Microsoft-Rewards-Bot'
-
-    try {
-      const result = execSync(`schtasks /Query /TN "${taskName}" /FO LIST /V`, { encoding: 'utf-8' })
-      if (result.includes(taskName)) {
-        log('main', 'SCHEDULER', '✅ Windows Task is active', 'log', 'green')
-        log('main', 'SCHEDULER', `Task name: ${taskName}`, 'log')
-      }
-    } catch {
-      log('main', 'SCHEDULER', `❌ Task "${taskName}" not found`, 'warn')
+      // Task doesn't exist or already removed, nothing to do
     }
   }
 }

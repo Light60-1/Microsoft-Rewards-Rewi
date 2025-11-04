@@ -25,7 +25,7 @@ This TypeScript-based automation bot helps you maximize your **Microsoft Rewards
 - 📅 **Daily Activities** — Quizzes, polls, daily sets, and punch cards
 - 🤖 **Human-like Behavior** — Advanced humanization system to avoid detection
 - 🛡️ **Risk Management** — Built-in ban detection and prediction with ML algorithms
-- ⏰ **External Scheduling** — Ready for cron, systemd timers, and Windows Task Scheduler
+- ⏰ **Automatic Scheduling** — Easy configuration for cron (Linux/Raspberry Pi) and Windows Task Scheduler
 - 🔔 **Notifications** — Discord webhooks and NTFY push alerts
 - 🐳 **Docker Support** — Easy containerized deployment
 - 🔐 **Multi-Account** — Manage multiple accounts with parallel execution
