@@ -107,6 +107,7 @@ export class Login {
       
       // Try initial navigation with error handling for chrome-error interruption
       let navigationSucceeded = false
+      let recoveryUsed = false
       try {
         await page.goto('https://www.bing.com/rewards/dashboard', { 
           waitUntil: 'domcontentloaded',
@@ -127,6 +128,7 @@ export class Login {
           try {
             await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
             navigationSucceeded = true
+            recoveryUsed = true
             this.bot.log(this.bot.isMobile, 'LOGIN', 'Recovery successful via reload')
           } catch (reloadError) {
             // Last resort: try goto again
@@ -149,17 +151,19 @@ export class Login {
         throw new Error('Failed to navigate to dashboard after multiple attempts')
       }
       
-      // Additional check for HTTP 400 in page content
-      await this.bot.utils.wait(500)
-      const content = await page.content().catch(() => '')
-      const hasHttp400 = content.includes('HTTP ERROR 400') || 
-                        content.includes('This page isn\'t working') ||
-                        content.includes('Cette page ne fonctionne pas')
-      
-      if (hasHttp400) {
-        this.bot.log(this.bot.isMobile, 'LOGIN', 'HTTP 400 detected in content, reloading...', 'warn')
-        await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
-        await this.bot.utils.wait(1000)
+      // Only check for HTTP 400 if recovery was NOT used (to avoid double reload)
+      if (!recoveryUsed) {
+        await this.bot.utils.wait(500)
+        const content = await page.content().catch(() => '')
+        const hasHttp400 = content.includes('HTTP ERROR 400') || 
+                          content.includes('This page isn\'t working') ||
+                          content.includes('Cette page ne fonctionne pas')
+        
+        if (hasHttp400) {
+          this.bot.log(this.bot.isMobile, 'LOGIN', 'HTTP 400 detected in content, reloading...', 'warn')
+          await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
+          await this.bot.utils.wait(1000)
+        }
       }
       
       await this.disableFido(page)
@@ -215,6 +219,7 @@ export class Login {
     
     // Try initial navigation with error handling
     let navigationSucceeded = false
+    let recoveryUsed = false
     try {
       await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: navigationTimeout })
       navigationSucceeded = true
@@ -228,6 +233,7 @@ export class Login {
         try {
           await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
           navigationSucceeded = true
+          recoveryUsed = true
           this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'OAuth recovery successful')
         } catch (reloadError) {
           await this.bot.utils.wait(1500)
@@ -243,17 +249,19 @@ export class Login {
       throw new Error('Failed to navigate to OAuth page')
     }
     
-    // Check for HTTP 400
-    await this.bot.utils.wait(500)
-    const content = await page.content().catch(() => '')
-    const hasHttp400 = content.includes('HTTP ERROR 400') || 
-                      content.includes('This page isn\'t working') ||
-                      content.includes('Cette page ne fonctionne pas')
-    
-    if (hasHttp400) {
-      this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'HTTP 400 detected, reloading...', 'warn')
-      await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
-      await this.bot.utils.wait(1000)
+    // Only check HTTP 400 if recovery was NOT used
+    if (!recoveryUsed) {
+      await this.bot.utils.wait(500)
+      const content = await page.content().catch(() => '')
+      const hasHttp400 = content.includes('HTTP ERROR 400') || 
+                        content.includes('This page isn\'t working') ||
+                        content.includes('Cette page ne fonctionne pas')
+      
+      if (hasHttp400) {
+        this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'HTTP 400 detected, reloading...', 'warn')
+        await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
+        await this.bot.utils.wait(1000)
+      }
     }
     const start = Date.now()
     this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'Authorizing mobile scope...')
@@ -351,6 +359,7 @@ export class Login {
       
       // Try navigation with error recovery
       let navigationSucceeded = false
+      let recoveryUsed = false
       try {
         await page.goto(homeUrl, { timeout: navigationTimeout })
         navigationSucceeded = true
@@ -364,6 +373,7 @@ export class Login {
           try {
             await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
             navigationSucceeded = true
+            recoveryUsed = true
           } catch (reloadError) {
             await this.bot.utils.wait(1500)
             await page.goto(homeUrl, { timeout: navigationTimeout })
@@ -378,17 +388,19 @@ export class Login {
       
       await page.waitForLoadState('domcontentloaded').catch(logError('LOGIN', 'DOMContentLoaded timeout', this.bot.isMobile))
       
-      // Check for HTTP 400
-      await this.bot.utils.wait(500)
-      const content = await page.content().catch(() => '')
-      const hasHttp400 = content.includes('HTTP ERROR 400') || 
-                        content.includes('This page isn\'t working') ||
-                        content.includes('Cette page ne fonctionne pas')
-      
-      if (hasHttp400) {
-        this.bot.log(this.bot.isMobile, 'LOGIN', 'HTTP 400 on session check, reloading...', 'warn')
-        await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
-        await this.bot.utils.wait(1000)
+      // Only check HTTP 400 if recovery was NOT used
+      if (!recoveryUsed) {
+        await this.bot.utils.wait(500)
+        const content = await page.content().catch(() => '')
+        const hasHttp400 = content.includes('HTTP ERROR 400') || 
+                          content.includes('This page isn\'t working') ||
+                          content.includes('Cette page ne fonctionne pas')
+        
+        if (hasHttp400) {
+          this.bot.log(this.bot.isMobile, 'LOGIN', 'HTTP 400 on session check, reloading...', 'warn')
+          await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
+          await this.bot.utils.wait(1000)
+        }
       }
       await this.bot.browser.utils.reloadBadPage(page)
       await this.bot.utils.wait(250)
