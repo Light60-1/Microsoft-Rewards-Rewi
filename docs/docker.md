@@ -1,6 +1,6 @@
 # 🐳 Docker Guide
 
-Run the bot in a containerized environment with optional in-container cron support.
+Run the bot in a containerized environment with built-in cron scheduling.
 
 ---
 
@@ -8,26 +8,30 @@ Run the bot in a containerized environment with optional in-container cron suppo
 
 1. **Create required files**
    - `src/accounts.jsonc` with your credentials
-   - `src/config.jsonc` (defaults apply if missing)
+   - `src/config.jsonc` (optional, defaults apply if missing)
+
 2. **Start the container**
    ```bash
    docker compose up -d
    ```
+
 3. **Watch logs**
    ```bash
-   docker logs -f microsoft-rewards-bot
+   docker logs -f microsoft-rewards-script
    ```
 
-The container performs a single pass. Use cron, Task Scheduler, or another orchestrator to restart it on your desired cadence.
+The container runs with cron scheduling enabled by default. Configure schedule via environment variables.
 
 ---
 
 ## 🎯 What's Included
 
-- ✅ Chromium Headless Shell (lightweight browser runtime)
-- ✅ Cron-ready entrypoint (`docker-entrypoint.sh`)
-- ✅ Volume mounts for persistent sessions and configs
-- ✅ Forced headless mode for container stability
+- ✅ **Chromium Headless Shell** — Lightweight browser runtime
+- ✅ **Built-in Cron** — Automated scheduling inside container
+- ✅ **Volume Mounts** — Persistent sessions and configs
+- ✅ **Forced Headless Mode** — Optimized for container stability
+- ✅ **Health Checks** — Monitors cron daemon status
+- ✅ **Random Sleep** — Spreads execution to avoid patterns
 
 ---
 
@@ -35,9 +39,10 @@ The container performs a single pass. Use cron, Task Scheduler, or another orche
 
 | Host Path | Container Path | Purpose |
 |-----------|----------------|---------|
-| `./src/accounts.jsonc` | `/app/src/accounts.jsonc` | Account credentials (read-only) |
-| `./src/config.jsonc` | `/app/src/config.jsonc` | Configuration (read-only) |
-| `./sessions` | `/app/sessions` | Cookies, fingerprints, and job-state |
+| `./src/accounts.jsonc` | `/usr/src/microsoft-rewards-script/dist/accounts.jsonc` | Account credentials (read-only) |
+| `./src/config.jsonc` | `/usr/src/microsoft-rewards-script/dist/config.jsonc` | Configuration (read-only) |
+| `./sessions` | `/usr/src/microsoft-rewards-script/sessions` | Cookies, fingerprints, and job-state |
+| `./reports` | `/usr/src/microsoft-rewards-script/reports` | Run summaries and metrics |
 
 Edit `compose.yaml` to adjust paths or add additional mounts.
 
@@ -45,20 +50,54 @@ Edit `compose.yaml` to adjust paths or add additional mounts.
 
 ## 🌍 Environment Variables
 
+Configure via `compose.yaml`:
+
 ```yaml
 services:
-  microsoft-rewards-bot:
+  microsoft-rewards-script:
     environment:
-      TZ: "Europe/Paris"          # Container timezone (cron + logging)
-      NODE_ENV: "production"
-      FORCE_HEADLESS: "1"        # Required for Chromium in Docker
-      #USE_CRON: "true"          # Optional cron mode (see below)
-      #CRON_SCHEDULE: "0 9 * * *"
-      #RUN_ON_START: "true"
+      # Required
+      TZ: "America/Toronto"                   # Container timezone
+      CRON_SCHEDULE: "0 7,16,20 * * *"       # When to run (crontab format)
+      
+      # Optional
+      RUN_ON_START: "true"                    # Run immediately on startup
+      NODE_ENV: "production"                  # Node environment
+      
+      # Randomization (spreads execution time)
+      MIN_SLEEP_MINUTES: "5"                  # Min random delay (default: 5)
+      MAX_SLEEP_MINUTES: "50"                 # Max random delay (default: 50)
+      SKIP_RANDOM_SLEEP: "false"              # Set to "true" to disable
+      
+      # Safety
+      STUCK_PROCESS_TIMEOUT_HOURS: "8"        # Kill stuck runs (default: 8h)
 ```
 
-- `ACCOUNTS_JSON` and `ACCOUNTS_FILE` can override account sources.
-- `ACCOUNTS_JSON` expects inline JSON; `ACCOUNTS_FILE` points to a mounted path.
+### Key Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TZ` | `UTC` | Container timezone for logs and scheduling |
+| `CRON_SCHEDULE` | Required | Cron expression (use [crontab.guru](https://crontab.guru)) |
+| `RUN_ON_START` | `false` | Run once immediately when container starts |
+| `MIN_SLEEP_MINUTES` | `5` | Minimum random delay before execution |
+| `MAX_SLEEP_MINUTES` | `50` | Maximum random delay before execution |
+| `SKIP_RANDOM_SLEEP` | `false` | Disable randomization (not recommended) |
+| `STUCK_PROCESS_TIMEOUT_HOURS` | `8` | Timeout for stuck processes |
+
+---
+
+## 🕐 Cron Schedule Examples
+
+| Schedule | Description | Cron Expression |
+|----------|-------------|-----------------|
+| Daily at 09:00 | Single daily run | `0 9 * * *` |
+| Three times daily | 07:00, 16:00, 20:00 | `0 7,16,20 * * *` |
+| Every 6 hours | Four runs per day | `0 */6 * * *` |
+| Weekdays at 08:00 | Monday–Friday only | `0 8 * * 1-5` |
+| Twice daily | 09:00 and 21:00 | `0 9,21 * * *` |
+
+**Validate expressions:** [crontab.guru](https://crontab.guru)
 
 ---
 
@@ -68,61 +107,25 @@ services:
 # Start container
 docker compose up -d
 
-# View logs
-docker logs -f microsoft-rewards-bot
+# View logs (follow)
+docker logs -f microsoft-rewards-script
+
+# View last 100 lines
+docker logs --tail 100 microsoft-rewards-script
 
 # Stop container
 docker compose down
 
-# Rebuild image
+# Rebuild image (after code changes)
 docker compose build --no-cache
+docker compose up -d
 
 # Restart container
 docker compose restart
+
+# Check container status
+docker compose ps
 ```
-
----
-
-## 🎛️ Scheduling Options
-
-### Use a host scheduler (recommended)
-
-- Trigger `docker compose up --build` (or restart the container) with cron, systemd timers, Task Scheduler, Kubernetes CronJobs, etc.
-- Ensure persistent volumes are mounted so repeated runs reuse state.
-- See [External Scheduling](schedule.md) for host-level examples.
-
-### Enable in-container cron (optional)
-
-1. Set environment variables in `docker-compose.yml`:
-   ```yaml
-   services:
-     microsoft-rewards-bot:
-       environment:
-         USE_CRON: "true"
-         CRON_SCHEDULE: "0 9,16,21 * * *"  # Example: 09:00, 16:00, 21:00
-         RUN_ON_START: "true"              # Optional one-time run at container boot
-   ```
-2. Rebuild and redeploy:
-   ```bash
-   docker compose down
-   docker compose build --no-cache
-   docker compose up -d
-   ```
-3. Confirm cron is active:
-   ```bash
-   docker logs -f microsoft-rewards-bot
-   ```
-
-#### Cron schedule examples
-
-| Schedule | Description | Cron expression |
-|----------|-------------|-----------------|
-| Daily at 09:00 | Single run | `0 9 * * *` |
-| Twice daily | 09:00 & 21:00 | `0 9,21 * * *` |
-| Every 6 hours | Four runs/day | `0 */6 * * *` |
-| Weekdays at 08:00 | Monday–Friday | `0 8 * * 1-5` |
-
-Validate expressions with [crontab.guru](https://crontab.guru).
 
 ---
 
@@ -130,125 +133,128 @@ Validate expressions with [crontab.guru](https://crontab.guru).
 
 | Problem | Solution |
 |---------|----------|
-| **"accounts.json not found"** | Ensure `./src/accounts.jsonc` exists and is mounted read-only |
-| **"Browser launch failed"** | Verify `FORCE_HEADLESS=1` and Chromium dependencies installed |
-| **"Permission denied"** | Check file permissions (`chmod 644 accounts.jsonc config.jsonc`) |
-| **Automation not repeating** | Enable cron (`USE_CRON=true`) or use a host scheduler |
-| **Cron not working** | See [Cron troubleshooting](#-cron-troubleshooting) |
+| **"accounts.jsonc not found"** | Ensure file exists at `./src/accounts.jsonc` |
+| **"Browser launch failed"** | Verify `FORCE_HEADLESS=1` is set (automatic in Dockerfile) |
+| **"Permission denied"** | Fix file permissions: `chmod 644 src/*.jsonc` |
+| **Cron not running** | Check logs for "Cron configured" message |
+| **Wrong timezone** | Update `TZ` in `compose.yaml` and restart |
+| **No output in logs** | Wait for cron schedule or set `RUN_ON_START=true` |
 
-### Debug container
+### Debug Container
 
 ```bash
 # Enter container shell
-docker exec -it microsoft-rewards-bot /bin/bash
+docker exec -it microsoft-rewards-script /bin/bash
 
 # Check Node.js version
-docker exec -it microsoft-rewards-bot node --version
+docker exec -it microsoft-rewards-script node --version
 
 # Inspect mounted config
-docker exec -it microsoft-rewards-bot cat /app/src/config.jsonc
+docker exec -it microsoft-rewards-script cat /usr/src/microsoft-rewards-script/dist/config.jsonc
 
-# Check env vars
-docker exec -it microsoft-rewards-bot printenv | grep -E "TZ|USE_CRON|CRON_SCHEDULE"
+# Check environment variables
+docker exec -it microsoft-rewards-script printenv | grep -E "TZ|CRON"
+
+# View cron configuration
+docker exec -it microsoft-rewards-script crontab -l
+
+# Check if cron is running
+docker exec -it microsoft-rewards-script ps aux | grep cron
 ```
 
 ---
 
-## 🔄 Switching cron on or off
+## � Health Check
 
-- **Enable cron:** set `USE_CRON=true`, provide `CRON_SCHEDULE`, rebuild, and redeploy.
-- **Disable cron:** remove `USE_CRON` (and related variables). The container will run once per start; handle recurrence externally.
+The container includes a health check that monitors the cron daemon:
+
+```yaml
+healthcheck:
+  test: ["CMD", "sh", "-c", "pgrep cron > /dev/null || exit 1"]
+  interval: 60s
+  timeout: 10s
+  retries: 3
+  start_period: 30s
+```
+
+Check health status:
+```bash
+docker inspect --format='{{.State.Health.Status}}' microsoft-rewards-script
+```
 
 ---
 
-## 🐛 Cron troubleshooting
+## ⚠️ Important Notes
 
-| Problem | Solution |
-|---------|----------|
-| **Cron not executing** | Check logs for "Cron mode enabled" and cron syntax errors |
-| **Wrong timezone** | Ensure `TZ` matches your location |
-| **Syntax error** | Validate expression at [crontab.guru](https://crontab.guru) |
-| **No logs generated** | Tail `/var/log/cron.log` inside the container |
-| **Duplicate runs** | Ensure only one cron entry is configured |
+### Buy Mode Not Supported
 
-### Inspect cron inside the container
+**Buy Mode cannot be used in Docker** because it requires interactive terminal input. Use Buy Mode only in local installations:
 
 ```bash
-docker exec -it microsoft-rewards-bot /bin/bash
-ps aux | grep cron
-crontab -l
-tail -100 /var/log/cron.log
+# ✅ Works locally
+npm run buy
+
+# ❌ Does not work in Docker
+docker exec microsoft-rewards-script npm run buy
 ```
 
+For manual redemptions, run the bot locally outside Docker.
+
+### Headless Mode Required
+
+Docker containers **must run in headless mode**. The Dockerfile automatically sets `FORCE_HEADLESS=1`. Do not disable this.
+
+### Random Sleep Behavior
+
+- **Enabled by default** to avoid detection patterns
+- Adds 5-50 minutes random delay before each run
+- Disable only for testing: `SKIP_RANDOM_SLEEP=true`
+- First run (when `RUN_ON_START=true`) skips random sleep
+
 ---
 
-## 📚 Next steps
+## � Resource Limits
 
-- [Configuration guide](config.md)
-- [External scheduling](schedule.md)
-- [Humanization guide](humanization.md)
-
----
-
-### Option 3: Single Run (Manual)
+Recommended settings in `compose.yaml`:
 
 ```yaml
 services:
-  rewards:
-    build: .
-    command: ["node", "./dist/index.js"]
+  microsoft-rewards-script:
+    mem_limit: 4g     # Maximum RAM
+    cpus: 2           # CPU cores
 ```
+
+Adjust based on your system and number of accounts.
 
 ---
 
-## 🔄 Switching Cron On or Off
+## 🔒 Security Hardening
 
-- **Enable cron:** set `USE_CRON=true`, provide `CRON_SCHEDULE`, rebuild the image, and redeploy.
-- **Disable cron:** remove `USE_CRON` (and related variables). The container will run once per start; use host automation to relaunch when needed.
+The compose file includes security measures:
 
----
-
-## 🐛 Cron Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| **Cron not executing** | Check `docker logs` for "Cron mode enabled" message |
-| **Wrong timezone** | Verify `TZ` environment variable matches your location |
-| **Syntax error** | Validate cron expression at [crontab.guru](https://crontab.guru) |
-| **No logs** | Use `docker exec <container> tail -f /var/log/cron.log` |
-| **Multiple executions** | Check for duplicate cron entries |
-
-### Debug Cron Inside Container
-
-```bash
-# Enter container
-docker exec -it microsoft-rewards-bot /bin/bash
-
-# Check cron is running
-ps aux | grep cron
-
-# View installed cron jobs
-crontab -l
-
-# Check cron logs
-tail -100 /var/log/cron.log
-
-# Test environment variables
-printenv | grep -E 'TZ|NODE_ENV'
+```yaml
+security_opt:
+  - no-new-privileges:true  # Prevents privilege escalation
 ```
+
+Volumes are mounted **read-only** (`:ro`) for credentials to prevent tampering.
 
 ---
 
 ## 📚 Next Steps
 
-**Need 2FA?**  
-→ **[Accounts & TOTP Setup](./accounts.md)**
+**Need 2FA setup?**  
+→ **[Accounts & TOTP Guide](./accounts.md)**
 
 **Want notifications?**  
-→ **[Discord Webhooks](./conclusionwebhook.md)**
+→ **[Discord Webhooks](./conclusionwebhook.md)**  
+→ **[NTFY Push Alerts](./ntfy.md)**
 
-**Need scheduling tips?**  
-→ **[External Scheduling](./schedule.md)**
+**Need proxy configuration?**  
+→ **[Proxy Setup](./proxy.md)**
+
+**External scheduling?**  
+→ **[Scheduling Guide](./schedule.md)**
 
 ---
 

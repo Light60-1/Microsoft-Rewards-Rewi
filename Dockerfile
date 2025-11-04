@@ -3,7 +3,7 @@
 ###############################################################################
 FROM node:22-slim AS builder
 
-WORKDIR /app
+WORKDIR /usr/src/microsoft-rewards-script
 
 ENV PLAYWRIGHT_BROWSERS_PATH=0
 
@@ -31,7 +31,7 @@ RUN npx playwright install --with-deps --only-shell chromium \
 ###############################################################################
 FROM node:22-slim AS runtime
 
-WORKDIR /app
+WORKDIR /usr/src/microsoft-rewards-script
 
 # Set production environment variables
 ENV NODE_ENV=production \
@@ -41,6 +41,9 @@ ENV NODE_ENV=production \
 
 # Install minimal system libraries required for Chromium headless to run
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    cron \
+    gettext-base \
+    tzdata \
     ca-certificates \
     libglib2.0-0 \
     libdbus-1-3 \
@@ -72,16 +75,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 # Copy compiled application and dependencies from builder stage
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /usr/src/microsoft-rewards-script/dist ./dist
+COPY --from=builder /usr/src/microsoft-rewards-script/package*.json ./
+COPY --from=builder /usr/src/microsoft-rewards-script/node_modules ./node_modules
 
-# Copy entrypoint script
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+# Copy runtime scripts with proper permissions from the start
+COPY --chmod=755 src/run_daily.sh ./src/run_daily.sh
+COPY --chmod=644 src/crontab.template /etc/cron.d/microsoft-rewards-cron.template
+COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
-# Use entrypoint that supports single-run and optional cron mode
-ENTRYPOINT ["docker-entrypoint.sh"]
-
-# Default: single execution
-CMD ["node", "--enable-source-maps", "./dist/index.js"]
+# Entrypoint handles TZ, initial run toggle, cron templating & launch
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["sh", "-c", "echo 'Container started; cron is running.'"]

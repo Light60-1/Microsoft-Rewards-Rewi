@@ -180,17 +180,28 @@ The bot will automatically configure cron (Linux/Raspberry Pi) or Task Scheduler
 
 ---
 
-## Docker Quick Start
+## 🐳 Docker Quick Start
 
-For containerized deployment:
+For containerized deployment with built-in scheduling:
 
 ```bash
-# Ensure accounts.jsonc exists in src/
+# Ensure accounts.jsonc and config.jsonc exist in src/
 docker compose up -d
 
 # View logs
-docker logs -f microsoft-rewards-bot
+docker logs -f microsoft-rewards-script
+
+# Check status
+docker compose ps
 ```
+
+Container includes:
+- ✅ Built-in cron scheduling
+- ✅ Automatic timezone handling
+- ✅ Random execution delays (anti-detection)
+- ✅ Health checks
+
+**⚠️ Note:** Buy Mode is not available in Docker (requires interactive terminal)
 
 **📖 [Full Docker Guide](docs/docker.md)**
 

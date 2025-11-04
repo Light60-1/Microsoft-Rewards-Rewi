@@ -42,7 +42,7 @@
 
     // Search
     "search": {
-        "useLocalQueries": true,
+        "useLocalQueries": false,
         "settings": {
             "useGeoLocaleQueries": true,
             "scrollRandomResults": true,
