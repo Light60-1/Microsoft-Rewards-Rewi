@@ -44,17 +44,32 @@ class Browser {
             this.bot.log(this.bot.isMobile, 'BROWSER', `Launching ${engineName} (headless=${headless})`)
             const proxyConfig = this.buildPlaywrightProxy(proxy)
 
+            // Detect Raspberry Pi / ARM Linux for specific browser args
+            const isRaspberryPi = process.platform === 'linux' && process.arch === 'arm64'
+            
+            const baseArgs = [
+                '--no-sandbox',
+                '--mute-audio',
+                '--disable-setuid-sandbox',
+                '--ignore-certificate-errors',
+                '--ignore-certificate-errors-spki-list',
+                '--ignore-ssl-errors'
+            ]
+            
+            // Add Raspberry Pi specific args to fix DNS/network issues
+            const raspberryPiArgs = isRaspberryPi ? [
+                '--disable-features=NetworkService',
+                '--disable-features=VizDisplayCompositor',
+                '--disable-dev-shm-usage',
+                '--disable-software-rasterizer',
+                '--disable-gpu',
+                '--disable-features=IsolateOrigins,site-per-process'
+            ] : []
+
             browser = await playwright.chromium.launch({
                 headless,
                 ...(proxyConfig && { proxy: proxyConfig }),
-                args: [
-                    '--no-sandbox',
-                    '--mute-audio',
-                    '--disable-setuid-sandbox',
-                    '--ignore-certificate-errors',
-                    '--ignore-certificate-errors-spki-list',
-                    '--ignore-ssl-errors'
-                ]
+                args: [...baseArgs, ...raspberryPiArgs]
             })
         } catch (e: unknown) {
             const msg = (e instanceof Error ? e.message : String(e))
