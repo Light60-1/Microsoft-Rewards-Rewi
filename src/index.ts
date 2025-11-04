@@ -4,6 +4,7 @@ import type { Page } from 'playwright'
 import fs from 'fs'
 import path from 'path'
 import { spawn } from 'child_process'
+import { createInterface } from 'readline'
 
 import Browser from './browser/Browser'
 import BrowserFunc from './browser/BrowserFunc'
@@ -167,6 +168,43 @@ export class MicrosoftRewardsBot {
         if (!value) return false
         const lower = value.toLowerCase()
         return value === '1' || lower === 'true' || lower === 'yes'
+    }
+
+    private async promptResetJobState(): Promise<boolean> {
+        // Skip prompt in non-interactive environments (Docker, CI, scheduled tasks)
+        if (!process.stdin.isTTY) {
+            log('main','TASK','Non-interactive environment detected - keeping job state', 'warn')
+            return false
+        }
+
+        const rl = createInterface({
+            input: process.stdin,
+            output: process.stdout
+        })
+
+        return new Promise<boolean>((resolve) => {
+            rl.question('\n⚠️  Reset job state and run all accounts again? (y/N): ', (answer) => {
+                rl.close()
+                const trimmed = answer.trim().toLowerCase()
+                resolve(trimmed === 'y' || trimmed === 'yes')
+            })
+        })
+    }
+
+    private resetAllJobStates(): void {
+        if (!this.accountJobState) return
+        
+        const jobStateDir = this.accountJobState.getJobStateDir()
+        if (!fs.existsSync(jobStateDir)) return
+
+        const files = fs.readdirSync(jobStateDir).filter(f => f.endsWith('.json'))
+        for (const file of files) {
+            try {
+                fs.unlinkSync(path.join(jobStateDir, file))
+            } catch {
+                // Ignore errors
+            }
+        }
     }
 
     async run() {
@@ -479,6 +517,22 @@ export class MicrosoftRewardsBot {
     }
 
     private async runTasks(accounts: Account[]) {
+        // Check if all accounts are already completed and prompt user
+        const accountDayKey = this.utils.getFormattedDate()
+        const allCompleted = accounts.every(acc => this.shouldSkipAccount(acc.email, accountDayKey))
+        
+        if (allCompleted && accounts.length > 0) {
+            log('main','TASK',`All accounts already completed on ${accountDayKey}`, 'warn', 'yellow')
+            const shouldReset = await this.promptResetJobState()
+            if (shouldReset) {
+                this.resetAllJobStates()
+                log('main','TASK','Job state reset - proceeding with all accounts', 'log', 'green')
+            } else {
+                log('main','TASK','Keeping existing job state - exiting', 'log')
+                return
+            }
+        }
+
         for (const account of accounts) {
             // If a global standby is active due to security/banned, stop processing further accounts
             if (this.globalStandby.active) {
@@ -490,9 +544,9 @@ export class MicrosoftRewardsBot {
                 log('main','TASK',`Stopping remaining accounts due to ban on ${this.bannedTriggered.email}: ${this.bannedTriggered.reason}`,'warn')
                 break
             }
-            const accountDayKey = this.utils.getFormattedDate()
-            if (this.shouldSkipAccount(account.email, accountDayKey)) {
-                log('main','TASK',`Skipping account ${account.email}: already completed on ${accountDayKey} (job-state resume)`, 'warn')
+            const currentDayKey = this.utils.getFormattedDate()
+            if (this.shouldSkipAccount(account.email, currentDayKey)) {
+                log('main','TASK',`Skipping account ${account.email}: already completed on ${currentDayKey} (job-state resume)`, 'warn')
                 continue
             }
             // Reset compromised state per account

@@ -99,6 +99,10 @@ export class JobState {
       this.save(email, st)
     }
   }
+
+  getJobStateDir(): string {
+    return this.baseDir
+  }
 }
 
 export default JobState

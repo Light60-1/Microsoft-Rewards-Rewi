@@ -21,7 +21,7 @@
         "parallel": false,
         "runOnZeroPoints": false,
         "clusters": 1,
-        "passesPerRun": 1
+        "passesPerRun": 1 // Number of times to run through all accounts (set to 3 to run 3 times even if already completed)
     },
     "jobState": {
         "enabled": true,
