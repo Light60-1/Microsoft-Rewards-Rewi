@@ -52,29 +52,18 @@ class Browser {
                 '--ignore-ssl-errors'
             ]
             
-            // Linux-specific args to fix DNS resolution & chrome-error://chromewebdata/ issues
-            // These fixes apply to ALL Linux distributions (Ubuntu, Debian, Raspberry Pi OS, etc.)
-            // Fixes navigation interrupted errors caused by DNS timeouts & network service issues
-            const linuxNetworkFixArgs = isLinux ? [
-                '--disable-features=NetworkService',
-                '--disable-features=VizDisplayCompositor',
-                '--enable-features=NetworkServiceInProcess',
+            // Minimal Linux fixes for DNS/network issues without detection risk
+            // Only adds essential stability flags that don't trigger bot detection
+            const linuxStabilityArgs = isLinux ? [
                 '--disable-dev-shm-usage',
-                '--disable-software-rasterizer',
-                '--disable-gpu',
-                '--disable-features=IsolateOrigins,site-per-process',
-                '--disable-site-isolation-trials',
-                '--dns-prefetch-disable',
-                '--no-zygote',
-                '--single-process',
-                '--disable-blink-features=AutomationControlled'
+                '--disable-software-rasterizer'
             ] : []
 
             browser = await playwright.chromium.launch({
                 headless,
                 ...(proxyConfig && { proxy: proxyConfig }),
-                args: [...baseArgs, ...linuxNetworkFixArgs],
-                timeout: isLinux ? 120000 : 60000
+                args: [...baseArgs, ...linuxStabilityArgs],
+                timeout: isLinux ? 90000 : 60000
             })
         } catch (e: unknown) {
             const msg = (e instanceof Error ? e.message : String(e))

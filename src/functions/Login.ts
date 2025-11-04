@@ -102,14 +102,36 @@ export class Login {
         return
       }
 
-      // Use longer timeout on Linux due to DNS resolution issues
       const isLinux = process.platform === 'linux'
-      const navigationTimeout = isLinux ? 45000 : 30000
+      const navigationTimeout = isLinux ? 60000 : 30000
       
-      await page.goto('https://www.bing.com/rewards/dashboard', { 
-        waitUntil: 'domcontentloaded',
-        timeout: navigationTimeout
-      })
+      // Retry mechanism for Linux DNS issues
+      let lastError: Error | null = null
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await page.goto('https://www.bing.com/rewards/dashboard', { 
+            waitUntil: 'domcontentloaded',
+            timeout: navigationTimeout
+          })
+          lastError = null
+          break
+        } catch (e) {
+          lastError = e as Error
+          const errorMsg = e instanceof Error ? e.message : String(e)
+          
+          // Only retry on chrome-error or timeout, not on HTTP errors (400, 403, etc.)
+          if (errorMsg.includes('chrome-error://chromewebdata/') || errorMsg.includes('Timeout')) {
+            if (attempt < 3) {
+              this.bot.log(this.bot.isMobile, 'LOGIN', `Navigation failed (attempt ${attempt}/3), retrying...`, 'warn')
+              await this.bot.utils.wait(2000 * attempt)
+              continue
+            }
+          }
+          throw e
+        }
+      }
+      
+      if (lastError) throw lastError
       await this.disableFido(page)
       
       const [, , portalCheck] = await Promise.allSettled([
@@ -159,8 +181,23 @@ export class Login {
     url.searchParams.set('login_hint', email)
 
     const isLinux = process.platform === 'linux'
-    const navigationTimeout = isLinux ? 45000 : 30000
-    await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: navigationTimeout })
+    const navigationTimeout = isLinux ? 60000 : 30000
+    
+    // Retry for Linux DNS issues
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: navigationTimeout })
+        break
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : String(e)
+        if ((errorMsg.includes('chrome-error://chromewebdata/') || errorMsg.includes('Timeout')) && attempt < 3) {
+          this.bot.log(this.bot.isMobile, 'LOGIN-APP', `OAuth navigation failed (attempt ${attempt}/3), retrying...`, 'warn')
+          await this.bot.utils.wait(2000 * attempt)
+          continue
+        }
+        throw e
+      }
+    }
     const start = Date.now()
     this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'Authorizing mobile scope...')
     let code = ''
@@ -253,8 +290,24 @@ export class Login {
     const homeUrl = 'https://rewards.bing.com/'
     try {
       const isLinux = process.platform === 'linux'
-      const navigationTimeout = isLinux ? 45000 : 30000
-      await page.goto(homeUrl, { timeout: navigationTimeout })
+      const navigationTimeout = isLinux ? 60000 : 30000
+      
+      // Retry for Linux DNS issues
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          await page.goto(homeUrl, { timeout: navigationTimeout })
+          break
+        } catch (e) {
+          const errorMsg = e instanceof Error ? e.message : String(e)
+          if ((errorMsg.includes('chrome-error://chromewebdata/') || errorMsg.includes('Timeout')) && attempt < 2) {
+            this.bot.log(this.bot.isMobile, 'LOGIN', 'Session check navigation failed, retrying...', 'warn')
+            await this.bot.utils.wait(2000)
+            continue
+          }
+          throw e
+        }
+      }
+      
       await page.waitForLoadState('domcontentloaded').catch(logError('LOGIN', 'DOMContentLoaded timeout', this.bot.isMobile))
       await this.bot.browser.utils.reloadBadPage(page)
       await this.bot.utils.wait(250)
