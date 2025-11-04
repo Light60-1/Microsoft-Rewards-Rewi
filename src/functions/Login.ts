@@ -102,7 +102,14 @@ export class Login {
         return
       }
 
-      await page.goto('https://www.bing.com/rewards/dashboard', { waitUntil: 'domcontentloaded' })
+      // Use longer timeout on Linux due to DNS resolution issues
+      const isLinux = process.platform === 'linux'
+      const navigationTimeout = isLinux ? 45000 : 30000
+      
+      await page.goto('https://www.bing.com/rewards/dashboard', { 
+        waitUntil: 'domcontentloaded',
+        timeout: navigationTimeout
+      })
       await this.disableFido(page)
       
       const [, , portalCheck] = await Promise.allSettled([
@@ -151,7 +158,9 @@ export class Login {
     url.searchParams.set('access_type', 'offline_access')
     url.searchParams.set('login_hint', email)
 
-    await page.goto(url.href, { waitUntil: 'domcontentloaded' })
+    const isLinux = process.platform === 'linux'
+    const navigationTimeout = isLinux ? 45000 : 30000
+    await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: navigationTimeout })
     const start = Date.now()
     this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'Authorizing mobile scope...')
     let code = ''
@@ -243,7 +252,9 @@ export class Login {
   private async tryReuseExistingSession(page: Page): Promise<boolean> {
     const homeUrl = 'https://rewards.bing.com/'
     try {
-      await page.goto(homeUrl)
+      const isLinux = process.platform === 'linux'
+      const navigationTimeout = isLinux ? 45000 : 30000
+      await page.goto(homeUrl, { timeout: navigationTimeout })
       await page.waitForLoadState('domcontentloaded').catch(logError('LOGIN', 'DOMContentLoaded timeout', this.bot.isMobile))
       await this.bot.browser.utils.reloadBadPage(page)
       await this.bot.utils.wait(250)

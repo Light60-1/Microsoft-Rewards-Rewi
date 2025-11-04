@@ -41,8 +41,7 @@ class Browser {
             this.bot.log(this.bot.isMobile, 'BROWSER', `Launching ${engineName} (headless=${headless})`)
             const proxyConfig = this.buildPlaywrightProxy(proxy)
 
-            // Detect Raspberry Pi / ARM Linux for specific browser args
-            const isRaspberryPi = process.platform === 'linux' && process.arch === 'arm64'
+            const isLinux = process.platform === 'linux'
             
             const baseArgs = [
                 '--no-sandbox',
@@ -53,20 +52,29 @@ class Browser {
                 '--ignore-ssl-errors'
             ]
             
-            // Add Raspberry Pi specific args to fix DNS/network issues
-            const raspberryPiArgs = isRaspberryPi ? [
+            // Linux-specific args to fix DNS resolution & chrome-error://chromewebdata/ issues
+            // These fixes apply to ALL Linux distributions (Ubuntu, Debian, Raspberry Pi OS, etc.)
+            // Fixes navigation interrupted errors caused by DNS timeouts & network service issues
+            const linuxNetworkFixArgs = isLinux ? [
                 '--disable-features=NetworkService',
                 '--disable-features=VizDisplayCompositor',
+                '--enable-features=NetworkServiceInProcess',
                 '--disable-dev-shm-usage',
                 '--disable-software-rasterizer',
                 '--disable-gpu',
-                '--disable-features=IsolateOrigins,site-per-process'
+                '--disable-features=IsolateOrigins,site-per-process',
+                '--disable-site-isolation-trials',
+                '--dns-prefetch-disable',
+                '--no-zygote',
+                '--single-process',
+                '--disable-blink-features=AutomationControlled'
             ] : []
 
             browser = await playwright.chromium.launch({
                 headless,
                 ...(proxyConfig && { proxy: proxyConfig }),
-                args: [...baseArgs, ...raspberryPiArgs]
+                args: [...baseArgs, ...linuxNetworkFixArgs],
+                timeout: isLinux ? 120000 : 60000
             })
         } catch (e: unknown) {
             const msg = (e instanceof Error ? e.message : String(e))
