@@ -102,7 +102,7 @@ export class Login {
         return
       }
 
-      await page.goto('https://rewards.bing.com/signin', { waitUntil: 'domcontentloaded' })
+      await page.goto('https://www.bing.com/rewards/dashboard', { waitUntil: 'domcontentloaded' })
       await this.disableFido(page)
       
       const [, , portalCheck] = await Promise.allSettled([
