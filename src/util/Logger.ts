@@ -7,6 +7,18 @@ import { DISCORD } from '../constants'
 
 const WEBHOOK_USERNAME = 'MS Rewards - Live Logs'
 
+/**
+ * Safe error logger for catch blocks
+ * Use in .catch() to log errors without breaking flow
+ * @example await action().catch(logError('ACTION', 'Failed to do something'))
+ */
+export function logError(title: string, message: string, isMobile: boolean | 'main' = 'main') {
+    return (error: unknown) => {
+        const errMsg = error instanceof Error ? error.message : String(error)
+        log(isMobile, title, `${message}: ${errMsg}`, 'warn')
+    }
+}
+
 type WebhookBuffer = {
     lines: string[]
     sending: boolean

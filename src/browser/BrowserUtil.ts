@@ -1,6 +1,7 @@
 import { Page } from 'rebrowser-playwright'
 import { load } from 'cheerio'
 import { MicrosoftRewardsBot } from '../index'
+import { logError } from '../util/Logger'
 
 type DismissButton = { selector: string; label: string; isXPath?: boolean }
 
@@ -80,7 +81,7 @@ export default class BrowserUtil {
             const visible = await loc.first().isVisible({ timeout: 200 }).catch(() => false)
             if (!visible) return false
 
-            await loc.first().click({ timeout: 500 }).catch(() => {})
+            await loc.first().click({ timeout: 500 }).catch(logError('BROWSER-UTIL', `Failed to click ${btn.label}`, this.bot.isMobile))
             this.bot.log(this.bot.isMobile, 'DISMISS-ALL-MESSAGES', `Dismissed: ${btn.label}`)
             return true
         } catch {
@@ -97,14 +98,14 @@ export default class BrowserUtil {
 
             const rejectBtn = overlay.locator(reject)
             if (await rejectBtn.first().isVisible().catch(() => false)) {
-                await rejectBtn.first().click({ timeout: 500 }).catch(() => {})
+                await rejectBtn.first().click({ timeout: 500 }).catch(logError('BROWSER-UTIL', 'Overlay reject click failed', this.bot.isMobile))
                 this.bot.log(this.bot.isMobile, 'DISMISS-ALL-MESSAGES', 'Dismissed: Overlay Reject')
                 return 1
             }
 
             const acceptBtn = overlay.locator(accept)
             if (await acceptBtn.first().isVisible().catch(() => false)) {
-                await acceptBtn.first().click({ timeout: 500 }).catch(() => {})
+                await acceptBtn.first().click({ timeout: 500 }).catch(logError('BROWSER-UTIL', 'Overlay accept click failed', this.bot.isMobile))
                 this.bot.log(this.bot.isMobile, 'DISMISS-ALL-MESSAGES', 'Dismissed: Overlay Accept')
                 return 1
             }
@@ -124,12 +125,12 @@ export default class BrowserUtil {
 
             const closeBtn = dialog.locator(closeButtons).first()
             if (await closeBtn.isVisible({ timeout: 200 }).catch(() => false)) {
-                await closeBtn.click({ timeout: 500 }).catch(() => {})
+                await closeBtn.click({ timeout: 500 }).catch(logError('BROWSER-UTIL', 'Streak dialog close failed', this.bot.isMobile))
                 this.bot.log(this.bot.isMobile, 'DISMISS-ALL-MESSAGES', 'Dismissed: Streak Protection Dialog Button')
                 return 1
             }
 
-            await page.keyboard.press('Escape').catch(() => {})
+            await page.keyboard.press('Escape').catch(logError('BROWSER-UTIL', 'Streak dialog Escape failed', this.bot.isMobile))
             this.bot.log(this.bot.isMobile, 'DISMISS-ALL-MESSAGES', 'Dismissed: Streak Protection Dialog Escape')
             return 1
         } catch {
@@ -153,7 +154,7 @@ export default class BrowserUtil {
             // Click the Next button
             const nextBtn = page.locator(nextButton).first()
             if (await nextBtn.isVisible({ timeout: 500 }).catch(() => false)) {
-                await nextBtn.click({ timeout: 1000 }).catch(() => {})
+                await nextBtn.click({ timeout: 1000 }).catch(logError('BROWSER-UTIL', 'Terms update next button click failed', this.bot.isMobile))
                 this.bot.log(this.bot.isMobile, 'DISMISS-ALL-MESSAGES', 'Dismissed: Terms Update Dialog (Next)')
                 // Wait a bit for navigation
                 await page.waitForTimeout(1000)

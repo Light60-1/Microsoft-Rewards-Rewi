@@ -9,6 +9,7 @@ import { MicrosoftRewardsBot } from '../index'
 import { OAuth } from '../interface/OAuth'
 import { Retry } from '../util/Retry'
 import { LoginState, LoginStateDetector } from '../util/LoginStateDetector'
+import { logError } from '../util/Logger'
 
 // -------------------------------
 // Constants / Tunables
@@ -243,7 +244,7 @@ export class Login {
     const homeUrl = 'https://rewards.bing.com/'
     try {
       await page.goto(homeUrl)
-      await page.waitForLoadState('domcontentloaded').catch(()=>{})
+      await page.waitForLoadState('domcontentloaded').catch(logError('LOGIN', 'DOMContentLoaded timeout', this.bot.isMobile))
       await this.bot.browser.utils.reloadBadPage(page)
       await this.bot.utils.wait(250)
 
@@ -384,7 +385,10 @@ export class Login {
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Email prefilled')
     }
     const next = await page.waitForSelector(SELECTORS.submitBtn, { timeout: 2000 }).catch(()=>null)
-    if (next) { await next.click().catch(()=>{}); this.bot.log(this.bot.isMobile, 'LOGIN', 'Submitted email') }
+    if (next) { 
+      await next.click().catch(e => this.bot.log(this.bot.isMobile, 'LOGIN', `Email submit click failed: ${e}`, 'warn'))
+      this.bot.log(this.bot.isMobile, 'LOGIN', 'Submitted email') 
+    }
   }
 
   private async inputPasswordOr2FA(page: Page, password: string) {
@@ -394,7 +398,10 @@ export class Login {
     
     // Some flows require switching to password first
     const switchBtn = await page.waitForSelector('#idA_PWD_SwitchToPassword', { timeout: 1500 }).catch(()=>null)
-    if (switchBtn) { await switchBtn.click().catch(()=>{}); await this.bot.utils.wait(1000) }
+    if (switchBtn) { 
+      await switchBtn.click().catch(e => this.bot.log(this.bot.isMobile, 'LOGIN', `Switch to password failed: ${e}`, 'warn'))
+      await this.bot.utils.wait(1000) 
+    }
 
     // Early TOTP check - if totpSecret is configured, check for TOTP challenge before password
     if (this.currentTotpSecret) {
@@ -429,7 +436,10 @@ export class Login {
     await page.fill(SELECTORS.passwordInput, '')
     await page.fill(SELECTORS.passwordInput, password)
     const submit = await page.waitForSelector(SELECTORS.submitBtn, { timeout: 2000 }).catch(()=>null)
-    if (submit) { await submit.click().catch(()=>{}); this.bot.log(this.bot.isMobile, 'LOGIN', 'Password submitted') }
+    if (submit) { 
+      await submit.click().catch(e => this.bot.log(this.bot.isMobile, 'LOGIN', `Password submit failed: ${e}`, 'warn'))
+      this.bot.log(this.bot.isMobile, 'LOGIN', 'Password submitted') 
+    }
   }
 
   // --------------- 2FA Handling ---------------
@@ -462,10 +472,10 @@ export class Login {
           const resend = await page.waitForSelector('button[aria-describedby="pushNotificationsTitle errorDescription"]', { timeout: 1500 }).catch(()=>null)
           if (!resend) break
           await this.bot.utils.wait(60000)
-          await resend.click().catch(()=>{})
+          await resend.click().catch(logError('LOGIN', 'Resend click failed', this.bot.isMobile))
         }
       }
-      await page.click('button[aria-describedby="confirmSendTitle"]').catch(()=>{})
+      await page.click('button[aria-describedby="confirmSendTitle"]').catch(logError('LOGIN', 'Confirm send click failed', this.bot.isMobile))
       await this.bot.utils.wait(1500)
       try {
         const el = await page.waitForSelector('#displaySign, div[data-testid="displaySign"]>span', { timeout: 2000 })
@@ -484,7 +494,7 @@ export class Login {
       } catch {
         this.bot.log(this.bot.isMobile, 'LOGIN', 'Authenticator code expired – refreshing')
         const retryBtn = await page.waitForSelector(SELECTORS.passkeyPrimary, { timeout: 3000 }).catch(()=>null)
-        if (retryBtn) await retryBtn.click().catch(()=>{})
+        if (retryBtn) await retryBtn.click().catch(logError('LOGIN-AUTH', 'Refresh button click failed', this.bot.isMobile))
         const refreshed = await this.fetchAuthenticatorNumber(page)
         if (!refreshed) { this.bot.log(this.bot.isMobile, 'LOGIN', 'Could not refresh authenticator code', 'warn'); return }
         numberToPress = refreshed
@@ -584,9 +594,9 @@ export class Login {
       // Use unified selector system
       const submit = await this.findFirstVisibleLocator(page, Login.TOTP_SELECTORS.submit)
       if (submit) {
-        await submit.click().catch(()=>{})
+        await submit.click().catch(logError('LOGIN-TOTP', 'Auto-submit click failed', this.bot.isMobile))
       } else {
-        await page.keyboard.press('Enter').catch(()=>{})
+        await page.keyboard.press('Enter').catch(logError('LOGIN-TOTP', 'Auto-submit Enter failed', this.bot.isMobile))
       }
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Submitted TOTP automatically')
     } catch (error) {
@@ -747,7 +757,7 @@ export class Login {
     for (const sel of selectors) {
       const loc = page.locator(sel).first()
       if (await loc.isVisible().catch(() => false)) {
-        await loc.click().catch(()=>{})
+        await loc.click().catch(logError('LOGIN', `Click failed for selector: ${sel}`, this.bot.isMobile))
         return true
       }
     }
@@ -1017,7 +1027,7 @@ export class Login {
       const text = (await skipBtn.textContent() || '').trim()
       // Check if it's actually a skip button (could be other secondary buttons)
       if (/skip|later|not now|non merci|pas maintenant/i.test(text)) {
-        await skipBtn.click().catch(()=>{})
+        await skipBtn.click().catch(logError('LOGIN-PASSKEY', 'Skip button click failed', this.bot.isMobile))
         did = true
         this.logPasskeyOnce('data-testid secondaryButton')
       }
@@ -1028,7 +1038,11 @@ export class Login {
       const biometric = await page.waitForSelector(SELECTORS.biometricVideo, { timeout: 500 }).catch(()=>null)
       if (biometric) {
         const btn = await page.$(SELECTORS.passkeySecondary)
-        if (btn) { await btn.click().catch(()=>{}); did = true; this.logPasskeyOnce('video heuristic') }
+        if (btn) { 
+          await btn.click().catch(logError('LOGIN-PASSKEY', 'Video heuristic click failed', this.bot.isMobile))
+          did = true
+          this.logPasskeyOnce('video heuristic') 
+        }
       }
     }
     
@@ -1039,11 +1053,17 @@ export class Login {
       const primBtn = await page.waitForSelector(SELECTORS.passkeyPrimary, { timeout: 500 }).catch(()=>null)
       const title = (titleEl ? (await titleEl.textContent()) : '')?.trim() || ''
       const looksLike = /sign in faster|passkey|fingerprint|face|pin|empreinte|visage|windows hello|hello/i.test(title)
-      if (looksLike && secBtn) { await secBtn.click().catch(()=>{}); did = true; this.logPasskeyOnce('title heuristic '+title) }
+      if (looksLike && secBtn) { 
+        await secBtn.click().catch(logError('LOGIN-PASSKEY', 'Title heuristic click failed', this.bot.isMobile))
+        did = true
+        this.logPasskeyOnce('title heuristic '+title) 
+      }
       else if (!did && secBtn && primBtn) {
         const text = (await secBtn.textContent()||'').trim()
         if (/skip for now|not now|later|passer|plus tard/i.test(text)) { 
-          await secBtn.click().catch(()=>{}); did = true; this.logPasskeyOnce('secondary button text') 
+          await secBtn.click().catch(logError('LOGIN-PASSKEY', 'Secondary button text click failed', this.bot.isMobile))
+          did = true
+          this.logPasskeyOnce('secondary button text') 
         }
       }
     }
@@ -1051,7 +1071,11 @@ export class Login {
     // Priority 4: XPath fallback (includes Windows Hello specific patterns)
     if (!did) {
       const textBtn = await page.locator('xpath=//button[contains(normalize-space(.),"Skip for now") or contains(normalize-space(.),"Not now") or contains(normalize-space(.),"Passer") or contains(normalize-space(.),"No thanks")]').first()
-      if (await textBtn.isVisible().catch(()=>false)) { await textBtn.click().catch(()=>{}); did = true; this.logPasskeyOnce('xpath fallback') }
+      if (await textBtn.isVisible().catch(()=>false)) { 
+        await textBtn.click().catch(logError('LOGIN-PASSKEY', 'XPath fallback click failed', this.bot.isMobile))
+        did = true
+        this.logPasskeyOnce('xpath fallback') 
+      }
     }
     
     // Priority 4.5: Windows Hello specific detection
@@ -1070,7 +1094,7 @@ export class Login {
         for (const pattern of skipPatterns) {
           const btn = await page.locator(pattern).first()
           if (await btn.isVisible().catch(() => false)) {
-            await btn.click().catch(() => {})
+            await btn.click().catch(logError('LOGIN-PASSKEY', 'Windows Hello skip failed', this.bot.isMobile))
             did = true
             this.logPasskeyOnce('Windows Hello skip')
             break
@@ -1082,14 +1106,22 @@ export class Login {
     // Priority 5: Close button fallback
     if (!did) {
       const close = await page.$('#close-button')
-      if (close) { await close.click().catch(()=>{}); did = true; this.logPasskeyOnce('close button') }
+      if (close) { 
+        await close.click().catch(logError('LOGIN-PASSKEY', 'Close button fallback failed', this.bot.isMobile))
+        did = true
+        this.logPasskeyOnce('close button') 
+      }
     }
 
     // KMSI prompt
     const kmsi = await page.waitForSelector(SELECTORS.kmsiVideo, { timeout: 400 }).catch(()=>null)
     if (kmsi) {
       const yes = await page.$(SELECTORS.passkeyPrimary)
-      if (yes) { await yes.click().catch(()=>{}); did = true; this.bot.log(this.bot.isMobile,'LOGIN-KMSI','Accepted KMSI prompt') }
+      if (yes) { 
+        await yes.click().catch(logError('LOGIN-KMSI', 'KMSI accept click failed', this.bot.isMobile))
+        did = true
+        this.bot.log(this.bot.isMobile,'LOGIN-KMSI','Accepted KMSI prompt') 
+      }
     }
 
     if (!did && context === 'main') {
@@ -1140,9 +1172,9 @@ export class Login {
       this.bot.compromisedModeActive = true
       this.bot.compromisedReason = 'sign-in-blocked'
       this.startCompromisedInterval()
-      await this.bot.engageGlobalStandby('sign-in-blocked', email).catch(()=>{})
+      await this.bot.engageGlobalStandby('sign-in-blocked', email).catch(logError('LOGIN-SECURITY', 'Global standby engagement failed', this.bot.isMobile))
       // Open security docs for immediate guidance (best-effort)
-      await this.openDocsTab(page, docsUrl).catch(()=>{})
+      await this.openDocsTab(page, docsUrl).catch(logError('LOGIN-SECURITY', 'Failed to open docs tab', this.bot.isMobile))
       return true
     } catch { return false }
   }
@@ -1250,8 +1282,8 @@ export class Login {
         this.bot.compromisedModeActive = true
         this.bot.compromisedReason = 'recovery-mismatch'
         this.startCompromisedInterval()
-        await this.bot.engageGlobalStandby('recovery-mismatch', email).catch(()=>{})
-        await this.openDocsTab(page, docsUrl).catch(()=>{})
+        await this.bot.engageGlobalStandby('recovery-mismatch', email).catch(logError('LOGIN-RECOVERY', 'Global standby failed', this.bot.isMobile))
+        await this.openDocsTab(page, docsUrl).catch(logError('LOGIN-RECOVERY', 'Failed to open docs tab', this.bot.isMobile))
       } else {
         const mode = observedPrefix.length === 1 ? 'lenient' : 'strict'
         this.bot.log(this.bot.isMobile,'LOGIN-RECOVERY',`Recovery OK (${mode}): ${extracted} matches ${matchRef.prefix2}**@${matchRef.domain}`)
@@ -1263,7 +1295,7 @@ export class Login {
     try {
       const link = await page.locator('xpath=//span[@role="button" and (contains(translate(normalize-space(.),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"use your password") or contains(translate(normalize-space(.),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"utilisez votre mot de passe"))]').first()
       if (await link.isVisible().catch(()=>false)) {
-        await link.click().catch(()=>{})
+        await link.click().catch(logError('LOGIN', 'Use password link click failed', this.bot.isMobile))
         await this.bot.utils.wait(800)
         this.bot.log(this.bot.isMobile,'LOGIN','Clicked "Use your password" link')
       }
@@ -1335,6 +1367,6 @@ export class Login {
         body.isFidoSupported = false
         route.continue({ postData: JSON.stringify(body) })
       } catch { route.continue() }
-    }).catch(()=>{})
+    }).catch(logError('LOGIN-FIDO', 'Route interception setup failed', this.bot.isMobile))
   }
 }

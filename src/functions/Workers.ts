@@ -6,6 +6,7 @@ import { MicrosoftRewardsBot } from '../index'
 import JobState from '../util/JobState'
 import { Retry } from '../util/Retry'
 import { AdaptiveThrottler } from '../util/AdaptiveThrottler'
+import { logError } from '../util/Logger'
 
 export class Workers {
     public bot: MicrosoftRewardsBot
@@ -204,7 +205,7 @@ export class Workers {
     }
 
     private async prepareActivityPage(page: Page, selector: string, throttle: AdaptiveThrottler): Promise<void> {
-        await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+        await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(logError('WORKERS', 'Network idle wait failed', this.bot.isMobile))
         await this.bot.browser.utils.humanizePage(page)
         await this.applyThrottle(throttle, 1200, 2600)
     }

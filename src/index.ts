@@ -120,10 +120,16 @@ export class MicrosoftRewardsBot {
         
         // Run comprehensive startup validation
         const validator = new StartupValidator()
-        await validator.validate(this.config, this.accounts)
+        try {
+            await validator.validate(this.config, this.accounts)
+        } catch (error) {
+            // Critical validation errors prevent startup
+            const errorMsg = error instanceof Error ? error.message : String(error)
+            log('main', 'VALIDATION', `Fatal validation error: ${errorMsg}`, 'error')
+            throw error // Re-throw to stop execution
+        }
         
-        // Always continue - validation is informative, not blocking
-        // This allows users to proceed even with warnings or minor issues
+        // Validation passed - continue with initialization
         
         // Initialize job state
         if (this.config.jobState?.enabled !== false) {

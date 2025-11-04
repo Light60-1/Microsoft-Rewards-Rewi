@@ -9,6 +9,7 @@ import { Counters, DashboardData, MorePromotion, PromotionalItem } from '../inte
 import { QuizData } from '../interface/QuizData'
 import { AppUserData } from '../interface/AppUserData'
 import { EarnablePoints } from '../interface/Points'
+import { logError } from '../util/Logger'
 
 
 export default class BrowserFunc {
@@ -148,7 +149,7 @@ export default class BrowserFunc {
                 
                 // Force a navigation retry once before failing hard
                 await this.goHome(target)
-                await target.waitForLoadState('domcontentloaded', { timeout: TIMEOUTS.VERY_LONG }).catch(() => {})
+                await target.waitForLoadState('domcontentloaded', { timeout: TIMEOUTS.VERY_LONG }).catch(logError('BROWSER-FUNC', 'Dashboard recovery load failed', this.bot.isMobile))
                 await this.bot.utils.wait(this.bot.isMobile ? TIMEOUTS.LONG : TIMEOUTS.MEDIUM)
                 
                 scriptContent = await this.extractDashboardScript(target)

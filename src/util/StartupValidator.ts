@@ -11,6 +11,7 @@ interface ValidationError {
   message: string
   fix?: string
   docsLink?: string
+  blocking?: boolean // If true, prevents bot startup
 }
 
 export class StartupValidator {
@@ -19,8 +20,8 @@ export class StartupValidator {
 
   /**
    * Run all validation checks before starting the bot.
-   * Always returns true - validation is informative, not blocking.
-   * Displays errors and warnings but lets execution continue.
+   * Throws ValidationError if critical (blocking) errors are found.
+   * Displays errors and warnings to help users fix configuration issues.
    */
   async validate(config: Config, accounts: Account[]): Promise<boolean> {
     log('main', 'STARTUP', 'Running configuration validation...')
@@ -40,8 +41,15 @@ export class StartupValidator {
     // Display results (await to respect the delay)
     await this.displayResults()
 
-    // Always return true - validation is informative only
-    // Users can proceed even with errors (they might be false positives)
+    // Check for blocking errors
+    const blockingErrors = this.errors.filter(e => e.blocking === true)
+    if (blockingErrors.length > 0) {
+      const errorMsg = `Validation failed with ${blockingErrors.length} critical error(s). Fix configuration before proceeding.`
+      log('main', 'VALIDATION', errorMsg, 'error')
+      throw new Error(errorMsg)
+    }
+
+    // Non-blocking errors and warnings allow execution to continue
     return true
   }
 
@@ -51,7 +59,8 @@ export class StartupValidator {
         'accounts',
         'No accounts found in accounts.json',
         'Add at least one account to src/accounts.json or src/accounts.jsonc',
-        'docs/accounts.md'
+        'docs/accounts.md',
+        true // blocking: no accounts = nothing to run
       )
       return
     }
@@ -64,13 +73,17 @@ export class StartupValidator {
         this.addError(
           'accounts',
           `${prefix}: Missing or invalid email address`,
-          'Add a valid email address in the "email" field'
+          'Add a valid email address in the "email" field',
+          undefined,
+          true // blocking: email is required
         )
       } else if (!/@/.test(account.email)) {
         this.addError(
           'accounts',
           `${prefix}: Email format is invalid`,
-          'Email must contain @ symbol (e.g., user@example.com)'
+          'Email must contain @ symbol (e.g., user@example.com)',
+          undefined,
+          true // blocking: invalid email = cannot login
         )
       }
 
@@ -79,7 +92,9 @@ export class StartupValidator {
         this.addError(
           'accounts',
           `${prefix}: Missing or invalid password`,
-          'Add your Microsoft account password in the "password" field'
+          'Add your Microsoft account password in the "password" field',
+          undefined,
+          true // blocking: password is required
         )
       } else if (account.password.length < 4) {
         this.addWarning(
@@ -218,7 +233,9 @@ export class StartupValidator {
       this.addError(
         'config',
         'Global timeout is set to 0',
-        'Set a reasonable timeout value (e.g., "30s", "60s") to prevent infinite hangs'
+        'Set a reasonable timeout value (e.g., "30s", "60s") to prevent infinite hangs',
+        undefined,
+        true // blocking: 0 timeout = infinite hangs guaranteed
       )
     }
 
@@ -368,13 +385,16 @@ export class StartupValidator {
           'network',
           'Webhook enabled but URL is missing',
           'Add webhook URL or set webhook.enabled=false',
-          'docs/config.md'
+          'docs/config.md',
+          true // blocking: enabled but no URL = will crash
         )
       } else if (!config.webhook.url.startsWith('http')) {
         this.addError(
           'network',
           `Invalid webhook URL: ${config.webhook.url}`,
-          'Webhook URL must start with http:// or https://'
+          'Webhook URL must start with http:// or https://',
+          undefined,
+          true // blocking: invalid URL = will crash
         )
       }
     }
@@ -385,7 +405,9 @@ export class StartupValidator {
         this.addError(
           'network',
           'Conclusion webhook enabled but URL is missing',
-          'Add conclusion webhook URL or disable it'
+          'Add conclusion webhook URL or disable it',
+          undefined,
+          true // blocking: enabled but no URL = will crash
         )
       }
     }
@@ -397,7 +419,8 @@ export class StartupValidator {
           'network',
           'NTFY enabled but URL is missing',
           'Add NTFY server URL or set ntfy.enabled=false',
-          'docs/ntfy.md'
+          'docs/ntfy.md',
+          true // blocking: enabled but no URL = will crash
         )
       }
       if (!config.ntfy.topic || config.ntfy.topic.trim() === '') {
@@ -405,7 +428,8 @@ export class StartupValidator {
           'network',
           'NTFY enabled but topic is missing',
           'Add NTFY topic name',
-          'docs/ntfy.md'
+          'docs/ntfy.md',
+          true // blocking: enabled but no topic = will crash
         )
       }
     }
@@ -611,12 +635,12 @@ export class StartupValidator {
     }
   }
 
-  private addError(category: string, message: string, fix?: string, docsLink?: string): void {
-    this.errors.push({ severity: 'error', category, message, fix, docsLink })
+  private addError(category: string, message: string, fix?: string, docsLink?: string, blocking = false): void {
+    this.errors.push({ severity: 'error', category, message, fix, docsLink, blocking })
   }
 
   private addWarning(category: string, message: string, fix?: string, docsLink?: string): void {
-    this.warnings.push({ severity: 'warning', category, message, fix, docsLink })
+    this.warnings.push({ severity: 'warning', category, message, fix, docsLink, blocking: false })
   }
 
   private async displayResults(): Promise<void> {
