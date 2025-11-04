@@ -7,46 +7,39 @@ import { botController } from './BotController'
 
 export const apiRouter = Router()
 
+// Helper to extract error message
+const getErr = (e: unknown): string => e instanceof Error ? e.message : 'Unknown error'
+
+// Helper to load accounts if not already loaded
+function ensureAccountsLoaded(): void {
+  const accounts = dashboardState.getAccounts()
+  if (accounts.length === 0) {
+    try {
+      const loadedAccounts = loadAccounts()
+      dashboardState.initializeAccounts(loadedAccounts.map(a => a.email))
+    } catch (error) {
+      console.error('[Dashboard] Failed to load accounts:', error)
+    }
+  }
+}
+
 // GET /api/status - Bot status
 apiRouter.get('/status', (_req: Request, res: Response) => {
   try {
-    const accounts = dashboardState.getAccounts()
-    
-    // If no accounts loaded yet, try to load them
-    if (accounts.length === 0) {
-      try {
-        const loadedAccounts = loadAccounts()
-        dashboardState.initializeAccounts(loadedAccounts.map(a => a.email))
-      } catch (error) {
-        console.error('[Dashboard] Failed to load accounts for status:', error)
-      }
-    }
-    
+    ensureAccountsLoaded()
     res.json(dashboardState.getStatus())
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+    res.status(500).json({ error: getErr(error) })
   }
 })
 
 // GET /api/accounts - List all accounts with masked emails
 apiRouter.get('/accounts', (_req: Request, res: Response) => {
   try {
-    let accounts = dashboardState.getAccounts()
-    
-    // If no accounts in state, try to load from config
-    if (accounts.length === 0) {
-      try {
-        const loadedAccounts = loadAccounts()
-        dashboardState.initializeAccounts(loadedAccounts.map(a => a.email))
-        accounts = dashboardState.getAccounts()
-      } catch (error) {
-        console.error('[Dashboard] Failed to load accounts:', error)
-      }
-    }
-    
-    res.json(accounts)
+    ensureAccountsLoaded()
+    res.json(dashboardState.getAccounts())
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+    res.status(500).json({ error: getErr(error) })
   }
 })
 
@@ -57,7 +50,7 @@ apiRouter.get('/logs', (req: Request, res: Response) => {
     const logs = dashboardState.getLogs(Math.min(limit, 500))
     res.json(logs)
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+    res.status(500).json({ error: getErr(error) })
   }
 })
 
@@ -67,7 +60,7 @@ apiRouter.delete('/logs', (_req: Request, res: Response) => {
     dashboardState.clearLogs()
     res.json({ success: true })
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+    res.status(500).json({ error: getErr(error) })
   }
 })
 
@@ -98,7 +91,7 @@ apiRouter.get('/history', (_req: Request, res: Response): void => {
 
     res.json(summaries.slice(0, 50))
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+    res.status(500).json({ error: getErr(error) })
   }
 })
 
@@ -115,7 +108,7 @@ apiRouter.get('/config', (_req: Request, res: Response) => {
 
     res.json(safe)
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+    res.status(500).json({ error: getErr(error) })
   }
 })
 
@@ -139,7 +132,7 @@ apiRouter.post('/config', (req: Request, res: Response): void => {
 
     res.json({ success: true, backup: backupPath })
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+    res.status(500).json({ error: getErr(error) })
   }
 })
 
@@ -148,26 +141,19 @@ apiRouter.post('/start', async (_req: Request, res: Response): Promise<void> => 
   try {
     const status = botController.getStatus()
     if (status.running) {
-      res.status(400).json({ error: 'Bot already running', pid: status.pid })
+      sendError(res, 400, `Bot already running (PID: ${status.pid})`)
       return
     }
 
     const result = await botController.start()
     
     if (result.success) {
-      res.json({ 
-        success: true, 
-        message: 'Bot started successfully', 
-        pid: result.pid 
-      })
+      sendSuccess(res, { message: 'Bot started successfully', pid: result.pid })
     } else {
-      res.status(500).json({ 
-        success: false, 
-        error: result.error || 'Failed to start bot' 
-      })
+      sendError(res, 500, result.error || 'Failed to start bot')
     }
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+    sendError(res, 500, getErr(error))
   }
 })
 
@@ -177,12 +163,12 @@ apiRouter.post('/stop', (_req: Request, res: Response): void => {
     const result = botController.stop()
     
     if (result.success) {
-      res.json({ success: true, message: 'Bot stopped successfully' })
+      sendSuccess(res, { message: 'Bot stopped successfully' })
     } else {
-      res.status(400).json({ success: false, error: result.error || 'Failed to stop bot' })
+      sendError(res, 400, result.error || 'Failed to stop bot')
     }
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+    sendError(res, 500, getErr(error))
   }
 })
 
@@ -192,19 +178,12 @@ apiRouter.post('/restart', async (_req: Request, res: Response): Promise<void> =
     const result = await botController.restart()
     
     if (result.success) {
-      res.json({ 
-        success: true, 
-        message: 'Bot restarted successfully', 
-        pid: result.pid 
-      })
+      sendSuccess(res, { message: 'Bot restarted successfully', pid: result.pid })
     } else {
-      res.status(500).json({ 
-        success: false, 
-        error: result.error || 'Failed to restart bot' 
-      })
+      sendError(res, 500, result.error || 'Failed to restart bot')
     }
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+    sendError(res, 500, getErr(error))
   }
 })
 
@@ -230,7 +209,7 @@ apiRouter.post('/sync/:email', async (req: Request, res: Response): Promise<void
       suggestion: 'Use /api/restart endpoint to run all accounts'
     })
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+    res.status(500).json({ error: getErr(error) })
   }
 })
 
@@ -253,7 +232,7 @@ apiRouter.get('/metrics', (_req: Request, res: Response) => {
       accountsError: accounts.filter(a => a.status === 'error').length
     })
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+    res.status(500).json({ error: getErr(error) })
   }
 })
 
@@ -275,7 +254,7 @@ apiRouter.get('/account/:email', (req: Request, res: Response): void => {
     
     res.json(account)
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+    res.status(500).json({ error: getErr(error) })
   }
 })
 
@@ -302,10 +281,11 @@ apiRouter.post('/account/:email/reset', (req: Request, res: Response): void => {
     
     res.json({ success: true })
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+    res.status(500).json({ error: getErr(error) })
   }
 })
 
+// Helper to mask sensitive URLs
 function maskUrl(url: string): string {
   try {
     const parsed = new URL(url)
@@ -319,4 +299,14 @@ function maskUrl(url: string): string {
   } catch {
     return '***'
   }
+}
+
+// Helper to send error response
+function sendError(res: Response, status: number, message: string): void {
+  res.status(status).json({ error: message })
+}
+
+// Helper to send success response
+function sendSuccess(res: Response, data: Record<string, unknown>): void {
+  res.json({ success: true, ...data })
 }

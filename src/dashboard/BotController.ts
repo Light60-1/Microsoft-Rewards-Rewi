@@ -1,9 +1,9 @@
 import { dashboardState } from './state'
 import type { MicrosoftRewardsBot } from '../index'
+import { getErrorMessage } from '../util/Utils'
 
 export class BotController {
   private botInstance: MicrosoftRewardsBot | null = null
-  private botPromise: Promise<void> | null = null
   private startTime?: Date
 
   constructor() {
@@ -37,7 +37,8 @@ export class BotController {
       dashboardState.setRunning(true)
       dashboardState.setBotInstance(this.botInstance)
 
-      this.botPromise = (async () => {
+      // Run bot asynchronously - don't block the API response
+      void (async () => {
         try {
           this.log('✓ Bot initialized, starting execution...', 'log')
           
@@ -46,22 +47,16 @@ export class BotController {
           
           this.log('✓ Bot completed successfully', 'log')
         } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error)
-          this.log(`Bot error: ${errorMsg}`, 'error')
-          throw error
+          this.log(`Bot error: ${getErrorMessage(error)}`, 'error')
         } finally {
           this.cleanup()
         }
       })()
 
-      this.botPromise.catch(error => {
-        this.log(`Bot execution failed: ${error instanceof Error ? error.message : String(error)}`, 'error')
-      })
-
       return { success: true, pid: process.pid }
 
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
+      const errorMsg = getErrorMessage(error)
       this.log(`Failed to start bot: ${errorMsg}`, 'error')
       this.cleanup()
       return { success: false, error: errorMsg }
@@ -81,7 +76,7 @@ export class BotController {
       return { success: true }
 
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
+      const errorMsg = getErrorMessage(error)
       this.log(`Error stopping bot: ${errorMsg}`, 'error')
       this.cleanup()
       return { success: false, error: errorMsg }
@@ -90,14 +85,19 @@ export class BotController {
 
   public async restart(): Promise<{ success: boolean; error?: string; pid?: number }> {
     this.log('🔄 Restarting bot...', 'log')
-    this.stop()
     
-    return new Promise((resolve) => {
-      setTimeout(async () => {
-        const result = await this.start()
-        resolve(result)
-      }, 2000)
-    })
+    const stopResult = this.stop()
+    if (!stopResult.success && stopResult.error !== 'Bot is not running') {
+      return { success: false, error: `Failed to stop: ${stopResult.error}` }
+    }
+    
+    await this.wait(2000)
+    
+    return await this.start()
+  }
+
+  private async wait(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
   }
 
   public getStatus(): {
@@ -116,7 +116,6 @@ export class BotController {
 
   private cleanup(): void {
     this.botInstance = null
-    this.botPromise = null
     this.startTime = undefined
     dashboardState.setRunning(false)
     dashboardState.setBotInstance(undefined)

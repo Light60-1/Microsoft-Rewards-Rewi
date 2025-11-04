@@ -1,8 +1,12 @@
 import ms from 'ms'
 
+export function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 export class Util {
 
-    async wait(ms: number): Promise<void> {
+    wait(ms: number): Promise<void> {
         const MAX_WAIT_MS = 3600000 // 1 hour max to prevent infinite waits
         const MIN_WAIT_MS = 0
         

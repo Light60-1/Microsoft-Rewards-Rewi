@@ -15,8 +15,6 @@ import { loadAccounts, loadConfig, saveSessionData } from './util/Load'
 import Axios from './util/Axios'
 import Humanizer from './util/Humanizer'
 import { detectBanReason } from './util/BanDetector'
-import { RiskManager, RiskMetrics, RiskEvent } from './util/RiskManager'
-import { BanPredictor } from './util/BanPredictor'
 import { QueryDiversityEngine } from './util/QueryDiversityEngine'
 import JobState from './util/JobState'
 import { StartupValidator } from './util/StartupValidator'
@@ -61,10 +59,6 @@ export class MicrosoftRewardsBot {
     private runId: string = Math.random().toString(36).slice(2)
     private bannedTriggered: { email: string; reason: string } | null = null
     private globalStandby: { active: boolean; reason?: string } = { active: false }
-    private riskManager?: RiskManager
-    private lastRiskMetrics?: RiskMetrics
-    private riskThresholdTriggered: boolean = false
-    private banPredictor?: BanPredictor
     private accountJobState?: JobState
     private accountRunCounts: Map<string, number> = new Map()
 
@@ -94,13 +88,6 @@ export class MicrosoftRewardsBot {
                 maxQueriesPerSource: this.config.queryDiversity.maxQueriesPerSource,
                 cacheMinutes: this.config.queryDiversity.cacheMinutes
             })
-        }
-
-        if (this.config.riskManagement?.enabled) {
-            this.riskManager = new RiskManager()
-            if (this.config.riskManagement.banPrediction) {
-                this.banPredictor = new BanPredictor(this.riskManager)
-            }
         }
         
         // Buy mode: CLI args take precedence over config
@@ -141,36 +128,6 @@ export class MicrosoftRewardsBot {
         if (this.config.jobState?.enabled !== false) {
             this.accountJobState = new JobState(this.config)
         }
-    }
-
-    private resetRiskTracking(): void {
-        if (this.riskManager) {
-            this.riskManager.reset()
-        }
-        this.lastRiskMetrics = undefined
-        this.riskThresholdTriggered = false
-    }
-
-    private recordRiskEvent(type: RiskEvent['type'], severity: number, context?: string): void {
-        if (!this.riskManager || this.config.riskManagement?.enabled !== true) return
-        this.riskManager.recordEvent(type, severity, context)
-        const metrics = this.riskManager.assessRisk()
-        this.lastRiskMetrics = metrics
-
-        const threshold = this.config.riskManagement?.riskThreshold
-        if (typeof threshold === 'number' && metrics.score >= threshold && !this.riskThresholdTriggered) {
-            this.riskThresholdTriggered = true
-            log('main', 'RISK', `Risk score ${metrics.score} exceeded threshold ${threshold} (level=${metrics.level})`, 'warn', 'yellow')
-        }
-
-        if (this.config.riskManagement?.stopOnCritical && metrics.level === 'critical') {
-            void this.engageGlobalStandby('risk-critical', this.currentAccountEmail)
-        }
-    }
-
-    public getRiskDelayMultiplier(): number {
-        if (!this.config.riskManagement?.enabled || this.config.riskManagement.autoAdjustDelays === false) return 1
-        return this.lastRiskMetrics?.delayMultiplier ?? 1
     }
 
     private shouldSkipAccount(email: string, dayKey: string): boolean {
@@ -525,7 +482,6 @@ export class MicrosoftRewardsBot {
             // Reset compromised state per account
             this.compromisedModeActive = false
             this.compromisedReason = undefined
-            this.resetRiskTracking()
             
             // If humanization allowed windows are configured, wait until within a window
             try {
@@ -568,9 +524,7 @@ export class MicrosoftRewardsBot {
                     initialTotal: 0,
                     endTotal: 0,
                     errors: [],
-                    banned,
-                    riskScore: 0,
-                    riskLevel: 'safe'
+                    banned
                 }
                 this.accountSummaries.push(summary)
                 this.persistAccountCompletion(account.email, accountDayKey, summary)
@@ -583,24 +537,20 @@ export class MicrosoftRewardsBot {
                 // Run both and capture results with detailed logging
                 const desktopPromise = this.Desktop(account).catch((e: unknown) => {
                     const msg = e instanceof Error ? e.message : String(e)
-                    this.recordRiskEvent('error', 6, `desktop:${msg}`)
                     log(false, 'TASK', `Desktop flow failed early for ${account.email}: ${msg}`,'error')
                     const bd = detectBanReason(e)
                     if (bd.status) {
                         banned.status = true; banned.reason = bd.reason.substring(0,200)
-                        this.recordRiskEvent('ban_hint', 9, bd.reason)
                         void this.handleImmediateBanAlert(account.email, banned.reason)
                     }
                     errors.push(formatFullError('desktop', e, verbose)); return null
                 })
                 const mobilePromise = mobileInstance.Mobile(account).catch((e: unknown) => {
                     const msg = e instanceof Error ? e.message : String(e)
-                    this.recordRiskEvent('error', 6, `mobile:${msg}`)
                     log(true, 'TASK', `Mobile flow failed early for ${account.email}: ${msg}`,'error')
                     const bd = detectBanReason(e)
                     if (bd.status) {
                         banned.status = true; banned.reason = bd.reason.substring(0,200)
-                        this.recordRiskEvent('ban_hint', 9, bd.reason)
                         void this.handleImmediateBanAlert(account.email, banned.reason)
                     }
                     errors.push(formatFullError('mobile', e, verbose)); return null
@@ -613,7 +563,6 @@ export class MicrosoftRewardsBot {
                     desktopCollected = desktopResult.value.collectedPoints
                 } else if (desktopResult.status === 'rejected') {
                     log(false, 'TASK', `Desktop promise rejected unexpectedly: ${shortErr(desktopResult.reason)}`,'error')
-                    this.recordRiskEvent('error', 6, `desktop-rejected:${shortErr(desktopResult.reason)}`)
                     errors.push(formatFullError('desktop-rejected', desktopResult.reason, verbose))
                 }
                 
@@ -623,7 +572,6 @@ export class MicrosoftRewardsBot {
                     mobileCollected = mobileResult.value.collectedPoints
                 } else if (mobileResult.status === 'rejected') {
                     log(true, 'TASK', `Mobile promise rejected unexpectedly: ${shortErr(mobileResult.reason)}`,'error')
-                    this.recordRiskEvent('error', 6, `mobile-rejected:${shortErr(mobileResult.reason)}`)
                     errors.push(formatFullError('mobile-rejected', mobileResult.reason, verbose))
                 }
             } else {
@@ -631,12 +579,10 @@ export class MicrosoftRewardsBot {
                 this.isMobile = false
                 const desktopResult = await this.Desktop(account).catch(e => {
                     const msg = e instanceof Error ? e.message : String(e)
-                    this.recordRiskEvent('error', 6, `desktop:${msg}`)
                     log(false, 'TASK', `Desktop flow failed early for ${account.email}: ${msg}`,'error')
                     const bd = detectBanReason(e)
                     if (bd.status) {
                         banned.status = true; banned.reason = bd.reason.substring(0,200)
-                        this.recordRiskEvent('ban_hint', 9, bd.reason)
                         void this.handleImmediateBanAlert(account.email, banned.reason)
                     }
                     errors.push(formatFullError('desktop', e, verbose)); return null
@@ -650,12 +596,10 @@ export class MicrosoftRewardsBot {
                     this.isMobile = true
                     const mobileResult = await this.Mobile(account).catch((e: unknown) => {
                         const msg = e instanceof Error ? e.message : String(e)
-                        this.recordRiskEvent('error', 6, `mobile:${msg}`)
                         log(true, 'TASK', `Mobile flow failed early for ${account.email}: ${msg}`,'error')
                         const bd = detectBanReason(e)
                         if (bd.status) {
                             banned.status = true; banned.reason = bd.reason.substring(0,200)
-                            this.recordRiskEvent('ban_hint', 9, bd.reason)
                             void this.handleImmediateBanAlert(account.email, banned.reason)
                         }
                         errors.push(formatFullError('mobile', e, verbose)); return null
@@ -681,34 +625,6 @@ export class MicrosoftRewardsBot {
                 : (desktopInitial || mobileInitial || 0)
             
             const endTotal = initialTotal + totalCollected
-            if (!banned.status) {
-                this.recordRiskEvent('success', 1, 'account-complete')
-            }
-
-            const riskMetrics = this.lastRiskMetrics
-            let riskScore = riskMetrics?.score
-            const riskLevel = riskMetrics?.level
-            let banPredictionScore: number | undefined
-            let banLikelihood: string | undefined
-
-            if (this.banPredictor && this.config.riskManagement?.banPrediction) {
-                const prediction = this.banPredictor.predictBanRisk(account.email, runNumber, runNumber)
-                banPredictionScore = prediction.riskScore
-                banLikelihood = prediction.likelihood
-                riskScore = prediction.riskScore
-                if (prediction.likelihood === 'high' || prediction.likelihood === 'critical') {
-                    log('main', 'RISK', `Ban predictor warning for ${account.email}: likelihood=${prediction.likelihood} score=${prediction.riskScore}`, 'warn', 'yellow')
-                }
-                if (banned.status) {
-                    this.banPredictor.recordBan(account.email, runNumber, runNumber)
-                } else {
-                    this.banPredictor.recordSuccess(account.email, runNumber, runNumber)
-                }
-            } else if (banned.status && this.banPredictor) {
-                this.banPredictor.recordBan(account.email, runNumber, runNumber)
-            } else if (this.banPredictor && !banned.status) {
-                this.banPredictor.recordSuccess(account.email, runNumber, runNumber)
-            }
 
             const summary: AccountSummary = {
                 email: account.email,
@@ -719,11 +635,7 @@ export class MicrosoftRewardsBot {
                 initialTotal,
                 endTotal,
                 errors,
-                banned,
-                riskScore,
-                riskLevel,
-                banPredictionScore,
-                banLikelihood
+                banned
             }
 
             this.accountSummaries.push(summary)
@@ -733,7 +645,6 @@ export class MicrosoftRewardsBot {
                 this.bannedTriggered = { email: account.email, reason: banned.reason }
                 // Enter global standby: do not proceed to next accounts
                 this.globalStandby = { active: true, reason: `banned:${banned.reason}` }
-                this.recordRiskEvent('ban_hint', 9, `final-ban:${banned.reason}`)
                 await this.sendGlobalSecurityStandbyAlert(account.email, `Ban detected: ${banned.reason || 'unknown'}`)
             }
 
@@ -1119,14 +1030,6 @@ export class MicrosoftRewardsBot {
             const extras: string[] = []
             if (summary.banned?.status) extras.push(`BAN:${summary.banned.reason || 'detected'}`)
             if (summary.errors.length) extras.push(`ERR:${summary.errors.slice(0, 1).join(' | ')}`)
-            if (summary.riskLevel) {
-                const scoreLabel = summary.riskScore != null ? `(${summary.riskScore})` : ''
-                extras.push(`RISK:${summary.riskLevel}${scoreLabel}`)
-            }
-            if (summary.banLikelihood) {
-                const predLabel = summary.banPredictionScore != null ? `(${summary.banPredictionScore})` : ''
-                extras.push(`PRED:${summary.banLikelihood}${predLabel}`)
-            }
             const tail = extras.length ? ` | ${extras.join(' • ')}` : ''
             return `${statusIcon} ${email} ${total} ${desktop}${mobile} ${totals} ${duration}${tail}`
         }
@@ -1151,19 +1054,12 @@ export class MicrosoftRewardsBot {
         const accountLines = summaries.map(buildAccountLine)
         const accountChunks = chunkLines(accountLines)
 
-        const riskSamples = summaries.filter(s => typeof s.riskScore === 'number' && !Number.isNaN(s.riskScore as number))
         const globalLines = [
             `Total points: **${formatNumber(totalInitial)}** → **${formatNumber(totalEnd)}** (${formatSigned(totalCollected)} pts)`,
             `Accounts: ✅ ${successes}${accountsWithErrors > 0 ? ` • ⚠️ ${accountsWithErrors}` : ''} (${totalAccounts} total)`,
             `Average per account: **${formatSigned(avgPointsPerAccount)} pts** • **${formatDuration(avgDuration)}**`,
             `Runtime: **${formatDuration(totalDuration)}**`
         ]
-
-        if (riskSamples.length > 0) {
-            const avgRiskScore = riskSamples.reduce((sum, s) => sum + (s.riskScore ?? 0), 0) / riskSamples.length
-            const highestRisk = riskSamples.reduce((prev, curr) => ((curr.riskScore ?? 0) > (prev.riskScore ?? 0) ? curr : prev))
-            globalLines.push(`Risk avg: **${avgRiskScore.toFixed(1)}** • Highest: ${highestRisk.email} (${highestRisk.riskScore ?? 0})`)
-        }
 
         const globalStatsValue = globalLines.join('\n')
 
@@ -1273,10 +1169,6 @@ interface AccountSummary {
     endTotal: number
     errors: string[]
     banned?: { status: boolean; reason: string }
-    riskScore?: number
-    riskLevel?: string
-    banPredictionScore?: number
-    banLikelihood?: string
 }
 
 function shortErr(e: unknown): string {
