@@ -5,8 +5,6 @@ import { Ntfy } from './Ntfy'
 import { loadConfig } from './Load'
 import { DISCORD } from '../constants'
 
-const WEBHOOK_USERNAME = 'MS Rewards - Live Logs'
-
 /**
  * Safe error logger for catch blocks
  * Use in .catch() to log errors without breaking flow
@@ -82,7 +80,7 @@ async function sendBatch(url: string, buf: WebhookBuffer) {
 
         // Enhanced webhook payload with embed, username and avatar
         const payload = {
-            username: WEBHOOK_USERNAME,
+            username: DISCORD.WEBHOOK_USERNAME,
             avatar_url: DISCORD.AVATAR_URL,
             embeds: [{
                 description: `\`\`\`\n${content}\n\`\`\``,

@@ -2,6 +2,7 @@ import axios from 'axios'
 import { Config } from '../interface/Config'
 import { Ntfy } from './Ntfy'
 import { log } from './Logger'
+import { DISCORD } from '../constants'
 
 interface DiscordField {
     name: string
@@ -51,7 +52,7 @@ export async function ConclusionWebhook(
         color: color || 0x0078D4,
         timestamp: new Date().toISOString(),
         thumbnail: {
-            url: 'https://media.discordapp.net/attachments/1421163952972369931/1434299121098952958/v2.50.5.png?ex=6907d2a6&is=69068126&hm=1a11362e2c2c40fc9f8b67762abf17e5bae72e4b70567d4331de195a880ba043&=&format=png&quality=lossless&width=1024&height=1076'
+            url: DISCORD.AVATAR_URL
         }
     }
 
@@ -60,8 +61,8 @@ export async function ConclusionWebhook(
     }
 
     const payload: WebhookPayload = {
-        username: 'MS Rewi',
-        avatar_url: 'https://media.discordapp.net/attachments/1421163952972369931/1434299121098952958/v2.50.5.png?ex=6907d2a6&is=69068126&hm=1a11362e2c2c40fc9f8b67762abf17e5bae72e4b70567d4331de195a880ba043&=&format=png&quality=lossless&width=1024&height=1076',
+        username: DISCORD.WEBHOOK_USERNAME,
+        avatar_url: DISCORD.AVATAR_URL,
         embeds: [embed]
     }
 

@@ -83,5 +83,6 @@ export const DISCORD = {
     COLOR_BLUE: 0x3498DB,
     COLOR_GREEN: 0x00D26A,
     COLOR_GRAY: 0x95A5A6,
-    AVATAR_URL: 'https://media.discordapp.net/attachments/1421163952972369931/1434918661235282144/logo.png?ex=690a13a4&is=6908c224&hm=6bae81966da32e73a647f46fde268011fcf460c7071082dd5fd76cf22d04af65&=&format=png&quality=lossless&width=653&height=638'
+    WEBHOOK_USERNAME: 'Microsoft-Rewards-Bot',
+    AVATAR_URL: 'https://raw.githubusercontent.com/Obsidian-wtf/Microsoft-Rewards-Bot/main/assets/logo.png'
 } as const
