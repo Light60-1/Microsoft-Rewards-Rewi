@@ -43,9 +43,10 @@ export class LoginStateDetector {
     
     // State 1: Already logged in (rewards portal)
     if (url.includes('rewards.bing.com') || url.includes('rewards.microsoft.com')) {
-      const hasPortal = await page.locator('html[data-role-name*="RewardsPortal"], #dashboard, main[data-bi-name="dashboard"]')
+      // STRICT CHECK: Must have actual portal elements, not just domain
+      const hasPortal = await page.locator('html[data-role-name*="RewardsPortal"], #dashboard, main[data-bi-name="dashboard"], #more-activities')
         .first()
-        .isVisible({ timeout: 1000 })
+        .isVisible({ timeout: 2000 })
         .catch(() => false)
       
       if (hasPortal) {
@@ -53,12 +54,25 @@ export class LoginStateDetector {
         return { state: LoginState.LoggedIn, confidence: 'high', url, indicators }
       }
       
-      // On rewards domain but no portal = might be loading or error
-      const bodyLength = await page.evaluate(() => document.body?.innerText?.length || 0).catch(() => 0)
-      if (bodyLength > 100) {
-        indicators.push('On rewards domain, checking content...')
-        return { state: LoginState.LoggedIn, confidence: 'medium', url, indicators }
+      // On rewards domain but no portal = still loading or redirecting to login
+      // Do NOT assume logged in just because of domain
+      indicators.push('On rewards domain but portal not detected')
+      
+      // Check if actually redirecting to login
+      const isRedirectingToLogin = url.includes('login.live.com') || 
+                                   url.includes('login.microsoftonline.com') ||
+                                   await page.locator('input[type="email"], input[name="loginfmt"]')
+                                     .first()
+                                     .isVisible({ timeout: 500 })
+                                     .catch(() => false)
+      
+      if (isRedirectingToLogin) {
+        indicators.push('Redirecting to login')
+        return { state: LoginState.EmailPage, confidence: 'medium', url, indicators }
       }
+      
+      // Unknown state - not logged in, not login page
+      return { state: LoginState.Unknown, confidence: 'low', url, indicators }
     }
     
     // State 2: Microsoft login pages

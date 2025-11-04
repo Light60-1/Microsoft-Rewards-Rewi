@@ -461,13 +461,24 @@ export class Login {
     )
     
     if (passwordPageReached === LoginState.LoggedIn) {
-      this.bot.log(this.bot.isMobile, 'LOGIN', 'Already authenticated after email (fast path)')
-      return
+      // Double-check: verify we're actually on rewards portal with activities
+      const actuallyLoggedIn = await page.locator('#more-activities, html[data-role-name*="RewardsPortal"]')
+        .first()
+        .isVisible({ timeout: 2000 })
+        .catch(() => false)
+      
+      if (actuallyLoggedIn) {
+        this.bot.log(this.bot.isMobile, 'LOGIN', 'Already authenticated after email (fast path)')
+        return
+      } else {
+        this.bot.log(this.bot.isMobile, 'LOGIN', 'False positive on LoggedIn state, continuing with password entry', 'warn')
+        // Continue to password entry
+      }
     }
     
     if (!passwordPageReached) {
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Password page not reached after 8s, continuing anyway...', 'warn')
-    } else {
+    } else if (passwordPageReached !== LoginState.LoggedIn) {
       this.bot.log(this.bot.isMobile, 'LOGIN', `Transitioned to state: ${passwordPageReached}`)
     }
     
