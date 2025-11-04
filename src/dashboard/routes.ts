@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express'
 import fs from 'fs'
 import path from 'path'
-import { spawn } from 'child_process'
 import { dashboardState } from './state'
 import { loadAccounts, loadConfig, getConfigPath } from '../util/Load'
 import { botController } from './BotController'
@@ -209,7 +208,7 @@ apiRouter.post('/restart', async (_req: Request, res: Response): Promise<void> =
   }
 })
 
-// POST /api/sync/:email - Force sync single account
+// POST /api/sync/:email - Force sync single account (deprecated - use full bot restart)
 apiRouter.post('/sync/:email', async (req: Request, res: Response): Promise<void> => {
   try {
     const { email } = req.params
@@ -226,18 +225,10 @@ apiRouter.post('/sync/:email', async (req: Request, res: Response): Promise<void
       return
     }
 
-    dashboardState.updateAccount(email, { status: 'running', lastSync: new Date().toISOString() })
-
-    // Spawn single account run
-    const child = spawn(process.execPath, [
-      path.join(process.cwd(), 'dist', 'index.js'),
-      '-account',
-      email
-    ], { detached: true, stdio: 'ignore' })
-    
-    if (child.unref) child.unref()
-
-    res.json({ success: true, pid: child.pid || undefined })
+    res.status(501).json({ 
+      error: 'Single account sync not implemented. Please use restart bot instead.',
+      suggestion: 'Use /api/restart endpoint to run all accounts'
+    })
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
   }
@@ -318,7 +309,13 @@ apiRouter.post('/account/:email/reset', (req: Request, res: Response): void => {
 function maskUrl(url: string): string {
   try {
     const parsed = new URL(url)
-    return `${parsed.protocol}//${parsed.hostname.slice(0, 3)}***${parsed.pathname.slice(0, 5)}***`
+    const maskedHost = parsed.hostname.length > 6 
+      ? `${parsed.hostname.slice(0, 3)}***${parsed.hostname.slice(-3)}`
+      : '***'
+    const maskedPath = parsed.pathname.length > 5 
+      ? `${parsed.pathname.slice(0, 3)}***`
+      : '***'
+    return `${parsed.protocol}//${maskedHost}${maskedPath}`
   } catch {
     return '***'
   }

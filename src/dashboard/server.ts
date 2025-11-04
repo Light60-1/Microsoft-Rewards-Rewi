@@ -108,17 +108,14 @@ export class DashboardServer {
   }
 
   private interceptBotLogs(): void {
-    // Store reference to this.clients for closure
-    const clients = this.clients
-    
-    // Intercept bot logs and forward to dashboard
     const originalLog = botLog
-    ;(global as Record<string, unknown>).botLog = function(
+    
+    ;(global as Record<string, unknown>).botLog = (
       isMobile: boolean | 'main',
       title: string,
       message: string,
       type: 'log' | 'warn' | 'error' = 'log'
-    ) {
+    ) => {
       const result = originalLog(isMobile, title, message, type)
       
       const logEntry: DashboardLog = {
@@ -130,18 +127,7 @@ export class DashboardServer {
       }
       
       dashboardState.addLog(logEntry)
-      
-      // Broadcast to WebSocket clients
-      const payload = JSON.stringify({ type: 'log', log: logEntry })
-      for (const client of clients) {
-        if (client.readyState === WebSocket.OPEN) {
-          try {
-            client.send(payload)
-          } catch (error) {
-            console.error('[Dashboard] Error sending to WebSocket client:', error)
-          }
-        }
-      }
+      this.broadcastUpdate('log', { log: logEntry })
       
       return result
     }

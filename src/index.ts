@@ -48,16 +48,12 @@ export class MicrosoftRewardsBot {
     public queryEngine?: QueryDiversityEngine
     public compromisedModeActive: boolean = false
     public compromisedReason?: string
-    // Mutex-like flag to prevent parallel execution when config.parallel is accidentally misconfigured
-    private isDesktopRunning: boolean = false
-    private isMobileRunning: boolean = false
 
     private activeWorkers: number
     private browserFactory: Browser = new Browser(this)
     private accounts: Account[]
     private workers: Workers
     private login = new Login(this)
-    // Buy mode (manual spending) tracking
     private buyMode: { enabled: boolean; email?: string } = { enabled: false }
 
     // Summary collection (per process)
@@ -632,55 +628,45 @@ export class MicrosoftRewardsBot {
                 }
             } else {
                 // Sequential execution with safety checks
-                if (this.isDesktopRunning || this.isMobileRunning) {
-                    log('main', 'TASK', `Race condition detected: Desktop=${this.isDesktopRunning}, Mobile=${this.isMobileRunning}. Skipping to prevent conflicts.`, 'error')
-                    errors.push('race-condition-detected')
-                } else {
-                    this.isMobile = false
-                    this.isDesktopRunning = true
-                    const desktopResult = await this.Desktop(account).catch(e => {
+                this.isMobile = false
+                const desktopResult = await this.Desktop(account).catch(e => {
+                    const msg = e instanceof Error ? e.message : String(e)
+                    this.recordRiskEvent('error', 6, `desktop:${msg}`)
+                    log(false, 'TASK', `Desktop flow failed early for ${account.email}: ${msg}`,'error')
+                    const bd = detectBanReason(e)
+                    if (bd.status) {
+                        banned.status = true; banned.reason = bd.reason.substring(0,200)
+                        this.recordRiskEvent('ban_hint', 9, bd.reason)
+                        void this.handleImmediateBanAlert(account.email, banned.reason)
+                    }
+                    errors.push(formatFullError('desktop', e, verbose)); return null
+                })
+                if (desktopResult) {
+                    desktopInitial = desktopResult.initialPoints
+                    desktopCollected = desktopResult.collectedPoints
+                }
+
+                if (!banned.status && !this.compromisedModeActive) {
+                    this.isMobile = true
+                    const mobileResult = await this.Mobile(account).catch((e: unknown) => {
                         const msg = e instanceof Error ? e.message : String(e)
-                        this.recordRiskEvent('error', 6, `desktop:${msg}`)
-                        log(false, 'TASK', `Desktop flow failed early for ${account.email}: ${msg}`,'error')
+                        this.recordRiskEvent('error', 6, `mobile:${msg}`)
+                        log(true, 'TASK', `Mobile flow failed early for ${account.email}: ${msg}`,'error')
                         const bd = detectBanReason(e)
                         if (bd.status) {
                             banned.status = true; banned.reason = bd.reason.substring(0,200)
                             this.recordRiskEvent('ban_hint', 9, bd.reason)
                             void this.handleImmediateBanAlert(account.email, banned.reason)
                         }
-                        errors.push(formatFullError('desktop', e, verbose)); return null
+                        errors.push(formatFullError('mobile', e, verbose)); return null
                     })
-                    if (desktopResult) {
-                        desktopInitial = desktopResult.initialPoints
-                        desktopCollected = desktopResult.collectedPoints
+                    if (mobileResult) {
+                        mobileInitial = mobileResult.initialPoints
+                        mobileCollected = mobileResult.collectedPoints
                     }
-                    this.isDesktopRunning = false
-
-                    // If banned or compromised detected, skip mobile to save time
-                    if (!banned.status && !this.compromisedModeActive) {
-                        this.isMobile = true
-                        this.isMobileRunning = true
-                        const mobileResult = await this.Mobile(account).catch((e: unknown) => {
-                            const msg = e instanceof Error ? e.message : String(e)
-                            this.recordRiskEvent('error', 6, `mobile:${msg}`)
-                            log(true, 'TASK', `Mobile flow failed early for ${account.email}: ${msg}`,'error')
-                            const bd = detectBanReason(e)
-                            if (bd.status) {
-                                banned.status = true; banned.reason = bd.reason.substring(0,200)
-                                this.recordRiskEvent('ban_hint', 9, bd.reason)
-                                void this.handleImmediateBanAlert(account.email, banned.reason)
-                            }
-                            errors.push(formatFullError('mobile', e, verbose)); return null
-                        })
-                        if (mobileResult) {
-                            mobileInitial = mobileResult.initialPoints
-                            mobileCollected = mobileResult.collectedPoints
-                        }
-                        this.isMobileRunning = false
-                    } else {
-                        const why = banned.status ? 'banned status' : 'compromised status'
-                        log(true, 'TASK', `Skipping mobile flow for ${account.email} due to ${why}`, 'warn')
-                    }
+                } else {
+                    const why = banned.status ? 'banned status' : 'compromised status'
+                    log(true, 'TASK', `Skipping mobile flow for ${account.email} due to ${why}`, 'warn')
                 }
             }
 
