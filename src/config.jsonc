@@ -154,7 +154,42 @@
         "scriptPath": "setup/update/update.mjs",
         "autoUpdateConfig": true,
         "autoUpdateAccounts": false
+    },
+
+    // Scheduling (automatic task scheduling)
+    // When enabled=true, the bot will automatically configure your system scheduler on first run.
+    // This works on Windows (Task Scheduler), Linux/Raspberry Pi (cron), and macOS (cron).
+    "scheduling": {
+        "enabled": false, // Set to true to enable automatic scheduling
+        
+        // Leave "type" as "auto" for automatic detection, or force "cron" (Linux/Raspberry Pi/macOS) or "task-scheduler" (Windows)
+        "type": "auto",
+        
+        // Cron settings (for Linux, Raspberry Pi, macOS)
+        // Only used when type="auto" on Linux/macOS or type="cron"
+        "cron": {
+            "schedule": "0 9 * * *", // When to run: 9 AM daily (see https://crontab.guru to customize)
+            // Examples:
+            // "0 9 * * *"     = Every day at 9:00 AM
+            // "30 14 * * *"   = Every day at 2:30 PM
+            // "0 9,21 * * *"  = Every day at 9:00 AM and 9:00 PM
+            // "0 9 * * 1-5"   = Weekdays at 9:00 AM (Monday-Friday)
+            
+            "workingDirectory": "", // Leave empty for auto-detection
+            "nodePath": "",         // Leave empty for auto-detection
+            "logFile": "",          // Optional: custom log file path (e.g., "/home/pi/rewards.log")
+            "user": ""              // Optional: run as specific user (leave empty for current user)
+        },
+        
+        // Windows Task Scheduler settings
+        // Only used when type="auto" on Windows or type="task-scheduler"
+        "taskScheduler": {
+            "taskName": "Microsoft-Rewards-Bot", // Task name in Windows Task Scheduler
+            "schedule": "09:00",                 // Time in 24h format (e.g., "09:00", "14:30", "21:00")
+            "frequency": "daily",                // "daily", "weekly", or "once"
+            "workingDirectory": "",              // Leave empty for auto-detection
+            "runAsUser": true,                   // true = run as current user, false = run as SYSTEM
+            "highestPrivileges": false           // Set to true if you need admin privileges
+        }
     }
 }
-
-

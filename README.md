@@ -126,6 +126,36 @@ Access at `http://localhost:3000` to:
 
 ---
 
+## ⏰ Automatic Scheduling
+
+Configure automatic task scheduling directly from `config.jsonc` - **perfect for Raspberry Pi!**
+
+```jsonc
+{
+  "scheduling": {
+    "enabled": true,    // Just set this to true
+    "type": "auto",     // Automatically detects Windows/Linux/Raspberry Pi
+    "cron": {
+      "schedule": "0 9 * * *"  // Raspberry Pi/Linux: Daily at 9 AM
+    },
+    "taskScheduler": {
+      "schedule": "09:00"      // Windows: Daily at 9:00
+    }
+  }
+}
+```
+
+**Then simply run:**
+```bash
+npm run start
+```
+
+The bot will automatically configure cron (Linux/Raspberry Pi) or Task Scheduler (Windows) for you!
+
+**[📖 Full Scheduling Documentation](docs/schedule.md)**
+
+---
+
 ## Docker Quick Start
 
 For containerized deployment:

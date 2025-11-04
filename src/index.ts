@@ -19,6 +19,7 @@ import { QueryDiversityEngine } from './util/QueryDiversityEngine'
 import JobState from './util/JobState'
 import { StartupValidator } from './util/StartupValidator'
 import { MobileRetryTracker } from './util/MobileRetryTracker'
+import { SchedulerManager } from './util/SchedulerManager'
 
 import { Login } from './functions/Login'
 import { Workers } from './functions/Workers'
@@ -127,6 +128,12 @@ export class MicrosoftRewardsBot {
         // Initialize job state
         if (this.config.jobState?.enabled !== false) {
             this.accountJobState = new JobState(this.config)
+        }
+
+        // Setup automatic scheduler if enabled
+        if (this.config.scheduling?.enabled) {
+            const scheduler = new SchedulerManager(this.config)
+            await scheduler.setup()
         }
     }
 

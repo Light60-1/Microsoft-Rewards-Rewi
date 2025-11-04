@@ -31,6 +31,7 @@ export interface Config {
     dryRun?: boolean; // NEW: Dry-run mode (simulate without executing)
     queryDiversity?: ConfigQueryDiversity; // NEW: Multi-source query generation
     dashboard?: ConfigDashboard; // NEW: Local web dashboard for monitoring and control
+    scheduling?: ConfigScheduling; // NEW: Automatic scheduler configuration (cron/Task Scheduler)
 }
 
 export interface ConfigSaveFingerprint {
@@ -194,4 +195,24 @@ export interface ConfigDashboard {
     enabled?: boolean; // auto-start dashboard with bot (default: false)
     port?: number; // dashboard server port (default: 3000)
     host?: string; // bind address (default: 127.0.0.1)
+}
+
+export interface ConfigScheduling {
+    enabled?: boolean; // enable automatic schedule configuration
+    type?: 'auto' | 'cron' | 'task-scheduler'; // auto-detect or force specific type
+    cron?: {
+        schedule?: string; // cron expression (default: "0 9 * * *")
+        workingDirectory?: string; // project root path (auto-detected if empty)
+        nodePath?: string; // path to node executable (auto-detected if empty)
+        logFile?: string; // optional log file path
+        user?: string; // optional specific user for crontab
+    };
+    taskScheduler?: {
+        taskName?: string; // task name in Windows Task Scheduler
+        schedule?: string; // time in 24h format (e.g., "09:00")
+        frequency?: 'daily' | 'weekly' | 'once'; // task frequency
+        workingDirectory?: string; // project root path (auto-detected if empty)
+        runAsUser?: boolean; // run under current user
+        highestPrivileges?: boolean; // request highest privileges
+    };
 }
