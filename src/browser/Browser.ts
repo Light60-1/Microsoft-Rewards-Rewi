@@ -27,19 +27,16 @@ class Browser {
         let browser: import('rebrowser-playwright').Browser
         try {
             const envForceHeadless = process.env.FORCE_HEADLESS === '1'
-            const legacyHeadless = (this.bot.config as { headless?: boolean }).headless
-            const nestedHeadless = (this.bot.config.browser as { headless?: boolean } | undefined)?.headless
-            let headlessValue = envForceHeadless ? true : (legacyHeadless ?? nestedHeadless ?? false)
+            let headless = envForceHeadless ? true : (this.bot.config.browser?.headless ?? false)
             
             if (this.bot.isBuyModeEnabled() && !envForceHeadless) {
-                if (headlessValue !== false) {
+                if (headless !== false) {
                     const target = this.bot.getBuyModeTarget()
                     this.bot.log(this.bot.isMobile, 'BROWSER', `Buy mode: forcing headless=false${target ? ` for ${target}` : ''}`, 'warn')
                 }
-                headlessValue = false
+                headless = false
             }
             
-            const headless: boolean = Boolean(headlessValue)
             const engineName = 'chromium'
             this.bot.log(this.bot.isMobile, 'BROWSER', `Launching ${engineName} (headless=${headless})`)
             const proxyConfig = this.buildPlaywrightProxy(proxy)
@@ -89,10 +86,8 @@ class Browser {
         const fingerprint = sessionData.fingerprint ? sessionData.fingerprint : await this.generateFingerprint()
         const context = await newInjectedContext(browser as unknown as import('playwright').Browser, { fingerprint: fingerprint })
 
-        const legacyTimeout = (this.bot.config as { globalTimeout?: number | string }).globalTimeout
-        const nestedTimeout = (this.bot.config.browser as { globalTimeout?: number | string } | undefined)?.globalTimeout
-        const globalTimeout = legacyTimeout ?? nestedTimeout ?? 30000
-        context.setDefaultTimeout(this.bot.utils.stringToMs(globalTimeout))
+        const globalTimeout = this.bot.config.browser?.globalTimeout ?? 30000
+        context.setDefaultTimeout(typeof globalTimeout === 'number' ? globalTimeout : this.bot.utils.stringToMs(globalTimeout))
 
         try {
             context.on('page', async (page) => {

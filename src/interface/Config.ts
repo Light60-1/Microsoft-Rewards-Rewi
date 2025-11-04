@@ -1,7 +1,6 @@
 export interface Config {
     baseURL: string;
     sessionPath: string;
-    headless: boolean;
     browser?: ConfigBrowser; // Optional nested browser config
     fingerprinting?: ConfigFingerprinting; // Optional nested fingerprinting config
     parallel: boolean;

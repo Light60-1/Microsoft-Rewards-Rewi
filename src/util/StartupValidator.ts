@@ -197,10 +197,10 @@ export class StartupValidator {
     }
 
     // Headless mode in Docker
-    if (process.env.FORCE_HEADLESS === '1' && config.headless === false) {
+    if (process.env.FORCE_HEADLESS === '1' && config.browser?.headless === false) {
       this.addWarning(
         'config',
-        'FORCE_HEADLESS=1 but config.headless is false',
+        'FORCE_HEADLESS=1 but config.browser.headless is false',
         'Docker environment forces headless mode. Your config setting will be overridden.'
       )
     }
@@ -358,10 +358,10 @@ export class StartupValidator {
 
   private validateBrowserSettings(config: Config): void {
     // Headless validation - only warn in Docker/containerized environments
-    if (!config.headless && process.env.FORCE_HEADLESS === '1') {
+    if (!config.browser?.headless && process.env.FORCE_HEADLESS === '1') {
       this.addWarning(
         'browser',
-        'FORCE_HEADLESS=1 but config.headless is false',
+        'FORCE_HEADLESS=1 but config.browser.headless is false',
         'Docker environment forces headless mode. Your config setting will be overridden.',
         'docs/docker.md'
       )

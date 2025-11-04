@@ -4,7 +4,10 @@ import fs from 'fs'
 import path from 'path'
 
 import { Account } from '../interface/Account'
-import { Config, ConfigSaveFingerprint } from '../interface/Config'
+import { Config, ConfigSaveFingerprint, ConfigBrowser } from '../interface/Config'
+import { Util } from './Utils'
+
+const utils = new Util()
 
 let configCache: Config
 let configSourcePath = ''
@@ -72,9 +75,21 @@ function normalizeConfig(raw: unknown): Config {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const n = (raw || {}) as any
 
-    // Browser / execution
-    const headless = n.browser?.headless ?? n.headless ?? false
-    const globalTimeout = n.browser?.globalTimeout ?? n.globalTimeout ?? '30s'
+    // Browser settings
+    const browserConfig = n.browser ?? {}
+    const headless = process.env.FORCE_HEADLESS === '1' 
+        ? true 
+        : (typeof browserConfig.headless === 'boolean' 
+            ? browserConfig.headless 
+            : (typeof n.headless === 'boolean' ? n.headless : false)) // Legacy fallback
+
+    const globalTimeout = browserConfig.globalTimeout ?? n.globalTimeout ?? '30s'
+    const browser: ConfigBrowser = {
+        headless,
+        globalTimeout: utils.stringToMs(globalTimeout)
+    }
+
+    // Execution
     const parallel = n.execution?.parallel ?? n.parallel ?? false
     const runOnZeroPoints = n.execution?.runOnZeroPoints ?? n.runOnZeroPoints ?? false
     const clusters = n.execution?.clusters ?? n.clusters ?? 1
@@ -197,7 +212,7 @@ function normalizeConfig(raw: unknown): Config {
     const cfg: Config = {
         baseURL: n.baseURL ?? 'https://rewards.bing.com',
         sessionPath: n.sessionPath ?? 'sessions',
-        headless,
+        browser,
         parallel,
         runOnZeroPoints,
         clusters,
