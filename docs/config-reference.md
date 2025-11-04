@@ -59,16 +59,19 @@ This page mirrors the defaults that ship in `src/config.jsonc` and explains what
 
 | Key | Default | Notes |
 | --- | --- | --- |
-| `search.useLocalQueries` | `true` | Use region-aware query pools. |
-| `search.settings.useGeoLocaleQueries` | `true` | Inject account country into generated queries. |
+| `search.useLocalQueries` | `false` | **Recommended**: Forces Google Trends as primary source. Local `queries.json` used only as emergency fallback. |
+| `search.settings.useGeoLocaleQueries` | `true` | Use account's country for Google Trends API (e.g., FR, DE, JP). Critical for localized queries. |
 | `search.settings.scrollRandomResults` | `true` | Random scrolls for realism. |
 | `search.settings.clickRandomResults` | `true` | Occasional safe click-through. |
 | `search.settings.retryMobileSearchAmount` | `2` | Retries for mobile search failures. |
 | `search.settings.delay.min/max` | `3min` / `5min` | Delay between searches. |
 | `queryDiversity.enabled` | `true` | Combine multiple content sources. |
-| `queryDiversity.sources` | `["google-trends", "reddit", "local-fallback"]` | Active diversity sources. |
+| `queryDiversity.sources` | `["google-trends", "reddit", "local-fallback"]` | **Recommended sources**. `news` requires API key (not included). `wikipedia` can be added optionally. |
 | `queryDiversity.maxQueriesPerSource` | `10` | Cap per source. |
 | `queryDiversity.cacheMinutes` | `30` | Cache lifetime in minutes.
+
+> **Priority Order**: Google Trends (country-specific) → Reddit → Wikipedia → Local fallback (`queries.json`)  
+> **Supported Languages in `queries.json`**: English, French, German, Spanish, Italian, Portuguese, Dutch, Japanese
 
 ---
 

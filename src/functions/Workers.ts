@@ -236,10 +236,9 @@ export class Workers {
 
     private async applyThrottle(throttle: AdaptiveThrottler, min: number, max: number): Promise<void> {
         const multiplier = throttle.getDelayMultiplier()
-        const riskMultiplier = this.bot.getRiskDelayMultiplier()
         await this.bot.utils.waitRandom(
-            Math.floor(min * multiplier * riskMultiplier),
-            Math.floor(max * multiplier * riskMultiplier)
+            Math.floor(min * multiplier),
+            Math.floor(max * multiplier)
         )
     }
 

@@ -213,6 +213,16 @@ The script works great with default settings, but you can customize everything i
 
 ```jsonc
 {
+  "search": {
+    "useLocalQueries": false,     // Prioritize Google Trends API (recommended)
+    "settings": {
+      "useGeoLocaleQueries": true // Use account country for searches (FR, DE, JP, etc.)
+    }
+  },
+  "queryDiversity": {
+    "enabled": true,              // Mix multiple search sources
+    "sources": ["google-trends", "reddit", "local-fallback"]
+  },
   "humanization": {
     "enabled": true,              // Enable natural behavior patterns
     "stopOnBan": true             // Stop on ban detection
