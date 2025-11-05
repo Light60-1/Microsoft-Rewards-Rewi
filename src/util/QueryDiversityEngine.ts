@@ -1,16 +1,10 @@
 import axios from 'axios'
 import { Util } from './Utils'
 
-export interface QuerySource {
-  name: string
-  weight: number // 0-1, probability of selection
-  fetchQueries: () => Promise<string[]>
-}
-
 export interface QueryDiversityConfig {
   sources: Array<'google-trends' | 'reddit' | 'news' | 'wikipedia' | 'local-fallback'>
   deduplicate: boolean
-  mixStrategies: boolean // Mix different source types in same session
+  mixStrategies: boolean
   maxQueriesPerSource: number
   cacheMinutes: number
 }
@@ -23,14 +17,52 @@ export class QueryDiversityEngine {
   private config: QueryDiversityConfig
   private cache: Map<string, { queries: string[]; expires: number }> = new Map()
   private util: Util = new Util()
+  private logger?: (source: string, message: string, level?: 'info' | 'warn' | 'error') => void
 
-  constructor(config?: Partial<QueryDiversityConfig>) {
+  constructor(config?: Partial<QueryDiversityConfig>, logger?: (source: string, message: string, level?: 'info' | 'warn' | 'error') => void) {
+    const maxQueriesPerSource = Math.max(1, Math.min(config?.maxQueriesPerSource || 10, 50))
+    const cacheMinutes = Math.max(1, Math.min(config?.cacheMinutes || 30, 1440))
+    
     this.config = {
-      sources: config?.sources || ['google-trends', 'reddit', 'local-fallback'],
+      sources: config?.sources && config.sources.length > 0 
+        ? config.sources 
+        : ['google-trends', 'reddit', 'local-fallback'],
       deduplicate: config?.deduplicate !== false,
       mixStrategies: config?.mixStrategies !== false,
-      maxQueriesPerSource: config?.maxQueriesPerSource || 10,
-      cacheMinutes: config?.cacheMinutes || 30
+      maxQueriesPerSource,
+      cacheMinutes
+    }
+    this.logger = logger
+  }
+
+  private log(source: string, message: string, level: 'info' | 'warn' | 'error' = 'info'): void {
+    if (this.logger) {
+      this.logger(source, message, level)
+    }
+  }
+
+  /**
+   * Generic HTTP fetch with error handling and timeout
+   */
+  private async fetchHttp(url: string, config?: { 
+    method?: 'GET' | 'POST'
+    headers?: Record<string, string>
+    data?: string
+    timeout?: number
+  }): Promise<string> {
+    try {
+      const response = await axios({
+        url,
+        method: config?.method || 'GET',
+        headers: config?.headers || { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        data: config?.data,
+        timeout: config?.timeout || 10000
+      })
+      return typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      this.log('QUERY-FETCH', `HTTP request failed for ${url}: ${errorMsg}`, 'error')
+      throw error
     }
   }
 
@@ -38,6 +70,7 @@ export class QueryDiversityEngine {
    * Fetch diverse queries from configured sources
    */
   async fetchQueries(count: number): Promise<string[]> {
+    const validCount = Math.max(1, Math.min(count, 200))
     const allQueries: string[] = []
 
     for (const sourceName of this.config.sources) {
@@ -45,28 +78,33 @@ export class QueryDiversityEngine {
         const queries = await this.getFromSource(sourceName)
         allQueries.push(...queries.slice(0, this.config.maxQueriesPerSource))
       } catch (error) {
-        // Silently fail and try other sources
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        this.log('QUERY-DIVERSITY', `Failed to fetch from ${sourceName}: ${errorMsg}`, 'warn')
       }
     }
 
-    // Deduplicate
     let final = this.config.deduplicate ? Array.from(new Set(allQueries)) : allQueries
 
-    // Mix strategies: interleave queries from different sources
     if (this.config.mixStrategies && this.config.sources.length > 1) {
-      final = this.interleaveQueries(final, count)
+      final = this.interleaveQueries(final, validCount)
     }
 
-    // Shuffle and limit to requested count
-    final = this.util.shuffleArray(final).slice(0, count)
+    final = this.util.shuffleArray(final).slice(0, validCount)
 
-    return final.length > 0 ? final : this.getLocalFallback(count)
+    if (final.length === 0) {
+      this.log('QUERY-DIVERSITY', 'All sources failed, using local fallback', 'warn')
+      return this.getLocalFallback(validCount)
+    }
+
+    return final
   }
 
   /**
    * Fetch from a specific source with caching
    */
   private async getFromSource(source: string): Promise<string[]> {
+    this.cleanExpiredCache()
+    
     const cached = this.cache.get(source)
     if (cached && Date.now() < cached.expires) {
       return cached.queries
@@ -91,14 +129,16 @@ export class QueryDiversityEngine {
         queries = this.getLocalFallback(20)
         break
       default:
-        // Unknown source, skip silently
+        this.log('QUERY-DIVERSITY', `Unknown source: ${source}`, 'warn')
         break
     }
 
-    this.cache.set(source, {
-      queries,
-      expires: Date.now() + (this.config.cacheMinutes * 60000)
-    })
+    if (queries.length > 0) {
+      this.cache.set(source, {
+        queries,
+        expires: Date.now() + (this.config.cacheMinutes * 60000)
+      })
+    }
 
     return queries
   }
@@ -108,12 +148,9 @@ export class QueryDiversityEngine {
    */
   private async fetchGoogleTrends(): Promise<string[]> {
     try {
-      const response = await axios.get('https://trends.google.com/trends/api/dailytrends?geo=US', {
-        timeout: 10000
-      })
-
-      const data = response.data.toString().replace(')]}\',', '')
-      const parsed = JSON.parse(data)
+      const data = await this.fetchHttp('https://trends.google.com/trends/api/dailytrends?geo=US')
+      const cleaned = data.toString().replace(')]}\',', '')
+      const parsed = JSON.parse(cleaned)
 
       const queries: string[] = []
       for (const item of parsed.default.trendingSearchesDays || []) {
@@ -137,15 +174,10 @@ export class QueryDiversityEngine {
     try {
       const subreddits = ['news', 'worldnews', 'todayilearned', 'askreddit', 'technology']
       const randomSub = subreddits[Math.floor(Math.random() * subreddits.length)]
-
-      const response = await axios.get(`https://www.reddit.com/r/${randomSub}/hot.json?limit=15`, {
-        timeout: 10000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-      })
-
-      const posts = response.data.data.children || []
+      
+      const data = await this.fetchHttp(`https://www.reddit.com/r/${randomSub}/hot.json?limit=15`)
+      const parsed = JSON.parse(data)
+      const posts = parsed.data?.children || []
       const queries: string[] = []
 
       for (const post of posts) {
@@ -166,22 +198,14 @@ export class QueryDiversityEngine {
    */
   private async fetchNews(): Promise<string[]> {
     try {
-      // Using NewsAPI.org free tier (limited requests)
       const apiKey = process.env.NEWS_API_KEY
       if (!apiKey) {
         return this.fetchNewsFallback()
       }
 
-      const response = await axios.get('https://newsapi.org/v2/top-headlines', {
-        params: {
-          country: 'us',
-          pageSize: 15,
-          apiKey
-        },
-        timeout: 10000
-      })
-
-      const articles = response.data.articles || []
+      const data = await this.fetchHttp(`https://newsapi.org/v2/top-headlines?country=us&pageSize=15&apiKey=${apiKey}`)
+      const parsed = JSON.parse(data)
+      const articles = parsed.articles || []
       return articles.map((a: { title?: string }) => a.title).filter((t: string | undefined) => t && t.length > 10)
     } catch {
       return this.fetchNewsFallback()
@@ -193,14 +217,7 @@ export class QueryDiversityEngine {
    */
   private async fetchNewsFallback(): Promise<string[]> {
     try {
-      const response = await axios.get('https://www.bbc.com/news', {
-        timeout: 10000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-      })
-
-      const html = response.data
+      const html = await this.fetchHttp('https://www.bbc.com/news')
       const regex = /<h3[^>]*>(.*?)<\/h3>/gi
       const matches: RegExpMatchArray[] = []
       let match
@@ -222,18 +239,9 @@ export class QueryDiversityEngine {
    */
   private async fetchWikipedia(): Promise<string[]> {
     try {
-      const response = await axios.get('https://en.wikipedia.org/w/api.php', {
-        params: {
-          action: 'query',
-          list: 'random',
-          rnnamespace: 0,
-          rnlimit: 15,
-          format: 'json'
-        },
-        timeout: 10000
-      })
-
-      const pages = response.data.query?.random || []
+      const data = await this.fetchHttp('https://en.wikipedia.org/w/api.php?action=query&list=random&rnnamespace=0&rnlimit=15&format=json')
+      const parsed = JSON.parse(data)
+      const pages = parsed.query?.random || []
       return pages.map((p: { title?: string }) => p.title).filter((t: string | undefined) => t && t.length > 3)
     } catch {
       return []
@@ -282,43 +290,35 @@ export class QueryDiversityEngine {
 
   /**
    * Interleave queries from different sources for diversity
+   * Uses a simple round-robin approach based on order of sources in config
    */
   private interleaveQueries(queries: string[], targetCount: number): string[] {
     const result: string[] = []
-    const sourceMap = new Map<string, string[]>()
-
-    // Group queries by estimated source (simple heuristic)
-    for (const q of queries) {
-      const source = this.guessSource(q)
-      if (!sourceMap.has(source)) {
-        sourceMap.set(source, [])
-      }
-      sourceMap.get(source)?.push(q)
+    const queriesPerSource = Math.ceil(this.config.maxQueriesPerSource)
+    const sourceCount = this.config.sources.length
+    
+    if (sourceCount === 0 || queries.length === 0) {
+      return queries.slice(0, targetCount)
     }
-
-    const sources = Array.from(sourceMap.values())
-    let index = 0
-
-    while (result.length < targetCount && sources.some(s => s.length > 0)) {
-      const source = sources[index % sources.length]
-      if (source && source.length > 0) {
-        const q = source.shift()
-        if (q) result.push(q)
+    
+    const chunkSize = queriesPerSource
+    let sourceIndex = 0
+    
+    for (let i = 0; i < queries.length && result.length < targetCount; i++) {
+      const currentChunkStart = sourceIndex * chunkSize
+      const currentChunkEnd = currentChunkStart + chunkSize
+      const query = queries[i]
+      
+      if (query && i >= currentChunkStart && i < currentChunkEnd) {
+        result.push(query)
       }
-      index++
+      
+      if (i === currentChunkEnd - 1) {
+        sourceIndex = (sourceIndex + 1) % sourceCount
+      }
     }
-
-    return result
-  }
-
-  /**
-   * Guess which source a query came from (basic heuristic)
-   */
-  private guessSource(query: string): string {
-    if (/^[A-Z]/.test(query) && query.includes(' ')) return 'news'
-    if (query.length > 80) return 'reddit'
-    if (/how to|what is|why/i.test(query)) return 'local'
-    return 'trends'
+    
+    return result.slice(0, targetCount)
   }
 
   /**
@@ -326,5 +326,17 @@ export class QueryDiversityEngine {
    */
   clearCache(): void {
     this.cache.clear()
+  }
+
+  /**
+   * Clean expired entries from cache automatically
+   */
+  private cleanExpiredCache(): void {
+    const now = Date.now()
+    for (const [key, value] of this.cache.entries()) {
+      if (now >= value.expires) {
+        this.cache.delete(key)
+      }
+    }
   }
 }

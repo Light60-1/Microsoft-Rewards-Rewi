@@ -1,21 +1,28 @@
 /* eslint-disable linebreak-style */
 /**
- * Smart Auto-Update Script
+ * Smart Auto-Update Script v2
+ * 
+ * Supports two update methods:
+ * 1. Git method (--git): Uses Git commands, requires Git installed
+ * 2. GitHub API method (--no-git): Downloads ZIP, no Git needed, no conflicts (RECOMMENDED)
  * 
  * Intelligently updates while preserving user settings:
  * - ALWAYS updates code files (*.ts, *.js, etc.)
- * - ONLY updates config.jsonc if remote has changes to it
- * - ONLY updates accounts.json if remote has changes to it
- * - KEEPS user passwords/emails/settings otherwise
+ * - Respects config.jsonc update preferences
+ * - ALWAYS preserves accounts files (unless explicitly configured)
  *
  * Usage:
- *   node setup/update/update.mjs --git
- *   node setup/update/update.mjs --docker
+ *   node setup/update/update.mjs               # Auto-detect method from config
+ *   node setup/update/update.mjs --git         # Force Git method
+ *   node setup/update/update.mjs --no-git      # Force GitHub API method
+ *   node setup/update/update.mjs --docker      # Update Docker containers
  */
 
 import { spawn, execSync } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, cpSync, rmSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { createWriteStream } from 'node:fs'
+import { get as httpsGet } from 'node:https'
 
 function stripJsonComments(input) {
   let result = ""
@@ -163,18 +170,16 @@ async function updateGit() {
   console.log('Smart Git Update')
   console.log('='.repeat(60))
 
-  // Step 0: Check for existing conflicts FIRST
+  // Step 0: Pre-flight checks
   const conflictCheck = hasUnresolvedConflicts()
   if (conflictCheck.hasConflicts) {
     console.log('\n⚠️  ERROR: Git repository has unresolved conflicts!')
     console.log('Conflicted files:')
     conflictCheck.files.forEach(f => console.log(`  - ${f}`))
-    console.log('\nAttempting automatic resolution...')
+    console.log('\n🔧 Attempting automatic resolution...')
     
-    // Abort any ongoing operations
     abortAllGitOperations()
     
-    // Verify conflicts are cleared
     const recheckConflicts = hasUnresolvedConflicts()
     if (recheckConflicts.hasConflicts) {
       console.log('\n❌ Could not automatically resolve conflicts.')
@@ -185,7 +190,14 @@ async function updateGit() {
       return 1
     }
     
-    console.log('✓ Conflicts cleared. Continuing with update...\n')
+    console.log('✓ Conflicts cleared. Continuing...\n')
+  }
+  
+  // Pre-flight: Check if repo is clean enough to proceed
+  const isDirty = exec('git diff --quiet')
+  const hasUntracked = exec('git ls-files --others --exclude-standard')
+  if (isDirty === null && hasUntracked) {
+    console.log('ℹ️  Repository has local changes, will preserve user files during update.')
   }
 
   // Step 1: Read config to get user preferences
@@ -208,161 +220,123 @@ async function updateGit() {
   console.log(`  Auto-update config.jsonc: ${userConfig.autoUpdateConfig}`)
   console.log(`  Auto-update accounts.json: ${userConfig.autoUpdateAccounts}`)
 
-  // Step 2: Fetch
-  console.log('\nFetching latest changes...')
-  await run('git', ['fetch', '--all', '--prune'])
-
-  // Step 3: Get current branch
+  // Step 2: Get current branch
   const currentBranch = exec('git branch --show-current')
   if (!currentBranch) {
     console.log('Could not determine current branch.')
     return 1
   }
-
-  // Step 4: Check which files changed in remote
-  const remoteBranch = `origin/${currentBranch}`
-  const filesChanged = exec(`git diff --name-only HEAD ${remoteBranch}`)
   
-  if (!filesChanged) {
-    console.log('Already up to date!')
-    return 0
-  }
+  // Fetch latest changes
+  console.log('\n🌐 Fetching latest changes...')
+  await run('git', ['fetch', '--all', '--prune'])
 
-  const changedFiles = filesChanged.split('\n').filter(f => f.trim())
-  const configChanged = changedFiles.includes('src/config.jsonc')
-  const accountsChanged = changedFiles.includes('src/accounts.json')
-
-  // Step 5: ALWAYS backup config and accounts (smart strategy!)
+  // Step 3: Backup user files BEFORE any git operations
   const backupDir = join(process.cwd(), '.update-backup')
   mkdirSync(backupDir, { recursive: true })
   
-  const filesToRestore = []
+  const userFiles = []
   
   if (existsSync('src/config.jsonc')) {
-    console.log('\nBacking up config.jsonc...')
-    writeFileSync(join(backupDir, 'config.jsonc'), readFileSync('src/config.jsonc', 'utf8'))
-    // ALWAYS restore config unless user explicitly wants auto-update
+    console.log('\n📦 Backing up config.jsonc...')
+    const configContent = readFileSync('src/config.jsonc', 'utf8')
+    writeFileSync(join(backupDir, 'config.jsonc.bak'), configContent)
     if (!userConfig.autoUpdateConfig) {
-      filesToRestore.push('config.jsonc')
+      userFiles.push({ path: 'src/config.jsonc', content: configContent })
     }
   }
 
-  if (existsSync('src/accounts.json')) {
-    console.log('Backing up accounts.json...')
-    writeFileSync(join(backupDir, 'accounts.json'), readFileSync('src/accounts.json', 'utf8'))
-    // ALWAYS restore accounts unless user explicitly wants auto-update
+  if (existsSync('src/accounts.jsonc')) {
+    console.log('📦 Backing up accounts.jsonc...')
+    const accountsContent = readFileSync('src/accounts.jsonc', 'utf8')
+    writeFileSync(join(backupDir, 'accounts.jsonc.bak'), accountsContent)
     if (!userConfig.autoUpdateAccounts) {
-      filesToRestore.push('accounts.json')
+      userFiles.push({ path: 'src/accounts.jsonc', content: accountsContent })
+    }
+  }
+  
+  if (existsSync('src/accounts.json')) {
+    console.log('📦 Backing up accounts.json...')
+    const accountsJsonContent = readFileSync('src/accounts.json', 'utf8')
+    writeFileSync(join(backupDir, 'accounts.json.bak'), accountsJsonContent)
+    if (!userConfig.autoUpdateAccounts) {
+      userFiles.push({ path: 'src/accounts.json', content: accountsJsonContent })
     }
   }
 
   // Show what will happen
-  console.log('\nUpdate strategy:')
-  console.log(`  config.jsonc: ${userConfig.autoUpdateConfig ? 'WILL UPDATE from remote' : 'KEEPING YOUR LOCAL VERSION (always)'}`)
-  console.log(`  accounts.json: ${userConfig.autoUpdateAccounts ? 'WILL UPDATE from remote' : 'KEEPING YOUR LOCAL VERSION (always)'}`)
-  console.log('  All other files: will update from remote')
+  console.log('\n📋 Update strategy:')
+  console.log(`  config.jsonc: ${userConfig.autoUpdateConfig ? '🔄 WILL UPDATE from remote' : '🔒 KEEPING YOUR LOCAL VERSION'}`)
+  console.log(`  accounts: ${userConfig.autoUpdateAccounts ? '🔄 WILL UPDATE from remote' : '🔒 KEEPING YOUR LOCAL VERSION (always)'}`)
+  console.log('  Other files: 🔄 will update from remote')
 
-  // Step 6: Handle local changes intelligently
-  // Check if there are uncommitted changes to config/accounts
-  const localChanges = exec('git status --porcelain')
-  const hasConfigChanges = localChanges && localChanges.includes('src/config.jsonc')
-  const hasAccountChanges = localChanges && localChanges.includes('src/accounts.json')
+  // Step 4: Use merge strategy to avoid conflicts
+  // Instead of stash, we'll use a better approach:
+  // 1. Reset to remote (get clean state)
+  // 2. Then restore user files manually
   
-  if (hasConfigChanges && !userConfig.autoUpdateConfig) {
-    console.log('\n✓ Detected local changes to config.jsonc - will preserve them')
+  console.log('\n🔄 Applying updates (using smart merge strategy)...')
+  
+  // Save current commit for potential rollback
+  const currentCommit = exec('git rev-parse HEAD')
+  
+  // Check if we're behind
+  const remoteBranch = `origin/${currentBranch}`
+  const behindCount = exec(`git rev-list --count HEAD..${remoteBranch}`)
+  
+  if (!behindCount || behindCount === '0') {
+    console.log('✓ Already up to date!')
+    return 0
   }
   
-  if (hasAccountChanges && !userConfig.autoUpdateAccounts) {
-    console.log('✓ Detected local changes to accounts.json - will preserve them')
-  }
-
-  // Step 7: Stash ALL changes (including untracked)
-  const hasChanges = exec('git status --porcelain')
-  let stashCreated = false
-  if (hasChanges) {
-    console.log('\nStashing local changes (including config/accounts)...')
-    await run('git', ['stash', 'push', '-u', '-m', 'Auto-update backup with untracked files'])
-    stashCreated = true
-  }
-
-  // Step 8: Pull with strategy to handle diverged branches
-  console.log('\nPulling latest code...')
-  let pullCode = await run('git', ['pull', '--rebase'])
+  console.log(`ℹ️  ${behindCount} commits behind remote`)
   
-  if (pullCode !== 0) {
-    console.log('\n❌ Pull failed! Checking for conflicts...')
+  // Use merge with strategy to accept remote changes for all files
+  // We'll restore user files afterwards
+  const mergeCode = await run('git', ['merge', '--strategy-option=theirs', remoteBranch])
+  
+  if (mergeCode !== 0) {
+    console.log('\n⚠️  Merge failed, trying reset strategy...')
     
-    // Check if it's a conflict
-    const postPullConflicts = hasUnresolvedConflicts()
-    if (postPullConflicts.hasConflicts) {
-      console.log('Conflicts detected during pull:')
-      postPullConflicts.files.forEach(f => console.log(`  - ${f}`))
+    // Abort merge
+    exec('git merge --abort')
+    
+    // Try reset + restore approach instead
+    const resetCode = await run('git', ['reset', '--hard', remoteBranch])
+    
+    if (resetCode !== 0) {
+      console.log('\n❌ Update failed!')
+      console.log('🔙 Rolling back to previous state...')
+      await run('git', ['reset', '--hard', currentCommit])
       
-      // Abort the rebase/merge
-      console.log('\nAborting failed pull...')
-      abortAllGitOperations()
-      
-      // Pop stash before giving up
-      if (stashCreated) {
-        console.log('Restoring stashed changes...')
-        await run('git', ['stash', 'pop'])
+      // Restore user files from backup
+      for (const file of userFiles) {
+        writeFileSync(file.path, file.content)
       }
       
-      console.log('\n⚠️  Update failed due to conflicts.')
-      console.log('Your local changes have been preserved.')
-      console.log('\nTo force update (DISCARDS local changes), run:')
-      console.log('  git fetch --all')
-      console.log('  git reset --hard origin/main')
-      console.log('  npm ci && npm run build')
-      
+      console.log('✓ Rolled back successfully. Your files are safe.')
       return 1
     }
-    
-    // Not a conflict, just a generic pull failure
-    console.log('Pull failed for unknown reason.')
-    if (stashCreated) await run('git', ['stash', 'pop'])
-    return pullCode
   }
-
-  // Step 9: Restore user files based on preferences
-  if (filesToRestore.length > 0) {
-    console.log('\nRestoring your local files (per config preferences)...')
-    for (const file of filesToRestore) {
-      const content = readFileSync(join(backupDir, file), 'utf8')
-      writeFileSync(join('src', file), content)
-      console.log(`  ✓ Restored ${file}`)
+  
+  // Step 5: Restore user files
+  if (userFiles.length > 0) {
+    console.log('\n🔒 Restoring your protected files...')
+    for (const file of userFiles) {
+      try {
+        writeFileSync(file.path, file.content)
+        console.log(`  ✓ Restored ${file.path}`)
+      } catch (err) {
+        console.log(`  ⚠️  Failed to restore ${file.path}: ${err.message}`)
+      }
     }
   }
+  
+  // Clean the git state (remove any leftover merge markers or conflicts)
+  exec('git reset HEAD .')
+  exec('git checkout -- .')
 
-  // Step 10: Restore stash (but skip config/accounts if we already restored them)
-  if (stashCreated) {
-    console.log('\nRestoring stashed changes...')
-    // Pop stash but auto-resolve conflicts by keeping our versions
-    const popCode = await run('git', ['stash', 'pop'])
-    
-    if (popCode !== 0) {
-      console.log('⚠️  Stash pop had conflicts - resolving automatically...')
-      
-      // For config/accounts, keep our version (--ours)
-      if (!userConfig.autoUpdateConfig) {
-        await run('git', ['checkout', '--ours', 'src/config.jsonc'])
-        await run('git', ['add', 'src/config.jsonc'])
-      }
-      
-      if (!userConfig.autoUpdateAccounts) {
-        await run('git', ['checkout', '--ours', 'src/accounts.json'])
-        await run('git', ['add', 'src/accounts.json'])
-      }
-      
-      // Drop the stash since we resolved manually
-      await run('git', ['reset'])
-      await run('git', ['stash', 'drop'])
-      
-      console.log('✓ Conflicts auto-resolved')
-    }
-  }
-
-  // Step 9: Install & build
+  // Step 6: Install & build
   const hasNpm = await which('npm')
   if (!hasNpm) return 0
 
@@ -379,6 +353,279 @@ async function updateGit() {
   return buildCode
 }
 
+/**
+ * Git-free update using GitHub API
+ * Downloads latest code as ZIP, extracts, and selectively copies files
+ * Preserves user config and accounts
+ */
+async function updateGitFree() {
+  console.log('\n' + '='.repeat(60))
+  console.log('Git-Free Smart Update (GitHub API)')
+  console.log('='.repeat(60))
+  
+  // Step 1: Read user preferences
+  let userConfig = { autoUpdateConfig: false, autoUpdateAccounts: false }
+  const configData = readJsonConfig([
+    "src/config.jsonc",
+    "config.jsonc",
+    "src/config.json",
+    "config.json"
+  ])
+
+  if (configData?.update) {
+    userConfig.autoUpdateConfig = configData.update.autoUpdateConfig ?? false
+    userConfig.autoUpdateAccounts = configData.update.autoUpdateAccounts ?? false
+  }
+
+  console.log('\n📋 User preferences:')
+  console.log(`  Auto-update config.jsonc: ${userConfig.autoUpdateConfig}`)
+  console.log(`  Auto-update accounts: ${userConfig.autoUpdateAccounts}`)
+  
+  // Step 2: Backup user files
+  const backupDir = join(process.cwd(), '.update-backup-gitfree')
+  mkdirSync(backupDir, { recursive: true })
+  
+  const filesToPreserve = [
+    { src: 'src/config.jsonc', preserve: !userConfig.autoUpdateConfig },
+    { src: 'src/accounts.jsonc', preserve: !userConfig.autoUpdateAccounts },
+    { src: 'src/accounts.json', preserve: !userConfig.autoUpdateAccounts },
+    { src: 'sessions', preserve: true, isDir: true },
+    { src: '.update-backup', preserve: true, isDir: true }
+  ]
+  
+  console.log('\n📦 Backing up protected files...')
+  for (const file of filesToPreserve) {
+    if (!file.preserve) continue
+    const srcPath = join(process.cwd(), file.src)
+    if (!existsSync(srcPath)) continue
+    
+    const destPath = join(backupDir, file.src)
+    mkdirSync(dirname(destPath), { recursive: true })
+    
+    try {
+      if (file.isDir) {
+        cpSync(srcPath, destPath, { recursive: true })
+        console.log(`  ✓ Backed up ${file.src}/ (directory)`)
+      } else {
+        writeFileSync(destPath, readFileSync(srcPath))
+        console.log(`  ✓ Backed up ${file.src}`)
+      }
+    } catch (err) {
+      console.log(`  ⚠️  Could not backup ${file.src}: ${err.message}`)
+    }
+  }
+  
+  // Step 3: Download latest code from GitHub
+  const repoOwner = 'Obsidian-wtf' // Change to your repo
+  const repoName = 'Microsoft-Rewards-Bot'
+  const branch = 'main'
+  
+  const archiveUrl = `https://github.com/${repoOwner}/${repoName}/archive/refs/heads/${branch}.zip`
+  const archivePath = join(process.cwd(), '.update-download.zip')
+  const extractDir = join(process.cwd(), '.update-extract')
+  
+  console.log(`\n🌐 Downloading latest code from GitHub...`)
+  console.log(`   ${archiveUrl}`)
+  
+  try {
+    // Download with built-in https
+    await downloadFile(archiveUrl, archivePath)
+    console.log('✓ Download complete')
+  } catch (err) {
+    console.log(`❌ Download failed: ${err.message}`)
+    console.log('Please check your internet connection and try again.')
+    return 1
+  }
+  
+  // Step 4: Extract archive
+  console.log('\n📂 Extracting archive...')
+  rmSync(extractDir, { recursive: true, force: true })
+  mkdirSync(extractDir, { recursive: true })
+  
+  try {
+    // Use built-in unzip or cross-platform solution
+    await extractZip(archivePath, extractDir)
+    console.log('✓ Extraction complete')
+  } catch (err) {
+    console.log(`❌ Extraction failed: ${err.message}`)
+    return 1
+  }
+  
+  // Step 5: Find extracted folder (GitHub adds repo name prefix)
+  const extractedItems = readdirSync(extractDir)
+  const extractedRepoDir = extractedItems.find(item => item.startsWith(repoName))
+  if (!extractedRepoDir) {
+    console.log('❌ Could not find extracted repository folder')
+    return 1
+  }
+  
+  const sourceDir = join(extractDir, extractedRepoDir)
+  
+  // Step 6: Copy files selectively
+  console.log('\n📋 Updating files...')
+  const filesToUpdate = [
+    'src',
+    'docs',
+    'setup',
+    'public',
+    'tests',
+    'package.json',
+    'package-lock.json',
+    'tsconfig.json',
+    'Dockerfile',
+    'compose.yaml',
+    'README.md',
+    'LICENSE'
+  ]
+  
+  for (const item of filesToUpdate) {
+    const srcPath = join(sourceDir, item)
+    const destPath = join(process.cwd(), item)
+    
+    if (!existsSync(srcPath)) continue
+    
+    // Skip if it's a protected file
+    const isProtected = filesToPreserve.some(f => 
+      f.preserve && (destPath.includes(f.src) || f.src === item)
+    )
+    if (isProtected) {
+      console.log(`  ⏭️  Skipping ${item} (protected)`)
+      continue
+    }
+    
+    try {
+      // Remove old first
+      if (existsSync(destPath)) {
+        rmSync(destPath, { recursive: true, force: true })
+      }
+      // Copy new
+      if (statSync(srcPath).isDirectory()) {
+        cpSync(srcPath, destPath, { recursive: true })
+        console.log(`  ✓ Updated ${item}/ (directory)`)
+      } else {
+        cpSync(srcPath, destPath)
+        console.log(`  ✓ Updated ${item}`)
+      }
+    } catch (err) {
+      console.log(`  ⚠️  Failed to update ${item}: ${err.message}`)
+    }
+  }
+  
+  // Step 7: Restore protected files
+  console.log('\n🔒 Restoring protected files...')
+  for (const file of filesToPreserve) {
+    if (!file.preserve) continue
+    const backupPath = join(backupDir, file.src)
+    if (!existsSync(backupPath)) continue
+    
+    const destPath = join(process.cwd(), file.src)
+    mkdirSync(dirname(destPath), { recursive: true })
+    
+    try {
+      if (file.isDir) {
+        rmSync(destPath, { recursive: true, force: true })
+        cpSync(backupPath, destPath, { recursive: true })
+        console.log(`  ✓ Restored ${file.src}/ (directory)`)
+      } else {
+        writeFileSync(destPath, readFileSync(backupPath))
+        console.log(`  ✓ Restored ${file.src}`)
+      }
+    } catch (err) {
+      console.log(`  ⚠️  Failed to restore ${file.src}: ${err.message}`)
+    }
+  }
+  
+  // Step 8: Cleanup
+  console.log('\n🧹 Cleaning up temporary files...')
+  rmSync(archivePath, { force: true })
+  rmSync(extractDir, { recursive: true, force: true })
+  console.log('✓ Cleanup complete')
+  
+  // Step 9: Install & build
+  const hasNpm = await which('npm')
+  if (!hasNpm) {
+    console.log('\n✓ Update completed! (npm not found, skipping dependencies)')
+    return 0
+  }
+
+  console.log('\n📦 Installing dependencies...')
+  await run('npm', ['ci'])
+  
+  console.log('\n🔨 Building project...')
+  const buildCode = await run('npm', ['run', 'build'])
+
+  console.log('\n' + '='.repeat(60))
+  console.log('✓ Git-Free Update Completed Successfully!')
+  console.log('='.repeat(60) + '\n')
+
+  return buildCode
+}
+
+/**
+ * Download file using Node.js built-in https
+ */
+function downloadFile(url, dest) {
+  return new Promise((resolve, reject) => {
+    const file = createWriteStream(dest)
+    
+    httpsGet(url, (response) => {
+      // Handle redirects
+      if (response.statusCode === 302 || response.statusCode === 301) {
+        file.close()
+        rmSync(dest, { force: true })
+        downloadFile(response.headers.location, dest).then(resolve).catch(reject)
+        return
+      }
+      
+      if (response.statusCode !== 200) {
+        file.close()
+        rmSync(dest, { force: true })
+        reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`))
+        return
+      }
+      
+      response.pipe(file)
+      
+      file.on('finish', () => {
+        file.close()
+        resolve()
+      })
+    }).on('error', (err) => {
+      file.close()
+      rmSync(dest, { force: true })
+      reject(err)
+    })
+  })
+}
+
+/**
+ * Extract ZIP file (cross-platform)
+ * Uses built-in or fallback methods
+ */
+async function extractZip(zipPath, destDir) {
+  // Try using unzip command (Unix-like systems)
+  const hasUnzip = await which('unzip')
+  if (hasUnzip) {
+    const code = await run('unzip', ['-q', '-o', zipPath, '-d', destDir], { stdio: 'ignore' })
+    if (code === 0) return
+  }
+  
+  // Try using tar (works on modern Windows 10+)
+  const hasTar = await which('tar')
+  if (hasTar) {
+    const code = await run('tar', ['-xf', zipPath, '-C', destDir], { stdio: 'ignore' })
+    if (code === 0) return
+  }
+  
+  // Try using PowerShell Expand-Archive (Windows)
+  if (process.platform === 'win32') {
+    const code = await run('powershell', ['-Command', `Expand-Archive -Path "${zipPath}" -DestinationPath "${destDir}" -Force`], { stdio: 'ignore' })
+    if (code === 0) return
+  }
+  
+  throw new Error('No suitable extraction tool found (unzip, tar, or PowerShell)')
+}
+
 async function updateDocker() {
   const hasDocker = await which('docker')
   if (!hasDocker) return 1
@@ -389,19 +636,105 @@ async function updateDocker() {
 
 async function main() {
   const args = new Set(process.argv.slice(2))
-  const doGit = args.has('--git')
+  const forceGit = args.has('--git')
+  const forceGitFree = args.has('--no-git') || args.has('--zip')
   const doDocker = args.has('--docker')
 
   let code = 0
-  if (doGit) {
-    code = await updateGit()
+  
+  // If no method specified, read from config
+  let useGitFree = forceGitFree
+  let useGit = forceGit
+  
+  if (!forceGit && !forceGitFree && !doDocker) {
+    // Read config to determine preferred method
+    const configData = readJsonConfig([
+      "src/config.jsonc",
+      "config.jsonc",
+      "src/config.json",
+      "config.json"
+    ])
+    
+    if (configData?.update) {
+      const updateEnabled = configData.update.enabled !== false
+      const method = configData.update.method || 'github-api'
+      
+      if (!updateEnabled) {
+        console.log('⚠️  Updates are disabled in config.jsonc (update.enabled = false)')
+        console.log('To enable updates, set "update.enabled" to true in your config.jsonc')
+        return 0
+      }
+      
+      if (method === 'github-api' || method === 'api' || method === 'zip') {
+        console.log('📋 Config prefers GitHub API method (update.method = "github-api")')
+        useGitFree = true
+      } else if (method === 'git') {
+        console.log('📋 Config prefers Git method (update.method = "git")')
+        useGit = true
+      } else {
+        console.log(`⚠️  Unknown update method "${method}" in config, defaulting to GitHub API`)
+        useGitFree = true
+      }
+    } else {
+      // No config found or no update section, default to GitHub API
+      console.log('📋 No update preferences in config, using GitHub API method (recommended)')
+      useGitFree = true
+    }
   }
+  
+  // Execute chosen method
+  if (useGitFree) {
+    console.log('🚀 Starting update with GitHub API method (no Git conflicts)...\n')
+    code = await updateGitFree()
+  } else if (useGit) {
+    // Check if git is available, fallback to git-free if not
+    const hasGit = await which('git')
+    if (!hasGit) {
+      console.log('⚠️  Git not found, falling back to GitHub API method\n')
+      code = await updateGitFree()
+    } else {
+      console.log('🚀 Starting update with Git method...\n')
+      code = await updateGit()
+    }
+  } else {
+    // No method chosen, show usage
+    console.log('Microsoft Rewards Bot - Update Script')
+    console.log('=' .repeat(60))
+    console.log('')
+    console.log('Usage:')
+    console.log('  node setup/update/update.mjs              # Auto-detect from config.jsonc')
+    console.log('  node setup/update/update.mjs --git        # Force Git method')
+    console.log('  node setup/update/update.mjs --no-git     # Force GitHub API method')
+    console.log('  node setup/update/update.mjs --docker     # Update Docker containers')
+    console.log('')
+    console.log('Update methods:')
+    console.log('  • GitHub API (--no-git): Downloads ZIP from GitHub')
+    console.log('    ✓ No Git required')
+    console.log('    ✓ No merge conflicts')
+    console.log('    ✓ Works even if Git repo is broken')
+    console.log('    ✓ Recommended for most users')
+    console.log('')
+    console.log('  • Git (--git): Uses Git pull/merge')
+    console.log('    ✓ Preserves Git history')
+    console.log('    ✓ Faster for small changes')
+    console.log('    ✗ Requires Git installed')
+    console.log('    ✗ May have merge conflicts')
+    console.log('')
+    console.log('Configuration:')
+    console.log('  Edit src/config.jsonc to set your preferred method:')
+    console.log('  "update": {')
+    console.log('    "enabled": true,')
+    console.log('    "method": "github-api"  // or "git"')
+    console.log('  }')
+    console.log('')
+    return 0
+  }
+  
   if (doDocker && code === 0) {
     code = await updateDocker()
   }
   
   // Return exit code to parent process
-  // This allows the bot to know if update succeeded (0) or failed (non-zero)
   process.exit(code)
 }
 
