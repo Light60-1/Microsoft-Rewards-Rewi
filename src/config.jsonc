@@ -25,7 +25,8 @@
     },
     "jobState": {
         "enabled": true,
-        "dir": ""
+        "dir": "",
+        "autoResetOnComplete": true // Set to true to automatically rerun all accounts without prompting (for scheduled tasks)
     },
 
     // Tasks

@@ -171,9 +171,27 @@ export class MicrosoftRewardsBot {
     }
 
     private async promptResetJobState(): Promise<boolean> {
-        // Skip prompt in non-interactive environments (Docker, CI, scheduled tasks)
-        if (!process.stdin.isTTY) {
-            log('main','TASK','Non-interactive environment detected - keeping job state', 'warn')
+        // Check if auto-reset is enabled in config (for scheduled tasks)
+        if (this.config.jobState?.autoResetOnComplete === true) {
+            log('main','TASK','Auto-reset enabled (jobState.autoResetOnComplete=true) - resetting and rerunning all accounts', 'log', 'green')
+            return true
+        }
+
+        // Check environment variable override
+        const envAutoReset = process.env.REWARDS_AUTO_RESET_JOBSTATE
+        if (envAutoReset === '1' || envAutoReset?.toLowerCase() === 'true') {
+            log('main','TASK','Auto-reset enabled (REWARDS_AUTO_RESET_JOBSTATE) - resetting and rerunning all accounts', 'log', 'green')
+            return true
+        }
+
+        // Detect non-interactive environments more reliably
+        const isNonInteractive = !process.stdin.isTTY || 
+                                 process.env.CI === 'true' || 
+                                 process.env.DOCKER === 'true' ||
+                                 process.env.SCHEDULED_TASK === 'true'
+        
+        if (isNonInteractive) {
+            log('main','TASK','Non-interactive environment detected - keeping job state (set jobState.autoResetOnComplete=true to auto-rerun)', 'warn')
             return false
         }
 

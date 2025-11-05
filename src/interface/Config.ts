@@ -156,6 +156,7 @@ export interface ConfigJobState {
     enabled?: boolean; // default true
     dir?: string; // base directory; defaults to <sessionPath>/job-state
     skipCompletedAccounts?: boolean; // if true (default), skip accounts already completed for the day
+    autoResetOnComplete?: boolean; // if true, automatically reset and rerun without prompting (useful for scheduled tasks)
 }
 
 // Live logging configuration
