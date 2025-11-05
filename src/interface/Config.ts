@@ -82,7 +82,9 @@ export interface ConfigProxy {
 }
 
 export interface ConfigUpdate {
-    git?: boolean; // if true, run git pull + npm ci + npm run build after completion
+    enabled?: boolean; // Master toggle for auto-updates (default: true)
+    method?: 'git' | 'github-api' | 'api' | 'zip'; // Update method: "git" or "github-api" (default: "github-api")
+    git?: boolean; // Legacy support: if true, use git method (deprecated, use method instead)
     docker?: boolean; // if true, run docker update routine (compose pull/up) after completion
     scriptPath?: string; // optional custom path to update script relative to repo root
     autoUpdateConfig?: boolean; // if true, allow auto-update of config.jsonc when remote changes it (default: false to preserve user settings)

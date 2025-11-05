@@ -1217,15 +1217,36 @@ export class MicrosoftRewardsBot {
     private async runAutoUpdate(): Promise<number> {
         const upd = this.config.update
         if (!upd) return 0
+        
+        // Check if updates are enabled
+        if (upd.enabled === false) {
+            log('main', 'UPDATE', 'Updates disabled in config (update.enabled = false)')
+            return 0
+        }
+        
         const scriptRel = upd.scriptPath || 'setup/update/update.mjs'
         const scriptAbs = path.join(process.cwd(), scriptRel)
         if (!fs.existsSync(scriptAbs)) return 0
 
         const args: string[] = []
-        // Git update is enabled by default (unless explicitly set to false)
-        if (upd.git !== false) args.push('--git')
+        
+        // Determine update method from config
+        const method = upd.method || 'github-api' // Default to github-api (recommended)
+        
+        if (method === 'git') {
+            // Use Git method (traditional, can have conflicts)
+            args.push('--git')
+        } else if (method === 'github-api' || method === 'api' || method === 'zip') {
+            // Use GitHub API method (no Git needed, no conflicts)
+            args.push('--no-git')
+        } else {
+            // Unknown method, default to github-api
+            log('main', 'UPDATE', `Unknown update method "${method}", using github-api`, 'warn')
+            args.push('--no-git')
+        }
+        
+        // Add Docker flag if enabled
         if (upd.docker) args.push('--docker')
-        if (args.length === 0) return 0
 
         // Run update script as a child process and capture exit code
         return new Promise<number>((resolve) => {
