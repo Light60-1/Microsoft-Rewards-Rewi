@@ -172,7 +172,20 @@ export class StartupValidator {
 
       // Proxy validation
       if (account.proxy) {
-        if (account.proxy.url && account.proxy.url.trim() !== '') {
+        const hasProxyUrl = account.proxy.url && account.proxy.url.trim() !== ''
+        const proxyEnabled = account.proxy.proxyAxios === true
+
+        if (proxyEnabled && !hasProxyUrl) {
+          this.addError(
+            'accounts',
+            `${prefix}: proxyAxios is true but proxy URL is empty`,
+            'Set proxyAxios to false if not using a proxy, or provide valid proxy URL/port',
+            undefined,
+            true // blocking
+          )
+        }
+
+        if (hasProxyUrl) {
           if (!account.proxy.port || account.proxy.port <= 0) {
             this.addError(
               'accounts',

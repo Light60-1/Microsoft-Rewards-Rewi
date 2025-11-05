@@ -10,7 +10,7 @@
       "recoveryRequired": true,
       "recoveryEmail": "primary.backup@example.com",
       "proxy": {
-        "proxyAxios": true,
+        "proxyAxios": false,  // Set to true ONLY if you have a proxy configured below
         "url": "",
         "port": 0,
         "username": "",
@@ -26,7 +26,7 @@
       "recoveryRequired": true,
       "recoveryEmail": "secondary.backup@example.com",
       "proxy": {
-        "proxyAxios": true,
+        "proxyAxios": false,  // Set to true ONLY if you have a proxy configured below
         "url": "",
         "port": 0,
         "username": "",
@@ -74,7 +74,7 @@
       "recoveryRequired": true,
       "recoveryEmail": "totp.optional.backup@example.com",
       "proxy": {
-        "proxyAxios": true,
+        "proxyAxios": false,  // Set to true ONLY if you have a proxy configured below
         "url": "",
         "port": 0,
         "username": "",
