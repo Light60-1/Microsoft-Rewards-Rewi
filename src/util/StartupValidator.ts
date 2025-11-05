@@ -34,6 +34,7 @@ export class StartupValidator {
     this.validateBrowserSettings(config)
     this.validateNetworkSettings(config)
     this.validateWorkerSettings(config)
+    this.validateExecutionSettings(config)
     this.validateSearchSettings(config)
     this.validateHumanizationSettings(config)
     this.validateSecuritySettings(config)
@@ -480,6 +481,58 @@ export class StartupValidator {
         'workers',
         'bundleDailySetWithSearch is enabled but doDesktopSearch is disabled',
         'Desktop search will not run after Daily Set. Enable doDesktopSearch or disable bundling.'
+      )
+    }
+  }
+
+  private validateExecutionSettings(config: Config): void {
+    // Validate passesPerRun
+    const passes = config.passesPerRun ?? 1
+    
+    if (passes < 1) {
+      this.addError(
+        'execution',
+        'passesPerRun must be at least 1',
+        'Set passesPerRun to 1 or higher in config.jsonc',
+        undefined,
+        true
+      )
+    }
+
+    if (passes > 5) {
+      this.addWarning(
+        'execution',
+        `passesPerRun is set to ${passes} (very high)`,
+        'Running multiple passes per day may trigger Microsoft detection. Recommended: 1-2 passes max',
+        'docs/config-reference.md'
+      )
+    }
+
+    if (passes > 1) {
+      this.addWarning(
+        'execution',
+        'passesPerRun > 1: Job-state skip is disabled',
+        'All accounts will run on every pass, even if already completed. This is intentional for multiple passes.',
+        'docs/jobstate.md'
+      )
+    }
+
+    // Validate clusters
+    if (config.clusters < 1) {
+      this.addError(
+        'execution',
+        'clusters must be at least 1',
+        'Set clusters to 1 or higher in config.jsonc',
+        undefined,
+        true
+      )
+    }
+
+    if (config.clusters > 10) {
+      this.addWarning(
+        'execution',
+        `clusters is set to ${config.clusters} (very high)`,
+        'Too many clusters may cause resource exhaustion. Recommended: 1-4 clusters'
       )
     }
   }

@@ -225,7 +225,17 @@ export class MicrosoftRewardsBot {
                 this.runWorker()
             }
         } else {
-            await this.runTasks(this.accounts)
+            const passes = this.config.passesPerRun ?? 1
+            for (let pass = 1; pass <= passes; pass++) {
+                if (passes > 1) {
+                    log('main', 'MAIN', `Starting pass ${pass}/${passes}`)
+                }
+                await this.runTasks(this.accounts)
+                if (pass < passes) {
+                    log('main', 'MAIN', `Completed pass ${pass}/${passes}. Waiting before next pass...`)
+                    await this.utils.wait(60000) // 1 minute between passes
+                }
+            }
         }
     }
 
@@ -515,7 +525,17 @@ export class MicrosoftRewardsBot {
         log('main', 'MAIN-WORKER', `Worker ${process.pid} spawned`)
         // Receive the chunk of accounts from the master
     ;(process as unknown as { on: (ev: 'message', cb: (m: { chunk: Account[] }) => void) => void }).on('message', async ({ chunk }: { chunk: Account[] }) => {
-            await this.runTasks(chunk)
+            const passes = this.config.passesPerRun ?? 1
+            for (let pass = 1; pass <= passes; pass++) {
+                if (passes > 1) {
+                    log('main', 'MAIN-WORKER', `Starting pass ${pass}/${passes}`)
+                }
+                await this.runTasks(chunk)
+                if (pass < passes) {
+                    log('main', 'MAIN-WORKER', `Completed pass ${pass}/${passes}. Waiting before next pass...`)
+                    await this.utils.wait(60000) // 1 minute between passes
+                }
+            }
         })
     }
 
