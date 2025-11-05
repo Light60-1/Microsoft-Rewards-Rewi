@@ -149,11 +149,14 @@
 
     // Updates
     "update": {
-        "git": true,
-        "docker": false,
+        "enabled": true, // Enable automatic updates (default: true)
+        "method": "github-api", // Update method: "git" or "github-api" (recommended: "github-api")
+        // "git" = Uses Git commands (requires Git installed, can have conflicts)
+        // "github-api" = Downloads ZIP from GitHub (no Git needed, no conflicts, recommended)
+        "docker": false, // Update Docker containers if using Docker
         "scriptPath": "setup/update/update.mjs",
-        "autoUpdateConfig": true,
-        "autoUpdateAccounts": false
+        "autoUpdateConfig": false, // Update config.jsonc from remote (keeps your settings if false)
+        "autoUpdateAccounts": false // Update accounts file from remote (NEVER recommended, keeps your accounts)
     },
 
     // Scheduling (automatic task scheduling)
