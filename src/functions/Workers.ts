@@ -213,6 +213,14 @@ export class Workers {
     private async executeActivity(page: Page, activity: PromotionalItem | MorePromotion, selector: string, throttle: AdaptiveThrottler, retry: Retry): Promise<void> {
         this.bot.log(this.bot.isMobile, 'ACTIVITY', `Found activity type: "${this.bot.activities.getTypeLabel(activity)}" title: "${activity.title}"`)
         
+        // Check if element exists before clicking (avoid 30s timeout)
+        try {
+            await page.waitForSelector(selector, { timeout: 5000 })
+        } catch (error) {
+            this.bot.log(this.bot.isMobile, 'ACTIVITY', `Activity selector not found (might be completed or unavailable): ${selector}`, 'warn')
+            return // Skip this activity gracefully instead of waiting 30s
+        }
+
         await page.click(selector)
         page = await this.bot.browser.utils.getLatestTab(page)
 

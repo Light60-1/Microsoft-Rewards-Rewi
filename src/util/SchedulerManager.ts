@@ -65,8 +65,10 @@ export class SchedulerManager {
       fs.mkdirSync(logDir, { recursive: true })
     }
 
-    // Build cron command
-    const cronCommand = `${schedule} cd ${workingDir} && ${nodePath} ${path.join(workingDir, 'dist', 'index.js')} >> ${logFile} 2>&1`
+    // Build cron command with proper PATH and error handling
+    // Important: Cron runs with minimal environment, so we need to set PATH explicitly
+    const nodeDir = path.dirname(nodePath)
+    const cronCommand = `${schedule} export PATH=${nodeDir}:/usr/local/bin:/usr/bin:/bin:$PATH && cd "${workingDir}" && "${nodePath}" "${path.join(workingDir, 'dist', 'index.js')}" >> "${logFile}" 2>&1`
 
     try {
       // Check if cron is installed
@@ -75,6 +77,14 @@ export class SchedulerManager {
       } catch {
         log('main', 'SCHEDULER', 'cron is not installed. Please install it first: sudo apt-get install cron', 'error')
         return
+      }
+
+      // Check if cron service is running (critical!)
+      try {
+        execSync('pgrep -x cron > /dev/null || pgrep -x crond > /dev/null', { stdio: 'ignore' })
+      } catch {
+        log('main', 'SCHEDULER', '⚠️  WARNING: cron service is not running! Start it with: sudo service cron start', 'warn')
+        log('main', 'SCHEDULER', 'Jobs will be configured but won\'t execute until cron service is started', 'warn')
       }
 
       // Get current crontab
@@ -113,8 +123,11 @@ export class SchedulerManager {
 
       log('main', 'SCHEDULER', '✅ Cron job configured successfully', 'log', 'green')
       log('main', 'SCHEDULER', `Schedule: ${schedule}`, 'log')
+      log('main', 'SCHEDULER', `Working directory: ${workingDir}`, 'log')
+      log('main', 'SCHEDULER', `Node path: ${nodePath}`, 'log')
       log('main', 'SCHEDULER', `Log file: ${logFile}`, 'log')
-      log('main', 'SCHEDULER', 'View jobs: crontab -l', 'log')
+      log('main', 'SCHEDULER', 'View configured jobs: crontab -l', 'log')
+      log('main', 'SCHEDULER', 'Check cron logs: sudo tail -f /var/log/syslog | grep CRON', 'log')
     } catch (error) {
       log('main', 'SCHEDULER', `Failed to configure cron: ${error instanceof Error ? error.message : String(error)}`, 'error')
     }

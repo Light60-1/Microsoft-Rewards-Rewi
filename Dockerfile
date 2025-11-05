@@ -8,12 +8,10 @@ WORKDIR /usr/src/microsoft-rewards-script
 ENV PLAYWRIGHT_BROWSERS_PATH=0
 
 # Copy package files
-COPY package.json tsconfig.json ./
+COPY package.json package-lock.json tsconfig.json ./
 
-# Generate fresh lockfile for target platform architecture
-# This ensures native dependencies are resolved correctly
-RUN npm install --ignore-scripts --package-lock-only \
-    && npm ci --ignore-scripts
+# Install all dependencies required to build the script
+RUN npm ci --ignore-scripts
 
 # Copy source and build
 COPY . .

@@ -497,7 +497,10 @@ export class MicrosoftRewardsBot {
                         log('main', 'CONCLUSION', `Failed to send conclusion: ${e instanceof Error ? e.message : String(e)}`, 'warn')
                     }
                     try {
-                        await this.runAutoUpdate()
+                        const updateCode = await this.runAutoUpdate()
+                        if (updateCode === 0) {
+                            log('main', 'UPDATE', '✅ Update successful - next run will use new version', 'log', 'green')
+                        }
                     } catch (e) {
                         log('main', 'UPDATE', `Auto-update failed: ${e instanceof Error ? e.message : String(e)}`, 'warn')
                     }
@@ -750,9 +753,19 @@ export class MicrosoftRewardsBot {
             // Single process mode -> build and send conclusion directly
             await this.sendConclusion(this.accountSummaries)
             // After conclusion, run optional auto-update
-            await this.runAutoUpdate().catch((e) => {
+            const updateResult = await this.runAutoUpdate().catch((e) => {
                 log('main', 'UPDATE', `Auto-update failed: ${e instanceof Error ? e.message : String(e)}`, 'warn')
+                return 1 // Error code
             })
+            
+            // If update was successful (code 0), restart the script to use the new version
+            // This is critical for cron jobs - they need to apply updates immediately
+            if (updateResult === 0) {
+                log('main', 'UPDATE', '✅ Update successful - restarting with new version...', 'log', 'green')
+                // On Raspberry Pi/Linux with cron, just exit - cron will handle next run
+                // No need to restart immediately, next scheduled run will use new code
+                log('main', 'UPDATE', 'Next scheduled run will use the updated code', 'log')
+            }
         }
         process.exit()
     }
@@ -1181,24 +1194,24 @@ export class MicrosoftRewardsBot {
     }
 
     // Run optional auto-update script based on configuration flags.
-    private async runAutoUpdate(): Promise<void> {
+    private async runAutoUpdate(): Promise<number> {
         const upd = this.config.update
-        if (!upd) return
+        if (!upd) return 0
         const scriptRel = upd.scriptPath || 'setup/update/update.mjs'
         const scriptAbs = path.join(process.cwd(), scriptRel)
-        if (!fs.existsSync(scriptAbs)) return
+        if (!fs.existsSync(scriptAbs)) return 0
 
         const args: string[] = []
         // Git update is enabled by default (unless explicitly set to false)
         if (upd.git !== false) args.push('--git')
         if (upd.docker) args.push('--docker')
-        if (args.length === 0) return
+        if (args.length === 0) return 0
 
-        // Run update script as a child process - it will handle its own exit
-        await new Promise<void>((resolve) => {
+        // Run update script as a child process and capture exit code
+        return new Promise<number>((resolve) => {
             const child = spawn(process.execPath, [scriptAbs, ...args], { stdio: 'inherit' })
-            child.on('close', () => resolve())
-            child.on('error', () => resolve())
+            child.on('close', (code) => resolve(code ?? 0))
+            child.on('error', () => resolve(1))
         })
     }
 

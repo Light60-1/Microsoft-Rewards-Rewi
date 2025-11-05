@@ -105,45 +105,53 @@ export class Login {
       const isLinux = process.platform === 'linux'
       const navigationTimeout = isLinux ? 60000 : 30000
       
-      // Try initial navigation with error handling for chrome-error interruption
+      // IMPROVEMENT: Try initial navigation with better error handling
       let navigationSucceeded = false
       let recoveryUsed = false
-      try {
-        await page.goto('https://www.bing.com/rewards/dashboard', { 
-          waitUntil: 'domcontentloaded',
-          timeout: navigationTimeout
-        })
-        navigationSucceeded = true
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error)
-        
-        // If interrupted by chrome-error, retry with reload approach
-        if (errorMsg.includes('chrome-error://chromewebdata/')) {
-          this.bot.log(this.bot.isMobile, 'LOGIN', 'Navigation interrupted by chrome-error, attempting recovery...', 'warn')
+      let attempts = 0
+      const maxAttempts = 3
+      
+      while (!navigationSucceeded && attempts < maxAttempts) {
+        attempts++
+        try {
+          await page.goto('https://www.bing.com/rewards/dashboard', { 
+            waitUntil: 'domcontentloaded',
+            timeout: navigationTimeout
+          })
+          navigationSucceeded = true
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error)
           
-          // Wait a bit for page to settle
-          await this.bot.utils.wait(1000)
-          
-          // Try reload which usually fixes the issue
-          try {
-            await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
-            navigationSucceeded = true
-            recoveryUsed = true
-            this.bot.log(this.bot.isMobile, 'LOGIN', 'Recovery successful via reload')
-          } catch (reloadError) {
-            // Last resort: try goto again
-            this.bot.log(this.bot.isMobile, 'LOGIN', 'Reload failed, trying fresh navigation...', 'warn')
-            await this.bot.utils.wait(1500)
-            await page.goto('https://www.bing.com/rewards/dashboard', { 
-              waitUntil: 'domcontentloaded',
-              timeout: navigationTimeout
-            })
-            navigationSucceeded = true
-            this.bot.log(this.bot.isMobile, 'LOGIN', 'Recovery successful via fresh navigation')
+          // If interrupted by chrome-error, retry with reload approach
+          if (errorMsg.includes('chrome-error://chromewebdata/')) {
+            this.bot.log(this.bot.isMobile, 'LOGIN', `Navigation interrupted by chrome-error (attempt ${attempts}/${maxAttempts}), attempting recovery...`, 'warn')
+            
+            // Wait a bit for page to settle
+            await this.bot.utils.wait(1500) // Increased from 1000ms
+            
+            // Try reload which usually fixes the issue
+            try {
+              await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
+              navigationSucceeded = true
+              recoveryUsed = true
+              this.bot.log(this.bot.isMobile, 'LOGIN', '✓ Recovery successful via reload')
+            } catch (reloadError) {
+              // Last resort: try goto again
+              if (attempts < maxAttempts) {
+                this.bot.log(this.bot.isMobile, 'LOGIN', `Reload failed (attempt ${attempts}/${maxAttempts}), trying fresh navigation...`, 'warn')
+                await this.bot.utils.wait(2000) // Increased from 1500ms
+              } else {
+                throw reloadError // Exhausted attempts
+              }
+            }
+          } else if (attempts < maxAttempts) {
+            // Different error, retry with backoff
+            this.bot.log(this.bot.isMobile, 'LOGIN', `Navigation failed (attempt ${attempts}/${maxAttempts}): ${errorMsg}`, 'warn')
+            await this.bot.utils.wait(2000 * attempts) // Exponential backoff
+          } else {
+            // Exhausted attempts, rethrow
+            throw error
           }
-        } else {
-          // Different error, rethrow
-          throw error
         }
       }
       
@@ -511,37 +519,55 @@ export class Login {
   private async inputEmail(page: Page, email: string) {
     // Check for passkey prompts first
     await this.handlePasskeyPrompts(page, 'main')
-    await this.bot.utils.wait(250)
+    await this.bot.utils.wait(500) // Increased from 250ms
+    
+    // IMPROVEMENT: Wait for page to be fully ready before looking for email field
+    await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {})
+    await this.bot.utils.wait(300) // Extra settling time
 
     if (await this.tryAutoTotp(page, 'pre-email check')) {
-      await this.bot.utils.wait(800)
+      await this.bot.utils.wait(1000) // Increased from 800ms
     }
     
-    let field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 5000 }).catch(()=>null)
+    // IMPROVEMENT: More retries with better timing
+    let field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 8000 }).catch(()=>null) // Increased from 5000ms
     if (!field) {
+      this.bot.log(this.bot.isMobile, 'LOGIN', 'Email field not found (first attempt), retrying...', 'warn')
+      
       const totpHandled = await this.tryAutoTotp(page, 'pre-email challenge')
       if (totpHandled) {
-        await this.bot.utils.wait(800)
-        field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 5000 }).catch(()=>null)
+        await this.bot.utils.wait(1200) // Increased from 800ms
+        field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 8000 }).catch(()=>null)
       }
     }
 
     if (!field) {
       // Try one more time after handling possible passkey prompts
+      this.bot.log(this.bot.isMobile, 'LOGIN', 'Email field not found (second attempt), trying passkey/reload...', 'warn')
       await this.handlePasskeyPrompts(page, 'main')
-      await this.bot.utils.wait(500)
+      await this.bot.utils.wait(800) // Increased from 500ms
+      
+      // IMPROVEMENT: Try page reload if field still missing (common issue on first load)
+      const content = await page.content().catch(() => '')
+      if (content.length < 1000) {
+        this.bot.log(this.bot.isMobile, 'LOGIN', 'Page content too small, reloading...', 'warn')
+        await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {})
+        await this.bot.utils.wait(1500)
+      }
+      
       const totpRetry = await this.tryAutoTotp(page, 'pre-email retry')
       if (totpRetry) {
-        await this.bot.utils.wait(800)
+        await this.bot.utils.wait(1200) // Increased from 800ms
       }
-      field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 3000 }).catch(()=>null)
+      
+      field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 5000 }).catch(()=>null)
       if (!field && this.totpAttempts > 0) {
-        await this.bot.utils.wait(2000)
-        field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 3000 }).catch(()=>null)
+        await this.bot.utils.wait(2500) // Increased from 2000ms
+        field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 5000 }).catch(()=>null) // Increased from 3000ms
       }
       if (!field) {
-        this.bot.log(this.bot.isMobile, 'LOGIN', 'Email field not present', 'warn')
-        return
+        this.bot.log(this.bot.isMobile, 'LOGIN', 'Email field not present after all retries', 'error')
+        throw new Error('Login form email field not found after multiple attempts')
       }
     }
     
