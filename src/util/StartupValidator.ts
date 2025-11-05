@@ -317,13 +317,11 @@ export class StartupValidator {
       )
     }
 
-    // Time sync warning for TOTP users
+    // Time sync info for TOTP users (informational, not a problem)
     if (process.platform === 'linux') {
-      this.addWarning(
-        'environment',
-        'Linux detected: Ensure system time is synchronized',
-        'Run: sudo timedatectl set-ntp true (required for TOTP to work correctly)'
-      )
+      // This is just informational - not displayed as warning
+      log('main', 'VALIDATION', '💡 Linux detected: Ensure system time is synchronized for TOTP')
+      log('main', 'VALIDATION', '   Suggestion: Run: sudo timedatectl set-ntp true (required for TOTP to work correctly)')
     }
   }
 
@@ -509,12 +507,10 @@ export class StartupValidator {
     }
 
     if (passes > 1) {
-      this.addWarning(
-        'execution',
-        'passesPerRun > 1: Job-state skip is disabled',
-        'All accounts will run on every pass, even if already completed. This is intentional for multiple passes.',
-        'docs/jobstate.md'
-      )
+      // This is intentional behavior confirmation, not a warning
+      log('main', 'VALIDATION', `✓ [OK] passesPerRun = ${passes}: Job-state skip is disabled (intentional)`)
+      log('main', 'VALIDATION', '   Suggestion: All accounts will run on every pass, even if already completed. This is intentional for multiple passes.')
+      log('main', 'VALIDATION', '   Docs: docs/jobstate.md')
     }
 
     // Validate clusters
@@ -739,16 +735,18 @@ export class StartupValidator {
     if (this.errors.length === 0 && this.warnings.length === 0) {
       log('main', 'VALIDATION', chalk.green('✅ All validation checks passed!'))
     } else {
-      log('main', 'VALIDATION', `Found: ${this.errors.length} error(s) | ${this.warnings.length} warning(s)`)
+      const errorLabel = this.errors.length === 1 ? 'error' : 'errors'
+      const warningLabel = this.warnings.length === 1 ? 'warning' : 'warnings'
+      log('main', 'VALIDATION', `[${this.errors.length > 0 ? 'ERROR' : 'OK'}] Found: ${this.errors.length} ${errorLabel} | ${this.warnings.length} ${warningLabel}`)
       
       if (this.errors.length > 0) {
         log('main', 'VALIDATION', 'Bot will continue, but issues may cause failures', 'warn')
-      } else {
+        log('main', 'VALIDATION', 'Full documentation: docs/index.md')
+        await new Promise(resolve => setTimeout(resolve, 3000))
+      } else if (this.warnings.length > 0) {
         log('main', 'VALIDATION', 'Warnings detected - review recommended', 'warn')
+        await new Promise(resolve => setTimeout(resolve, 2000))
       }
-      
-      log('main', 'VALIDATION', 'Full documentation: docs/index.md')
-      await new Promise(resolve => setTimeout(resolve, 3000))
     }
   }
 }
