@@ -225,39 +225,56 @@ export class Login {
     const isLinux = process.platform === 'linux'
     const navigationTimeout = isLinux ? 60000 : 30000
     
-    // Try initial navigation with error handling
     let navigationSucceeded = false
     let recoveryUsed = false
-    try {
-      await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: navigationTimeout })
-      navigationSucceeded = true
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      
-      if (errorMsg.includes('chrome-error://chromewebdata/')) {
-        this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'OAuth navigation interrupted, attempting recovery...', 'warn')
-        await this.bot.utils.wait(1000)
+    let attempts = 0
+    const maxAttempts = 3
+    
+    while (!navigationSucceeded && attempts < maxAttempts) {
+      attempts++
+      try {
+        await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: navigationTimeout })
+        navigationSucceeded = true
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error)
         
-        try {
-          await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
-          navigationSucceeded = true
-          recoveryUsed = true
-          this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'OAuth recovery successful')
-        } catch (reloadError) {
+        if (errorMsg.includes('chrome-error://chromewebdata/')) {
+          this.bot.log(this.bot.isMobile, 'LOGIN-APP', `OAuth navigation interrupted by chrome-error (attempt ${attempts}/${maxAttempts}), recovering...`, 'warn')
           await this.bot.utils.wait(1500)
-          await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: navigationTimeout })
-          navigationSucceeded = true
+          
+          try {
+            await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
+            navigationSucceeded = true
+            recoveryUsed = true
+            this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'OAuth recovery successful')
+          } catch (reloadError) {
+            if (attempts < maxAttempts) {
+              this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Reload failed (attempt ${attempts}/${maxAttempts}), retrying...`, 'warn')
+              await this.bot.utils.wait(2000)
+            } else {
+              throw reloadError
+            }
+          }
+        } else if (errorMsg.includes('ERR_PROXY_CONNECTION_FAILED') || errorMsg.includes('ERR_TUNNEL_CONNECTION_FAILED')) {
+          this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Proxy connection failed (attempt ${attempts}/${maxAttempts}): ${errorMsg}`, 'warn')
+          if (attempts < maxAttempts) {
+            await this.bot.utils.wait(3000 * attempts)
+          } else {
+            throw new Error('Proxy connection failed for OAuth - check proxy configuration')
+          }
+        } else if (attempts < maxAttempts) {
+          this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Navigation failed (attempt ${attempts}/${maxAttempts}): ${errorMsg}`, 'warn')
+          await this.bot.utils.wait(2000 * attempts)
+        } else {
+          throw error
         }
-      } else {
-        throw error
       }
     }
     
     if (!navigationSucceeded) {
-      throw new Error('Failed to navigate to OAuth page')
+      throw new Error('Failed to navigate to OAuth page after multiple attempts')
     }
     
-    // Only check HTTP 400 if recovery was NOT used
     if (!recoveryUsed) {
       await this.bot.utils.wait(500)
       const content = await page.content().catch(() => '')
@@ -1188,18 +1205,119 @@ export class Login {
   private async verifyBingContext(page: Page) {
     try {
       this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Verifying Bing auth context')
-      await page.goto('https://www.bing.com/fd/auth/signin?action=interactive&provider=windows_live_id&return_url=https%3A%2F%2Fwww.bing.com%2F')
-      for (let i=0;i<5;i++) {
-        const u = new URL(page.url())
-        if (u.hostname === 'www.bing.com' && u.pathname === '/') {
-          await this.bot.browser.utils.tryDismissAllMessages(page)
-          const ok = await page.waitForSelector('#id_n', { timeout: 3000 }).then(()=>true).catch(()=>false)
-          if (ok || this.bot.isMobile) { this.bot.log(this.bot.isMobile,'LOGIN-BING','Bing verification passed'); break }
+      
+      const isLinux = process.platform === 'linux'
+      const navigationTimeout = isLinux ? 60000 : 30000
+      const verificationUrl = 'https://www.bing.com/fd/auth/signin?action=interactive&provider=windows_live_id&return_url=https%3A%2F%2Fwww.bing.com%2F'
+      
+      let navigationSucceeded = false
+      let attempts = 0
+      const maxAttempts = 3
+      
+      while (!navigationSucceeded && attempts < maxAttempts) {
+        attempts++
+        try {
+          await page.goto(verificationUrl, { 
+            waitUntil: 'domcontentloaded',
+            timeout: navigationTimeout 
+          })
+          navigationSucceeded = true
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error)
+          
+          if (errorMsg.includes('chrome-error://chromewebdata/')) {
+            this.bot.log(this.bot.isMobile, 'LOGIN-BING', `Bing verification interrupted by chrome-error (attempt ${attempts}/${maxAttempts}), recovering...`, 'warn')
+            await this.bot.utils.wait(1500)
+            
+            try {
+              await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
+              navigationSucceeded = true
+              this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Bing verification recovery successful')
+            } catch (reloadError) {
+              if (attempts < maxAttempts) {
+                this.bot.log(this.bot.isMobile, 'LOGIN-BING', `Reload failed (attempt ${attempts}/${maxAttempts}), retrying navigation...`, 'warn')
+                await this.bot.utils.wait(2000)
+              } else {
+                throw reloadError
+              }
+            }
+          } else if (errorMsg.includes('ERR_PROXY_CONNECTION_FAILED') || errorMsg.includes('ERR_TUNNEL_CONNECTION_FAILED')) {
+            this.bot.log(this.bot.isMobile, 'LOGIN-BING', `Proxy connection failed (attempt ${attempts}/${maxAttempts}): ${errorMsg}`, 'warn')
+            if (attempts < maxAttempts) {
+              await this.bot.utils.wait(3000 * attempts)
+            } else {
+              throw new Error('Proxy connection failed for Bing verification - check proxy configuration')
+            }
+          } else if (attempts < maxAttempts) {
+            this.bot.log(this.bot.isMobile, 'LOGIN-BING', `Navigation failed (attempt ${attempts}/${maxAttempts}): ${errorMsg}`, 'warn')
+            await this.bot.utils.wait(2000 * attempts)
+          } else {
+            throw error
+          }
         }
+      }
+      
+      if (!navigationSucceeded) {
+        this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Bing verification navigation failed after multiple attempts', 'warn')
+        return
+      }
+      
+      await this.bot.utils.wait(800)
+      const content = await page.content().catch(() => '')
+      const hasHttp400 = content.includes('HTTP ERROR 400') || 
+                        content.includes('This page isn\'t working') ||
+                        content.includes('Cette page ne fonctionne pas')
+      
+      if (hasHttp400) {
+        this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'HTTP 400 detected during Bing verification, reloading...', 'warn')
+        await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout }).catch(logError('LOGIN-BING', 'Reload after HTTP 400 failed', this.bot.isMobile))
         await this.bot.utils.wait(1000)
       }
+      
+      const maxIterations = this.bot.isMobile ? 8 : 10
+      for (let i = 0; i < maxIterations; i++) {
+        const u = new URL(page.url())
+        
+        if (u.hostname === 'www.bing.com' && u.pathname === '/') {
+          await this.bot.browser.utils.tryDismissAllMessages(page)
+          
+          const ok = await page.waitForSelector('#id_n', { timeout: 3000 }).then(() => true).catch(() => false)
+          if (ok) {
+            this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Bing verification passed (user profile detected)')
+            return
+          }
+          
+          if (this.bot.isMobile) {
+            this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Bing verification passed (mobile mode - profile check skipped)')
+            return
+          }
+        }
+        
+        if (u.hostname.includes('login.live.com') || u.hostname.includes('login.microsoftonline.com')) {
+          await this.handlePasskeyPrompts(page, 'main')
+          await this.tryAutoTotp(page, 'bing-verification')
+        }
+        
+        const waitTime = i < 3 ? 1000 : 1500
+        await this.bot.utils.wait(waitTime)
+      }
+      
+      const finalUrl = page.url()
+      if (finalUrl.includes('www.bing.com')) {
+        this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Bing verification completed (on Bing domain, assuming success)')
+      } else {
+        this.bot.log(this.bot.isMobile, 'LOGIN-BING', `Bing verification uncertain - final URL: ${finalUrl}`, 'warn')
+      }
+      
     } catch (e) {
-      this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Bing verification error: '+e, 'warn')
+      const errorMsg = e instanceof Error ? e.message : String(e)
+      this.bot.log(this.bot.isMobile, 'LOGIN-BING', `Bing verification error: ${errorMsg}`, 'warn')
+      
+      if (errorMsg.includes('Proxy connection failed')) {
+        this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Skipping Bing verification due to proxy issues - continuing anyway', 'warn')
+      } else {
+        this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Bing verification failed but continuing login process', 'warn')
+      }
     }
   }
 
