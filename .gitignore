@@ -5,6 +5,7 @@ node_modules/
 .github/
 diagnostics/
 reports/
+accounts-created/
 accounts.json
 accounts.jsonc
 notes

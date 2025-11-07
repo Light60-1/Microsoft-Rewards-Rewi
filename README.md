@@ -150,6 +150,36 @@ npm run buy 1  # By account number
 
 ---
 
+## 🆕 Account Creator
+
+Automatically create new Microsoft accounts with referral link support:
+
+```bash
+# Create account without referral
+npm run creator
+
+# Create account with your referral link
+npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE&ref=rafsrchae
+```
+
+**Features:**
+- 🎯 Language-independent (works in any language)
+- 🔐 Generates strong passwords automatically
+- 📧 Creates unique email addresses
+- 🎂 Realistic birthdates (18-50 years old)
+- 🤖 CAPTCHA support (manual solving required)
+- 💾 Saves all account details to `accounts-created/` directory
+
+**What happens:**
+1. Opens browser to Microsoft signup page
+2. Automatically fills email, password, birthdate, and name
+3. Waits for you to solve CAPTCHA
+4. Saves complete account info to file
+
+**[📖 Full Account Creator Guide](src/account-creation/README.md)**
+
+---
+
 ## ⏰ Automatic Scheduling
 
 Configure automatic task scheduling directly from `config.jsonc` - **perfect for Raspberry Pi!**
