@@ -187,32 +187,6 @@ apiRouter.post('/restart', async (_req: Request, res: Response): Promise<void> =
   }
 })
 
-// POST /api/sync/:email - Force sync single account (deprecated - use full bot restart)
-apiRouter.post('/sync/:email', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { email } = req.params
-    if (!email) {
-      res.status(400).json({ error: 'Email parameter required' })
-      return
-    }
-
-    const accounts = loadAccounts()
-    const account = accounts.find(a => a.email === email)
-    
-    if (!account) {
-      res.status(404).json({ error: 'Account not found' })
-      return
-    }
-
-    res.status(501).json({ 
-      error: 'Single account sync not implemented. Please use restart bot instead.',
-      suggestion: 'Use /api/restart endpoint to run all accounts'
-    })
-  } catch (error) {
-    res.status(500).json({ error: getErr(error) })
-  }
-})
-
 // GET /api/metrics - Basic metrics
 apiRouter.get('/metrics', (_req: Request, res: Response) => {
   try {

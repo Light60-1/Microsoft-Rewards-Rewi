@@ -471,21 +471,15 @@ export async function loadSessionData(sessionPath: string, email: string, isMobi
             cookies = JSON.parse(cookiesData)
         }
 
-        // Fetch fingerprint file (support both legacy typo "fingerpint" and corrected "fingerprint")
-        // NOTE: "fingerpint" is a historical typo that must be maintained for backwards compatibility
-        // with existing session files. We check for the corrected name first, then fall back to the typo.
+        // Fetch fingerprint file
         const baseDir = path.join(__dirname, '../browser/', sessionPath, email)
-        const legacyFile = path.join(baseDir, `${isMobile ? 'mobile_fingerpint' : 'desktop_fingerpint'}.json`)
-        const correctFile = path.join(baseDir, `${isMobile ? 'mobile_fingerprint' : 'desktop_fingerprint'}.json`)
+        const fingerprintFile = path.join(baseDir, `${isMobile ? 'mobile_fingerprint' : 'desktop_fingerprint'}.json`)
 
         let fingerprint!: BrowserFingerprintWithHeaders
         const shouldLoad = (saveFingerprint.desktop && !isMobile) || (saveFingerprint.mobile && isMobile)
-        if (shouldLoad) {
-            const chosen = fs.existsSync(correctFile) ? correctFile : (fs.existsSync(legacyFile) ? legacyFile : '')
-            if (chosen) {
-                const fingerprintData = await fs.promises.readFile(chosen, 'utf-8')
-                fingerprint = JSON.parse(fingerprintData)
-            }
+        if (shouldLoad && fs.existsSync(fingerprintFile)) {
+            const fingerprintData = await fs.promises.readFile(fingerprintFile, 'utf-8')
+            fingerprint = JSON.parse(fingerprintData)
         }
 
         return {
@@ -532,19 +526,10 @@ export async function saveFingerprintData(sessionPath: string, email: string, is
             await fs.promises.mkdir(sessionDir, { recursive: true })
         }
 
-        // Save fingerprint to files (write both legacy and corrected names for compatibility)
-        // NOTE: Writing to both "fingerpint" (typo) and "fingerprint" (correct) ensures backwards
-        // compatibility with older bot versions that expect the typo filename.
-        const legacy = path.join(sessionDir, `${isMobile ? 'mobile_fingerpint' : 'desktop_fingerpint'}.json`)
-        const correct = path.join(sessionDir, `${isMobile ? 'mobile_fingerprint' : 'desktop_fingerprint'}.json`)
+        // Save fingerprint to file
+        const fingerprintPath = path.join(sessionDir, `${isMobile ? 'mobile_fingerprint' : 'desktop_fingerprint'}.json`)
         const payload = JSON.stringify(fingerprint)
-        await fs.promises.writeFile(correct, payload)
-        try { 
-            await fs.promises.writeFile(legacy, payload) 
-        } catch (e) { 
-            // Legacy file write failed - not critical since correct file was written
-            // Silently continue to maintain compatibility
-        }
+        await fs.promises.writeFile(fingerprintPath, payload)
 
         return sessionDir
     } catch (error) {
