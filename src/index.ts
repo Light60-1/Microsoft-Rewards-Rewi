@@ -226,7 +226,7 @@ export class MicrosoftRewardsBot {
                 if (passes > 1) {
                     log('main', 'MAIN', `Starting pass ${pass}/${passes}`)
                 }
-                await this.runTasks(this.accounts)
+                await this.runTasks(this.accounts, pass, passes)
                 if (pass < passes) {
                     log('main', 'MAIN', `Completed pass ${pass}/${passes}. Waiting before next pass...`)
                     await this.utils.wait(TIMEOUTS.ONE_MINUTE)
@@ -376,7 +376,7 @@ export class MicrosoftRewardsBot {
                 if (passes > 1) {
                     log('main', 'MAIN-WORKER', `Starting pass ${pass}/${passes}`)
                 }
-                await this.runTasks(chunk)
+                await this.runTasks(chunk, pass, passes)
                 if (pass < passes) {
                     log('main', 'MAIN-WORKER', `Completed pass ${pass}/${passes}. Waiting before next pass...`)
                     await this.utils.wait(TIMEOUTS.ONE_MINUTE)
@@ -385,12 +385,14 @@ export class MicrosoftRewardsBot {
         })
     }
 
-    private async runTasks(accounts: Account[]) {
+    private async runTasks(accounts: Account[], currentPass: number = 1, totalPasses: number = 1) {
         // Check if all accounts are already completed and prompt user
+        // BUT skip this check for multi-pass runs (passes > 1) OR if not on first pass
         const accountDayKey = this.utils.getFormattedDate()
         const allCompleted = accounts.every(acc => this.shouldSkipAccount(acc.email, accountDayKey))
         
-        if (allCompleted && accounts.length > 0) {
+        // Only check completion on first pass and if not doing multiple passes
+        if (allCompleted && accounts.length > 0 && currentPass === 1 && totalPasses === 1) {
             log('main','TASK',`All accounts already completed on ${accountDayKey}`, 'warn', 'yellow')
             const shouldReset = await this.promptResetJobState()
             if (shouldReset) {
@@ -400,6 +402,10 @@ export class MicrosoftRewardsBot {
                 log('main','TASK','Keeping existing job state - exiting', 'log')
                 return
             }
+        } else if (allCompleted && accounts.length > 0 && currentPass > 1) {
+            // Multi-pass mode: clear job state for this pass to allow re-running
+            log('main','TASK',`Pass ${currentPass}/${totalPasses}: Clearing job state to allow account re-run`, 'log', 'cyan')
+            this.resetAllJobStates()
         }
 
         for (const account of accounts) {
@@ -414,9 +420,15 @@ export class MicrosoftRewardsBot {
                 break
             }
             const currentDayKey = this.utils.getFormattedDate()
+            // Note: shouldSkipAccount already returns false for multi-pass runs (passesPerRun > 1)
             if (this.shouldSkipAccount(account.email, currentDayKey)) {
                 log('main','TASK',`Skipping account ${account.email}: already completed on ${currentDayKey} (job-state resume)`, 'warn')
                 continue
+            }
+            
+            // Log pass info for multi-pass runs
+            if (totalPasses > 1) {
+                log('main','TASK',`[Pass ${currentPass}/${totalPasses}] Processing account ${account.email}`, 'log', 'cyan')
             }
             // Reset compromised state per account
             this.compromisedModeActive = false

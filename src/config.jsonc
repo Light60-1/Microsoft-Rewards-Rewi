@@ -151,7 +151,7 @@
         // "github-api" = Downloads ZIP from GitHub (no Git needed, no conflicts, recommended)
         "docker": false, // Update Docker containers if using Docker
         "scriptPath": "setup/update/update.mjs",
-        "autoUpdateConfig": false, // Update config.jsonc from remote (keeps your settings if false)
+        "autoUpdateConfig": true, // Update config.jsonc from remote (keeps your settings if false)
         "autoUpdateAccounts": false // Update accounts file from remote (NEVER recommended, keeps your accounts)
     },
 
