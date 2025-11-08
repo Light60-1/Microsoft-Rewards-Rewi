@@ -162,11 +162,7 @@ class Browser {
     }
 
     async generateFingerprint() {
-        const fingerPrintData = new FingerprintGenerator().getFingerprint({
-            devices: this.bot.isMobile ? ['mobile'] : ['desktop'],
-            operatingSystems: this.bot.isMobile ? ['android'] : ['windows'],
-            browsers: [{ name: 'edge' }]
-        })
+        const fingerPrintData = new FingerprintGenerator().getFingerprint()
 
         const updatedFingerPrintData = await updateFingerprintUserAgent(fingerPrintData, this.bot.isMobile)
 

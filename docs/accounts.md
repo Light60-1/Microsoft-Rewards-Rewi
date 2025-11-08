@@ -21,7 +21,7 @@
 }
 ```
 
-> ℹ️ `recoveryEmail` is still **recommended**. It lets the bot verify Microsoft’s masked hint during login and alert you if the recovery address ever changes. You can opt out per account by setting `"recoveryRequired": false`.
+> ℹ️ `recoveryEmail` is **optional but recommended**. It lets the bot verify Microsoft's masked hint during login and alert you if the recovery address ever changes. Simply leave it empty (`""`) if not needed.
 
 **That's it!** Run `npm start` to test.
 
@@ -60,9 +60,9 @@
 
 ---
 
-## 🚫 Skip the Recovery Email Check (Advanced)
+## 🚫 Skip the Recovery Email (Advanced)
 
-Most users should keep recovery validation enabled. If an account genuinely has no recovery address or you cannot disclose it, add `"recoveryRequired": false` to that entry. When disabled, the bot skips mismatch detection and logs a warning during startup validation.
+If an account genuinely has no recovery address or you prefer not to provide it, simply leave the `recoveryEmail` field empty:
 
 ```json
 {
@@ -70,13 +70,13 @@ Most users should keep recovery validation enabled. If an account genuinely has 
     {
       "email": "example@outlook.com",
       "password": "strong_password",
-      "recoveryRequired": false
+      "recoveryEmail": ""
     }
   ]
 }
 ```
 
-> ⚠️ Without a recovery email the bot cannot detect if Microsoft shows a different masked address. Enable this override only when you accept that risk.
+> ℹ️ The bot will automatically skip recovery validation when this field is empty. A warning will be logged during startup, but the bot will function normally.
 
 ---
 

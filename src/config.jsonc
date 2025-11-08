@@ -145,7 +145,7 @@
 
     // Updates
     "update": {
-        "enabled": true, // Enable automatic updates (default: true)
+        "enabled": true, // Enable automatic updates (default: true) - DISABLED to preserve custom modifications
         "method": "github-api", // Update method: "git" or "github-api" (recommended: "github-api")
         // "git" = Uses Git commands (requires Git installed, can have conflicts)
         // "github-api" = Downloads ZIP from GitHub (no Git needed, no conflicts, recommended)

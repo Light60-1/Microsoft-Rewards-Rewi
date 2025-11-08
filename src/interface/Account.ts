@@ -5,10 +5,8 @@ export interface Account {
     password: string;
     /** Optional TOTP secret in Base32 (e.g., from Microsoft Authenticator setup) */
     totp?: string;
-    /** Recovery email used during security challenge verification */
+    /** Recovery email used during security challenge verification. Leave empty if not needed. */
     recoveryEmail?: string;
-    /** Override to allow skipping recovery email checks for this account */
-    recoveryRequired?: boolean;
     proxy: AccountProxy;
 }
 

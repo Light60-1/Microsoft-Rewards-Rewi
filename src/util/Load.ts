@@ -379,27 +379,20 @@ export function loadAccounts(): Account[] {
             }
             a.email = String(a.email).trim()
             a.password = String(a.password)
-            const recoveryRequired = a.recoveryRequired !== false
-            a.recoveryRequired = recoveryRequired
 
-            if (recoveryRequired) {
-                if (typeof a.recoveryEmail !== 'string') {
-                    throw new Error(`account ${a.email || '<unknown>'} must include a recoveryEmail string (or set "recoveryRequired": false)`)
-                }
-                a.recoveryEmail = String(a.recoveryEmail).trim()
-                if (!a.recoveryEmail || !/@/.test(a.recoveryEmail)) {
-                    throw new Error(`account ${a.email} recoveryEmail must be a valid email address (got: "${a.recoveryEmail}") - set "recoveryRequired": false if not needed`)
-                }
-            } else {
-                if (typeof a.recoveryEmail === 'string' && a.recoveryEmail.trim() !== '') {
-                    const trimmed = a.recoveryEmail.trim()
+            // Simplified recovery email logic: if present and non-empty, validate it
+            if (typeof a.recoveryEmail === 'string') {
+                const trimmed = a.recoveryEmail.trim()
+                if (trimmed !== '') {
                     if (!/@/.test(trimmed)) {
-                        throw new Error(`account ${a.email} recoveryEmail must be a valid email address`)
+                        throw new Error(`account ${a.email} recoveryEmail must be a valid email address (got: "${trimmed}")`)
                     }
                     a.recoveryEmail = trimmed
                 } else {
                     a.recoveryEmail = undefined
                 }
+            } else {
+                a.recoveryEmail = undefined
             }
 
             if (!a.proxy || typeof a.proxy !== 'object') {
