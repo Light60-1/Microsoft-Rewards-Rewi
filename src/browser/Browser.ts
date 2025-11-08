@@ -18,9 +18,14 @@ class Browser {
         if (process.env.AUTO_INSTALL_BROWSERS === '1') {
             try {
                 const { execSync } = await import('child_process')
-                execSync('npx playwright install chromium', { stdio: 'ignore' })
+                // FIXED: Add timeout to prevent indefinite blocking
+                this.bot.log(this.bot.isMobile, 'BROWSER', 'Auto-installing Chromium...', 'log')
+                execSync('npx playwright install chromium', { stdio: 'ignore', timeout: 120000 })
+                this.bot.log(this.bot.isMobile, 'BROWSER', 'Chromium installed successfully', 'log')
             } catch (e) { 
-                this.bot.log(this.bot.isMobile, 'BROWSER', `Auto-install failed: ${e instanceof Error ? e.message : String(e)}`, 'warn')
+                // FIXED: Improved error logging (no longer silent)
+                const errorMsg = e instanceof Error ? e.message : String(e)
+                this.bot.log(this.bot.isMobile, 'BROWSER', `Auto-install failed: ${errorMsg}`, 'warn')
             }
         }
 

@@ -302,8 +302,13 @@ export class MicrosoftRewardsBot {
                 workerChunkMap.set(worker.id, chunk)
             }
             
-            (worker as unknown as { send?: (m: { chunk: Account[] }) => void }).send?.({ chunk })
+            // FIXED: Proper type checking before calling send
+            if (worker.send && typeof worker.send === 'function') {
+                worker.send({ chunk })
+            }
             worker.on('message', (msg: unknown) => {
+                // FIXED: Validate message structure before accessing properties
+                if (!msg || typeof msg !== 'object') return
                 const m = msg as { type?: string; data?: AccountSummary[] }
                 if (m && m.type === 'summary' && Array.isArray(m.data)) {
                     this.accountSummaries.push(...m.data)
@@ -666,38 +671,58 @@ export class MicrosoftRewardsBot {
         }
     }
 
-    /** Compute milliseconds to wait until within one of the allowed windows (HH:mm-HH:mm). Returns 0 if already inside. */
+    /**
+     * Compute milliseconds to wait until within one of the allowed windows (HH:mm-HH:mm).
+     * IMPROVED: Better documentation and validation
+     * 
+     * @param windows - Array of time window strings in format "HH:mm-HH:mm"
+     * @returns Milliseconds to wait (0 if already inside a window)
+     * 
+     * @example
+     * computeWaitForAllowedWindow(['09:00-17:00']) // Wait until 9 AM if outside window
+     * computeWaitForAllowedWindow(['22:00-02:00']) // Handles midnight crossing
+     */
     private computeWaitForAllowedWindow(windows: string[]): number {
         const now = new Date()
         const minsNow = now.getHours() * 60 + now.getMinutes()
         let nextStartMins: number | null = null
+        
         for (const w of windows) {
             const [start, end] = w.split('-')
             if (!start || !end) continue
-            const pStart = start.split(':').map(v=>parseInt(v,10))
-            const pEnd = end.split(':').map(v=>parseInt(v,10))
+            
+            const pStart = start.split(':').map(v => parseInt(v, 10))
+            const pEnd = end.split(':').map(v => parseInt(v, 10))
             if (pStart.length !== 2 || pEnd.length !== 2) continue
+            
             const sh = pStart[0]!, sm = pStart[1]!
             const eh = pEnd[0]!, em = pEnd[1]!
-            if ([sh,sm,eh,em].some(n=>Number.isNaN(n))) continue
-            const s = sh*60 + sm
-            const e = eh*60 + em
+            
+            // Validate hours and minutes ranges
+            if ([sh, sm, eh, em].some(n => Number.isNaN(n))) continue
+            if (sh < 0 || sh > 23 || eh < 0 || eh > 23) continue
+            if (sm < 0 || sm > 59 || em < 0 || em > 59) continue
+            
+            const s = sh * 60 + sm
+            const e = eh * 60 + em
+            
             if (s <= e) {
-                // same-day window
+                // Same-day window (e.g., 09:00-17:00)
                 if (minsNow >= s && minsNow <= e) return 0
                 if (minsNow < s) nextStartMins = Math.min(nextStartMins ?? s, s)
             } else {
-                // wraps past midnight (e.g., 22:00-02:00)
+                // Wraps past midnight (e.g., 22:00-02:00)
                 if (minsNow >= s || minsNow <= e) return 0
-                // next start today is s
                 nextStartMins = Math.min(nextStartMins ?? s, s)
             }
         }
-        const msPerMin = 60*1000
+        
+        const msPerMin = 60 * 1000
         if (nextStartMins != null) {
             const targetTodayMs = (nextStartMins - minsNow) * msPerMin
-            return targetTodayMs > 0 ? targetTodayMs : (24*60 + nextStartMins - minsNow) * msPerMin
+            return targetTodayMs > 0 ? targetTodayMs : (24 * 60 + nextStartMins - minsNow) * msPerMin
         }
+        
         // No valid windows parsed -> do not block
         return 0
     }
@@ -739,7 +764,12 @@ export class MicrosoftRewardsBot {
         await reporter.generateReport(summary)
     }
 
-    // Run optional auto-update script based on configuration flags.
+    /**
+     * Run optional auto-update script based on configuration flags
+     * IMPROVED: Added better documentation and error handling
+     * 
+     * @returns Exit code (0 = success, non-zero = error)
+     */
     private async runAutoUpdate(): Promise<number> {
         const upd = this.config.update
         if (!upd) return 0
@@ -752,7 +782,11 @@ export class MicrosoftRewardsBot {
         
         const scriptRel = upd.scriptPath || 'setup/update/update.mjs'
         const scriptAbs = path.join(process.cwd(), scriptRel)
-        if (!fs.existsSync(scriptAbs)) return 0
+        
+        if (!fs.existsSync(scriptAbs)) {
+            log('main', 'UPDATE', `Update script not found: ${scriptAbs}`, 'warn')
+            return 0
+        }
 
         const args: string[] = []
         
@@ -771,22 +805,47 @@ export class MicrosoftRewardsBot {
         // Add Docker flag if enabled
         if (upd.docker) args.push('--docker')
 
+        log('main', 'UPDATE', `Running update script: ${scriptRel}`, 'log')
+
         // Run update script as a child process and capture exit code
         return new Promise<number>((resolve) => {
             const child = spawn(process.execPath, [scriptAbs, ...args], { stdio: 'inherit' })
-            child.on('close', (code) => resolve(code ?? 0))
-            child.on('error', () => resolve(1))
+            child.on('close', (code) => {
+                log('main', 'UPDATE', `Update script exited with code ${code ?? 0}`, code === 0 ? 'log' : 'warn')
+                resolve(code ?? 0)
+            })
+            child.on('error', (err) => {
+                log('main', 'UPDATE', `Update script error: ${err.message}`, 'error')
+                resolve(1)
+            })
         })
     }
 
-    /** Public entry-point to engage global security standby from other modules (idempotent). */
+    /**
+     * Engage global security standby mode (halts all automation)
+     * IMPROVED: Enhanced documentation
+     * 
+     * Public entry-point to engage global security standby from other modules.
+     * This method is idempotent - calling it multiple times has no additional effect.
+     * 
+     * @param reason - Reason for standby (e.g., 'banned', 'recovery-mismatch')
+     * @param email - Optional email of the affected account
+     * 
+     * @example
+     * await bot.engageGlobalStandby('recovery-mismatch', 'user@example.com')
+     */
     public async engageGlobalStandby(reason: string, email?: string): Promise<void> {
         try {
+            // Idempotent: don't re-engage if already active
             if (this.globalStandby.active) return
+            
             this.globalStandby = { active: true, reason }
             const who = email || this.currentAccountEmail || 'unknown'
             await this.sendGlobalSecurityStandbyAlert(who, reason)
-        } catch {/* ignore */}
+        } catch (error) {
+            // Fail silently - standby engagement is a best-effort security measure
+            log('main', 'STANDBY', `Failed to engage standby: ${error instanceof Error ? error.message : String(error)}`, 'warn')
+        }
     }
 
     /** Send a strong alert to all channels and mention @everyone when entering global security standby. */
@@ -878,17 +937,29 @@ async function main(): Promise<void> {
         log('main', 'DASHBOARD', `Auto-started dashboard on http://${host}:${port}`)
     }
 
+    /**
+     * Attach global error handlers for graceful shutdown
+     * IMPROVED: Added error handling documentation
+     */
     const attachHandlers = () => {
         process.on('unhandledRejection', (reason: unknown) => {
-            log('main','FATAL','UnhandledRejection: ' + (reason instanceof Error ? reason.message : String(reason)), 'error')
+            const errorMsg = reason instanceof Error ? reason.message : String(reason)
+            const stack = reason instanceof Error ? reason.stack : undefined
+            log('main', 'FATAL', `UnhandledRejection: ${errorMsg}${stack ? `\nStack: ${stack.split('\n').slice(0, 3).join(' | ')}` : ''}`, 'error')
             gracefulExit(1)
         })
         process.on('uncaughtException', (err: Error) => {
-            log('main','FATAL','UncaughtException: ' + err.message, 'error')
+            log('main', 'FATAL', `UncaughtException: ${err.message}${err.stack ? `\nStack: ${err.stack.split('\n').slice(0, 3).join(' | ')}` : ''}`, 'error')
             gracefulExit(1)
         })
-        process.on('SIGTERM', () => gracefulExit(0))
-        process.on('SIGINT', () => gracefulExit(0))
+        process.on('SIGTERM', () => {
+            log('main', 'SHUTDOWN', 'Received SIGTERM, shutting down gracefully...', 'log')
+            gracefulExit(0)
+        })
+        process.on('SIGINT', () => {
+            log('main', 'SHUTDOWN', 'Received SIGINT (Ctrl+C), shutting down gracefully...', 'log')
+            gracefulExit(0)
+        })
     }
 
     const gracefulExit = (code: number) => {

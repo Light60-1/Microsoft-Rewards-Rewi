@@ -5,6 +5,7 @@
 
 /**
  * Parse environment variable as number with validation
+ * FIXED: Added strict validation for min/max boundaries
  * @param key Environment variable name
  * @param defaultValue Default value if parsing fails or out of range
  * @param min Minimum allowed value
@@ -16,7 +17,10 @@ function parseEnvNumber(key: string, defaultValue: number, min: number, max: num
     if (!raw) return defaultValue
     
     const parsed = Number(raw)
-    if (isNaN(parsed) || parsed < min || parsed > max) return defaultValue
+    // Strict validation: must be finite, not NaN, and within bounds
+    if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+        return defaultValue
+    }
     
     return parsed
 }

@@ -2,18 +2,18 @@ import { Page } from 'rebrowser-playwright'
 
 import { MicrosoftRewardsBot } from '../index'
 
-import { Search } from './activities/Search'
 import { ABC } from './activities/ABC'
+import { DailyCheckIn } from './activities/DailyCheckIn'
 import { Poll } from './activities/Poll'
 import { Quiz } from './activities/Quiz'
+import { ReadToEarn } from './activities/ReadToEarn'
+import { Search } from './activities/Search'
+import { SearchOnBing } from './activities/SearchOnBing'
 import { ThisOrThat } from './activities/ThisOrThat'
 import { UrlReward } from './activities/UrlReward'
-import { SearchOnBing } from './activities/SearchOnBing'
-import { ReadToEarn } from './activities/ReadToEarn'
-import { DailyCheckIn } from './activities/DailyCheckIn'
 
-import { DashboardData, MorePromotion, PromotionalItem } from '../interface/DashboardData'
 import type { ActivityHandler } from '../interface/ActivityHandler'
+import { DashboardData, MorePromotion, PromotionalItem } from '../interface/DashboardData'
 
 type ActivityKind =
     | { type: 'poll' }
@@ -73,8 +73,13 @@ export class Activities {
                 case 'urlReward':
                     await this.doUrlReward(page)
                     break
-                default:
+                case 'unsupported':
+                    // FIXED: Added explicit default case
                     this.bot.log(this.bot.isMobile, 'ACTIVITY', `Skipped activity "${activity.title}" | Reason: Unsupported type: "${String((activity as { promotionType?: string }).promotionType)}"!`, 'warn')
+                    break
+                default:
+                    // Exhaustiveness check - should never reach here due to ActivityKind type
+                    this.bot.log(this.bot.isMobile, 'ACTIVITY', `Unexpected activity kind for "${activity.title}"`, 'error')
                     break
             }
         } catch (e) {

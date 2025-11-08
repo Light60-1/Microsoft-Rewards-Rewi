@@ -42,7 +42,8 @@ const LOGIN_TARGET = { host: 'rewards.bing.com', path: '/' }
 const DEFAULT_TIMEOUTS = {
   loginMaxMs: (() => {
     const val = Number(process.env.LOGIN_MAX_WAIT_MS || 180000)
-    return (isNaN(val) || val < 10000 || val > 600000) ? 180000 : val
+    // IMPROVED: Use isFinite instead of isNaN for consistency
+    return (!Number.isFinite(val) || val < 10000 || val > 600000) ? 180000 : val
   })(),
   short: 200,
   medium: 800,
@@ -51,7 +52,7 @@ const DEFAULT_TIMEOUTS = {
   portalWaitMs: 15000,
   elementCheck: 100,
   fastPoll: 500
-}
+} as const
 
 // Security pattern bundle
 const SIGN_IN_BLOCK_PATTERNS: { re: RegExp; label: string }[] = [
@@ -739,16 +740,18 @@ export class Login {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
     
     try {
-      // IMPROVED: Add 120s timeout to prevent infinite blocking
+      // FIXED: Add 120s timeout with proper cleanup to prevent memory leak
+      let timeoutHandle: NodeJS.Timeout | undefined
       const code = await Promise.race([
         new Promise<string>(res => {
           rl.question('Enter 2FA code:\n', ans => {
+            if (timeoutHandle) clearTimeout(timeoutHandle)
             rl.close()
             res(ans.trim())
           })
         }),
         new Promise<string>((_, reject) => {
-          setTimeout(() => {
+          timeoutHandle = setTimeout(() => {
             rl.close()
             reject(new Error('2FA code input timeout after 120s'))
           }, 120000)
@@ -1677,7 +1680,11 @@ export class Login {
   }
 
   private startCompromisedInterval() {
-    if (this.compromisedInterval) clearInterval(this.compromisedInterval)
+    // FIXED: Always cleanup existing interval before creating new one
+    if (this.compromisedInterval) {
+      clearInterval(this.compromisedInterval)
+      this.compromisedInterval = undefined
+    }
     this.compromisedInterval = setInterval(()=>{
       try { 
         this.bot.log(this.bot.isMobile,'SECURITY','Security standby active. Manual review required before proceeding.','warn') 

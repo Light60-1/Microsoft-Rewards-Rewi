@@ -42,11 +42,16 @@ const cleanupInterval = setInterval(() => {
     }
 }, BUFFER_CLEANUP_INTERVAL_MS)
 
-// Allow cleanup to be stopped (prevents process from hanging)
-if (cleanupInterval.unref) {
+// FIXED: Allow cleanup to be stopped with proper fallback
+// unref() prevents process from hanging but may not exist in all environments
+if (typeof cleanupInterval.unref === 'function') {
     cleanupInterval.unref()
 }
 
+/**
+ * Get or create a webhook buffer for the given URL
+ * Buffers batch log messages to reduce Discord API calls
+ */
 function getBuffer(url: string): WebhookBuffer {
     let buf = webhookBuffers.get(url)
     if (!buf) {
@@ -58,6 +63,10 @@ function getBuffer(url: string): WebhookBuffer {
     return buf
 }
 
+/**
+ * Send batched log messages to Discord webhook
+ * Handles rate limiting and message size constraints
+ */
 async function sendBatch(url: string, buf: WebhookBuffer): Promise<void> {
     if (buf.sending) return
     buf.sending = true
@@ -104,27 +113,29 @@ async function sendBatch(url: string, buf: WebhookBuffer): Promise<void> {
     buf.sending = false
 }
 
+// IMPROVED: Extracted color determination logic for better maintainability
+type ColorRule = { pattern: RegExp | string; color: number }
+const COLOR_RULES: ColorRule[] = [
+    { pattern: /\[banned\]|\[security\]|suspended|compromised/i, color: DISCORD.COLOR_RED },
+    { pattern: /\[error\]|✗/i, color: DISCORD.COLOR_CRIMSON },
+    { pattern: /\[warn\]|⚠/i, color: DISCORD.COLOR_ORANGE },
+    { pattern: /\[ok\]|✓|complet/i, color: DISCORD.COLOR_GREEN },
+    { pattern: /\[main\]/i, color: DISCORD.COLOR_BLUE }
+]
+
 function determineColorFromContent(content: string): number {
     const lower = content.toLowerCase()
     
-    // Priority order: most critical first
-    if (lower.includes('[banned]') || lower.includes('[security]') || lower.includes('suspended') || lower.includes('compromised')) {
-        return DISCORD.COLOR_RED
-    }
-    if (lower.includes('[error]') || lower.includes('✗')) {
-        return DISCORD.COLOR_CRIMSON
-    }
-    if (lower.includes('[warn]') || lower.includes('⚠')) {
-        return DISCORD.COLOR_ORANGE
-    }
-    if (lower.includes('[ok]') || lower.includes('✓') || lower.includes('complet')) {
-        return DISCORD.COLOR_GREEN
-    }
-    if (lower.includes('[main]')) {
-        return DISCORD.COLOR_BLUE
+    // Check rules in priority order
+    for (const rule of COLOR_RULES) {
+        if (typeof rule.pattern === 'string') {
+            if (lower.includes(rule.pattern)) return rule.color
+        } else {
+            if (rule.pattern.test(lower)) return rule.color
+        }
     }
     
-    return 0x95A5A6
+    return DISCORD.COLOR_GRAY
 }
 
 function enqueueWebhookLog(url: string, line: string) {
@@ -138,7 +149,17 @@ function enqueueWebhookLog(url: string, line: string) {
     }
 }
 
-// Synchronous logger that returns an Error when type === 'error' so callers can `throw log(...)` safely.
+/**
+ * Centralized logging function with console, Discord webhook, and NTFY support
+ * @param isMobile - Platform identifier ('main', true for mobile, false for desktop)
+ * @param title - Log title/category (e.g., 'LOGIN', 'SEARCH')
+ * @param message - Log message content
+ * @param type - Log level (log, warn, error)
+ * @param color - Optional chalk color override
+ * @returns Error object if type is 'error' (allows `throw log(...)`)
+ * @example log('main', 'STARTUP', 'Bot started', 'log')
+ * @example throw log(false, 'LOGIN', 'Auth failed', 'error')
+ */
 export function log(isMobile: boolean | 'main', title: string, message: string, type: 'log' | 'warn' | 'error' = 'log', color?: keyof typeof chalk): Error | void {
     const configData = loadConfig()
 

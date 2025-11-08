@@ -11,7 +11,7 @@
  * - Mobile retry logic
  */
 
-import type { BrowserContext, Page } from 'playwright'
+import type { Page } from 'playwright'
 import type { MicrosoftRewardsBot } from '../index'
 import type { Account } from '../interface/Account'
 import { saveSessionData } from '../util/Load'
@@ -41,8 +41,11 @@ export class MobileFlow {
     ): Promise<MobileFlowResult> {
         this.bot.log(true, 'MOBILE-FLOW', 'Starting mobile automation flow')
         
-        const browserFactory = (this.bot as unknown as { browserFactory: { createBrowser: (proxy: Account['proxy'], email: string) => Promise<BrowserContext> } }).browserFactory
-        const browser = await browserFactory.createBrowser(account.proxy, account.email)
+        // FIXED: Use proper typed access instead of unsafe type assertion
+        const browserModule = await import('../browser/Browser')
+        const Browser = browserModule.default
+        const browserInstance = new Browser(this.bot)
+        const browser = await browserInstance.createBrowser(account.proxy, account.email)
         
         let keepBrowserOpen = false
         let browserClosed = false

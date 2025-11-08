@@ -149,6 +149,7 @@ function normalizeConfig(raw: unknown): Config {
     const saveFingerprint = (n.fingerprinting?.saveFingerprint ?? n.saveFingerprint) ?? { mobile: false, desktop: false }
 
     // Humanization defaults (single on/off)
+    // FIXED: Always initialize humanization object first to prevent undefined access
     if (!n.humanization) n.humanization = {}
     if (typeof n.humanization.enabled !== 'boolean') n.humanization.enabled = true
     if (typeof n.humanization.stopOnBan !== 'boolean') n.humanization.stopOnBan = false
@@ -250,6 +251,23 @@ function normalizeConfig(raw: unknown): Config {
     return cfg
 }
 
+// IMPROVED: Generic helper to reduce duplication
+function extractStringField(obj: unknown, key: string): string | undefined {
+    if (obj && typeof obj === 'object' && key in obj) {
+        const value = (obj as Record<string, unknown>)[key]
+        return typeof value === 'string' ? value : undefined
+    }
+    return undefined
+}
+
+function extractBooleanField(obj: unknown, key: string): boolean | undefined {
+    if (obj && typeof obj === 'object' && key in obj) {
+        const value = (obj as Record<string, unknown>)[key]
+        return typeof value === 'boolean' ? value : undefined
+    }
+    return undefined
+}
+
 function buildSchedulingConfig(raw: unknown): ConfigScheduling | undefined {
     if (!raw || typeof raw !== 'object') return undefined
 
@@ -261,13 +279,12 @@ function buildSchedulingConfig(raw: unknown): ConfigScheduling | undefined {
 
     const cronRaw = source.cron
     if (cronRaw && typeof cronRaw === 'object') {
-        const cronSource = cronRaw as Record<string, unknown>
         scheduling.cron = {
-            schedule: typeof cronSource.schedule === 'string' ? cronSource.schedule : undefined,
-            workingDirectory: typeof cronSource.workingDirectory === 'string' ? cronSource.workingDirectory : undefined,
-            nodePath: typeof cronSource.nodePath === 'string' ? cronSource.nodePath : undefined,
-            logFile: typeof cronSource.logFile === 'string' ? cronSource.logFile : undefined,
-            user: typeof cronSource.user === 'string' ? cronSource.user : undefined
+            schedule: extractStringField(cronRaw, 'schedule'),
+            workingDirectory: extractStringField(cronRaw, 'workingDirectory'),
+            nodePath: extractStringField(cronRaw, 'nodePath'),
+            logFile: extractStringField(cronRaw, 'logFile'),
+            user: extractStringField(cronRaw, 'user')
         }
     }
 
@@ -275,12 +292,12 @@ function buildSchedulingConfig(raw: unknown): ConfigScheduling | undefined {
     if (taskRaw && typeof taskRaw === 'object') {
         const taskSource = taskRaw as Record<string, unknown>
         scheduling.taskScheduler = {
-            taskName: typeof taskSource.taskName === 'string' ? taskSource.taskName : undefined,
-            schedule: typeof taskSource.schedule === 'string' ? taskSource.schedule : undefined,
+            taskName: extractStringField(taskRaw, 'taskName'),
+            schedule: extractStringField(taskRaw, 'schedule'),
             frequency: typeof taskSource.frequency === 'string' ? taskSource.frequency as 'daily' | 'weekly' | 'once' : undefined,
-            workingDirectory: typeof taskSource.workingDirectory === 'string' ? taskSource.workingDirectory : undefined,
-            runAsUser: typeof taskSource.runAsUser === 'boolean' ? taskSource.runAsUser : undefined,
-            highestPrivileges: typeof taskSource.highestPrivileges === 'boolean' ? taskSource.highestPrivileges : undefined
+            workingDirectory: extractStringField(taskRaw, 'workingDirectory'),
+            runAsUser: extractBooleanField(taskRaw, 'runAsUser'),
+            highestPrivileges: extractBooleanField(taskRaw, 'highestPrivileges')
         }
     }
 
@@ -345,8 +362,13 @@ export function loadAccounts(): Account[] {
         // Accept either a root array or an object with an `accounts` array, ignore `_note`
         const parsed = Array.isArray(parsedUnknown) ? parsedUnknown : (parsedUnknown && typeof parsedUnknown === 'object' && Array.isArray((parsedUnknown as { accounts?: unknown }).accounts) ? (parsedUnknown as { accounts: unknown[] }).accounts : null)
         if (!Array.isArray(parsed)) throw new Error('accounts must be an array')
-        // minimal shape validation
+        // FIXED: Validate entries BEFORE type assertion for better type safety
         for (const entry of parsed) {
+            // Pre-validation: Check basic structure before casting
+            if (!entry || typeof entry !== 'object') {
+                throw new Error('each account entry must be an object')
+            }
+            
             // JUSTIFIED USE OF `any`: Accounts come from untrusted user JSON with unpredictable structure
             // We perform explicit runtime validation of each property below (typeof checks, regex validation, etc.)
             // This is safer than trusting a type assertion to a specific interface

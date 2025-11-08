@@ -11,9 +11,18 @@ type NumericPolicy = {
 
 export type Retryable<T> = () => Promise<T>
 
+/**
+ * Exponential backoff retry mechanism with jitter
+ * IMPROVED: Added comprehensive documentation
+ */
 export class Retry {
   private policy: NumericPolicy
 
+  /**
+   * Create a retry handler with exponential backoff
+   * @param policy - Retry policy configuration (optional)
+   * @example new Retry({ maxAttempts: 5, baseDelay: 2000 })
+   */
   constructor(policy?: ConfigRetryPolicy) {
     const def: NumericPolicy = {
       maxAttempts: 3,
@@ -38,6 +47,14 @@ export class Retry {
     }
   }
 
+  /**
+   * Execute a function with exponential backoff retry logic
+   * @param fn - Async function to retry
+   * @param isRetryable - Optional predicate to determine if error is retryable
+   * @returns Result of the function
+   * @throws {Error} Last error if all attempts fail
+   * @example await retry.run(() => fetchAPI(), (err) => err.statusCode !== 404)
+   */
   async run<T>(fn: Retryable<T>, isRetryable?: (e: unknown) => boolean): Promise<T> {
     let attempt = 0
     let delay = this.policy.baseDelay
@@ -51,7 +68,8 @@ export class Retry {
         attempt += 1
         const retry = isRetryable ? isRetryable(e) : true
         if (!retry || attempt >= this.policy.maxAttempts) break
-        const jitter = 1 + (Math.random() * 2 - 1) * this.policy.jitter
+        // FIXED: Jitter should always increase delay, not decrease it (remove the -1)
+        const jitter = 1 + Math.random() * this.policy.jitter
         const sleep = Math.min(this.policy.maxDelay, Math.max(0, Math.floor(delay * jitter)))
         await new Promise((r) => setTimeout(r, sleep))
         delay = Math.min(this.policy.maxDelay, Math.floor(delay * (this.policy.multiplier || 2)))

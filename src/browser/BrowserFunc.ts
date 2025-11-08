@@ -182,10 +182,20 @@ export default class BrowserFunc {
 
     /**
      * Reload page with retry logic
+     * FIXED: Added global timeout to prevent infinite retry loops
      */
     private async reloadPageWithRetry(page: Page, maxAttempts: number): Promise<void> {
+        const startTime = Date.now()
+        const MAX_TOTAL_TIME_MS = 30000 // 30 seconds max total
         let lastError: unknown = null
+        
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            // Check global timeout
+            if (Date.now() - startTime > MAX_TOTAL_TIME_MS) {
+                this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Reload retry exceeded total timeout (${MAX_TOTAL_TIME_MS}ms)`, 'warn')
+                break
+            }
+            
             try {
                 await page.reload({ waitUntil: 'domcontentloaded' })
                 await this.bot.utils.wait(this.bot.isMobile ? TIMEOUTS.LONG : TIMEOUTS.MEDIUM)
@@ -231,6 +241,7 @@ export default class BrowserFunc {
 
     /**
      * Parse dashboard object from script content
+     * FIXED: Added format validation before JSON.parse
      */
     private async parseDashboardFromScript(page: Page, scriptContent: string): Promise<DashboardData | null> {
         return await page.evaluate((scriptContent: string) => {
@@ -244,7 +255,17 @@ export default class BrowserFunc {
                 const match = regex.exec(scriptContent)
                 if (match && match[1]) {
                     try {
-                        return JSON.parse(match[1])
+                        const jsonStr = match[1]
+                        // Validate basic JSON structure before parsing
+                        if (!jsonStr.trim().startsWith('{') || !jsonStr.trim().endsWith('}')) {
+                            continue
+                        }
+                        const parsed = JSON.parse(jsonStr)
+                        // Validate it's actually an object
+                        if (typeof parsed !== 'object' || parsed === null) {
+                            continue
+                        }
+                        return parsed
                     } catch (e) {
                         continue
                     }
