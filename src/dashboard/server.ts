@@ -41,8 +41,23 @@ export class DashboardServer {
 
   private setupMiddleware(): void {
     this.app.use(express.json())
-    this.app.use('/assets', express.static(path.join(__dirname, '../../assets')))
-    this.app.use(express.static(path.join(__dirname, '../../public')))
+    
+    // Disable caching for all static files
+    this.app.use((req, res, next) => {
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+      res.set('Pragma', 'no-cache')
+      res.set('Expires', '0')
+      next()
+    })
+    
+    this.app.use('/assets', express.static(path.join(__dirname, '../../assets'), {
+      etag: false,
+      maxAge: 0
+    }))
+    this.app.use(express.static(path.join(__dirname, '../../public'), {
+      etag: false,
+      maxAge: 0
+    }))
   }
 
   private setupRoutes(): void {
@@ -53,14 +68,16 @@ export class DashboardServer {
       res.json({ status: 'ok', uptime: process.uptime() })
     })
 
-    // Serve dashboard UI (with fallback if file doesn't exist)
+    // Serve dashboard UI
     this.app.get('/', (_req, res) => {
-      const dashboardPath = path.join(__dirname, '../../public/dashboard.html')
       const indexPath = path.join(__dirname, '../../public/index.html')
       
-      if (fs.existsSync(dashboardPath)) {
-        res.sendFile(dashboardPath)
-      } else if (fs.existsSync(indexPath)) {
+      // Force no cache on HTML files
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+      res.set('Pragma', 'no-cache')
+      res.set('Expires', '0')
+      
+      if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath)
       } else {
         res.status(200).send(`
@@ -113,16 +130,23 @@ export class DashboardServer {
   }
 
   private interceptBotLogs(): void {
-    const originalLog = botLog
+    // Intercept Logger.log calls by wrapping at module level
+    // This ensures all log calls go through dashboard state
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const loggerModule = require('../util/Logger') as { log: typeof botLog }
+    const originalLog = loggerModule.log
     
-    ;(global as Record<string, unknown>).botLog = (
+    loggerModule.log = (
       isMobile: boolean | 'main',
       title: string,
       message: string,
-      type: 'log' | 'warn' | 'error' = 'log'
+      type: 'log' | 'warn' | 'error' = 'log',
+      color?: keyof typeof import('chalk')
     ) => {
-      const result = originalLog(isMobile, title, message, type)
+      // Call original log function
+      const result = originalLog(isMobile, title, message, type, color as keyof typeof import('chalk'))
       
+      // Create log entry for dashboard
       const logEntry: DashboardLog = {
         timestamp: new Date().toISOString(),
         level: type,
@@ -131,11 +155,14 @@ export class DashboardServer {
         message
       }
       
+      // Add to dashboard state and broadcast
       dashboardState.addLog(logEntry)
       this.broadcastUpdate('log', { log: logEntry })
       
       return result
     }
+    
+    dashLog('Bot log interception active')
   }
 
   public broadcastUpdate(type: string, data: unknown): void {

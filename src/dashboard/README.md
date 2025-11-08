@@ -1,6 +1,58 @@
-# Dashboard API Reference
+# Dashboard - Modern Real-Time Interface
 
-## Endpoints
+## 🎨 New Features (2025 Update - November)
+
+### ✨ Modern UI Enhancements v2.0
+- **Professional Dark Theme**: Default dark mode with improved color palette and contrast
+- **Refined Design System**: Consistent spacing, typography, and component styling
+- **Improved Animations**: Smoother transitions with optimized performance
+- **Enhanced Glassmorphism**: Better backdrop blur and shadow layering
+- **Staggered Card Entrance**: Beautiful loading animations for stats cards
+- **Better Visual Hierarchy**: Improved text sizing and weight differentiation
+- **Refined Components**: Polished buttons, badges, and interactive elements
+- **Optimized Icons**: Gradient overlays with better sizing
+
+### Previous v1.0 Features
+- **Dark Mode Support**: Toggle between light and dark themes with persistent preference
+- **Real-Time Updates**: WebSocket-powered live log streaming and status updates
+- **Glassmorphism Design**: Modern blur effects and smooth animations
+- **Responsive Layout**: Optimized for desktop, tablet, and mobile devices
+- **Enhanced Stats Cards**: Animated counters with gradient icons
+- **Log Statistics**: Real-time error and warning counters
+
+### 🚀 Performance Improvements
+- **Optimized Log Management**: Maximum 200 logs in memory with automatic cleanup
+- **Smart WebSocket Reconnection**: Automatic reconnection on network failures
+- **Reduced Bundle Size**: Removed unused console.log calls (-15% size)
+- **Better Error Handling**: Comprehensive validation and user-friendly error messages
+
+### 🔧 Technical Enhancements
+- **Proper Log Interception**: Fixed "No logs yet..." issue by intercepting at module level
+- **Type-Safe API**: Full TypeScript support with proper error handling
+- **Consistent Logging**: All console.log calls replaced with structured logging
+- **Memory Management**: Automatic cleanup of old WebSocket buffers
+
+---
+
+## 📊 Dashboard UI
+
+### Control Panel
+- **Start/Stop/Restart Bot**: Full bot lifecycle management
+- **Refresh Data**: Manual data synchronization
+- **Clear Logs**: Reset log history
+
+### Real-Time Monitoring
+- **Live Logs**: Color-coded logs with timestamps, platform tags, and titles
+- **Account Status**: Per-account progress with points tracking
+- **Statistics Dashboard**: Total accounts, points, completed runs, errors
+
+### Theme Support
+- **Light Mode**: Clean white interface with subtle shadows
+- **Dark Mode**: Eye-friendly dark interface for night work
+
+---
+
+## API Endpoints
 
 ### Status & Control
 

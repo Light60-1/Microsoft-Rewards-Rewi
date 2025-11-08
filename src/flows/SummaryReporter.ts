@@ -12,6 +12,7 @@
 import type { Config } from '../interface/Config'
 import { ConclusionWebhook } from '../util/ConclusionWebhook'
 import { JobState } from '../util/JobState'
+import { log } from '../util/Logger'
 import { Ntfy } from '../util/Ntfy'
 
 export interface AccountResult {
@@ -80,7 +81,7 @@ export class SummaryReporter {
                 summary.failureCount > 0 ? 0xFF5555 : 0x00FF00
             )
         } catch (error) {
-            console.error('[SUMMARY] Failed to send webhook:', error)
+            log('main', 'SUMMARY', `Failed to send webhook: ${error instanceof Error ? error.message : String(error)}`, 'error')
         }
     }
 
@@ -97,7 +98,7 @@ export class SummaryReporter {
             
             await Ntfy(message, summary.failureCount > 0 ? 'warn' : 'log')
         } catch (error) {
-            console.error('[SUMMARY] Failed to send Ntfy notification:', error)
+            log('main', 'SUMMARY', `Failed to send Ntfy notification: ${error instanceof Error ? error.message : String(error)}`, 'error')
         }
     }
 
@@ -121,7 +122,7 @@ export class SummaryReporter {
                 )
             }
         } catch (error) {
-            console.error('[SUMMARY] Failed to update job state:', error)
+            log('main', 'SUMMARY', `Failed to update job state: ${error instanceof Error ? error.message : String(error)}`, 'error')
         }
     }
 
@@ -129,36 +130,36 @@ export class SummaryReporter {
      * Generate and send comprehensive summary
      */
     async generateReport(summary: SummaryData): Promise<void> {
-        console.log('\n' + '═'.repeat(80))
-        console.log('📊 EXECUTION SUMMARY')
-        console.log('═'.repeat(80))
+        log('main', 'SUMMARY', '═'.repeat(80))
+        log('main', 'SUMMARY', '📊 EXECUTION SUMMARY')
+        log('main', 'SUMMARY', '═'.repeat(80))
         
         const duration = Math.round((summary.endTime.getTime() - summary.startTime.getTime()) / 1000)
-        console.log(`\n⏱️  Duration: ${Math.floor(duration / 60)}m ${duration % 60}s`)
-        console.log(`📈 Total Points Collected: ${summary.totalPoints}`)
-        console.log(`✅ Successful Accounts: ${summary.successCount}/${summary.accounts.length}`)
+        log('main', 'SUMMARY', `⏱️  Duration: ${Math.floor(duration / 60)}m ${duration % 60}s`)
+        log('main', 'SUMMARY', `📈 Total Points Collected: ${summary.totalPoints}`)
+        log('main', 'SUMMARY', `✅ Successful Accounts: ${summary.successCount}/${summary.accounts.length}`)
         
         if (summary.failureCount > 0) {
-            console.log(`❌ Failed Accounts: ${summary.failureCount}`)
+            log('main', 'SUMMARY', `❌ Failed Accounts: ${summary.failureCount}`, 'warn')
         }
 
-        console.log('\n' + '─'.repeat(80))
-        console.log('Account Breakdown:')
-        console.log('─'.repeat(80))
+        log('main', 'SUMMARY', '─'.repeat(80))
+        log('main', 'SUMMARY', 'Account Breakdown:')
+        log('main', 'SUMMARY', '─'.repeat(80))
 
         for (const account of summary.accounts) {
             const status = account.errors?.length ? '❌ FAILED' : '✅ SUCCESS'
             const duration = Math.round(account.runDuration / 1000)
             
-            console.log(`\n${status} | ${account.email}`)
-            console.log(`   Points: ${account.pointsEarned} | Duration: ${duration}s`)
+            log('main', 'SUMMARY', `${status} | ${account.email}`)
+            log('main', 'SUMMARY', `   Points: ${account.pointsEarned} | Duration: ${duration}s`)
             
             if (account.errors?.length) {
-                console.log(`   Error: ${account.errors[0]}`)
+                log('main', 'SUMMARY', `   Error: ${account.errors[0]}`, 'error')
             }
         }
 
-        console.log('\n' + '═'.repeat(80) + '\n')
+        log('main', 'SUMMARY', '═'.repeat(80))
 
         // Send notifications
         await Promise.all([
