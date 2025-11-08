@@ -42,8 +42,8 @@ import { Workers } from './functions/Workers'
 
 import { DesktopFlow } from './flows/DesktopFlow'
 import { MobileFlow } from './flows/MobileFlow'
-// import { SummaryReporter } from './flows/SummaryReporter' // TODO: Integrate in Phase 3
-// import { BuyModeHandler } from './flows/BuyModeHandler' // TODO: Integrate in Phase 3
+import { SummaryReporter, type AccountResult } from './flows/SummaryReporter'
+// import { BuyModeHandler } from './flows/BuyModeHandler' // TODO: Integrate later
 
 import { DISCORD, TIMEOUTS } from './constants'
 import { Account } from './interface/Account'
@@ -896,145 +896,25 @@ export class MicrosoftRewardsBot {
     }
 
     private async sendConclusion(summaries: AccountSummary[]) {
-        const { ConclusionWebhook } = await import('./util/ConclusionWebhook')
-        const cfg = this.config
+        if (summaries.length === 0) return
 
-    const conclusionWebhookEnabled = !!(cfg.conclusionWebhook && cfg.conclusionWebhook.enabled)
-    const ntfyEnabled = !!(cfg.ntfy && cfg.ntfy.enabled)
-    const webhookEnabled = !!(cfg.webhook && cfg.webhook.enabled)
+        // Convert AccountSummary to AccountResult format
+        const accountResults: AccountResult[] = summaries.map(s => ({
+            email: s.email,
+            pointsEarned: s.totalCollected,
+            runDuration: s.durationMs,
+            errors: s.errors.length > 0 ? s.errors : undefined
+        }))
 
-        const totalAccounts = summaries.length
-        if (totalAccounts === 0) return
+        const startTime = new Date(Date.now() - summaries.reduce((sum, s) => sum + s.durationMs, 0))
+        const endTime = new Date()
 
-        let totalCollected = 0
-        let totalInitial = 0
-        let totalEnd = 0
-        let totalDuration = 0
-        let accountsWithErrors = 0
-        let successes = 0
-
-        // Calculate summary statistics
-        for (const s of summaries) {
-            totalCollected += s.totalCollected
-            totalInitial += s.initialTotal
-            totalEnd += s.endTotal
-            totalDuration += s.durationMs
-            if (s.errors.length) accountsWithErrors++
-            else successes++
-        }
-
-        const avgDuration = totalDuration / totalAccounts
-        const avgPointsPerAccount = Math.round(totalCollected / totalAccounts)
-
-        // Read package version
-        let version = 'unknown'
-        try {
-            const pkgPath = path.join(process.cwd(), 'package.json')
-            if (fs.existsSync(pkgPath)) {
-                const raw = fs.readFileSync(pkgPath, 'utf-8')
-                const pkg = JSON.parse(raw)
-                version = pkg.version || version
-            }
-        } catch { /* ignore */ }
-
-        const formatNumber = (value: number) => value.toLocaleString()
-        const formatSigned = (value: number) => `${value >= 0 ? '+' : ''}${formatNumber(value)}`
-        const padText = (value: string, length: number) => {
-            if (value.length >= length) {
-                if (length <= 1) return value.slice(0, length)
-                return value.length === length ? value : `${value.slice(0, length - 1)}…`
-            }
-            return value + ' '.repeat(length - value.length)
-        }
-        const buildAccountLine = (summary: AccountSummary): string => {
-            const statusIcon = summary.banned?.status ? '🚫' : (summary.errors.length ? '⚠️' : '✅')
-            const email = padText(summary.email, 24)
-            const total = padText(`${formatSigned(summary.totalCollected)} pts`, 13)
-            const desktop = padText(`D:${formatSigned(summary.desktopCollected)}`, 13)
-            const mobile = padText(`M:${formatSigned(summary.mobileCollected)}`, 13)
-            const totals = padText(`${formatNumber(summary.initialTotal)}→${formatNumber(summary.endTotal)}`, 21)
-            const duration = padText(formatDuration(summary.durationMs), 10)
-            const extras: string[] = []
-            if (summary.banned?.status) extras.push(`BAN:${summary.banned.reason || 'detected'}`)
-            if (summary.errors.length) extras.push(`ERR:${summary.errors.slice(0, 1).join(' | ')}`)
-            const tail = extras.length ? ` | ${extras.join(' • ')}` : ''
-            return `${statusIcon} ${email} ${total} ${desktop}${mobile} ${totals} ${duration}${tail}`
-        }
-        const chunkLines = (lines: string[], maxLen = 900): string[][] => {
-            const chunks: string[][] = []
-            let current: string[] = []
-            let currentLen = 0
-            for (const line of lines) {
-                const nextLen = line.length + 1
-                if (current.length > 0 && currentLen + nextLen > maxLen) {
-                    chunks.push(current)
-                    current = []
-                    currentLen = 0
-                }
-                current.push(line)
-                currentLen += nextLen
-            }
-            if (current.length) chunks.push(current)
-            return chunks
-        }
-
-        const accountLines = summaries.map(buildAccountLine)
-        const accountChunks = chunkLines(accountLines)
-
-        const globalLines = [
-            `Total points: **${formatNumber(totalInitial)}** → **${formatNumber(totalEnd)}** (${formatSigned(totalCollected)} pts)`,
-            `Accounts: ✅ ${successes}${accountsWithErrors > 0 ? ` • ⚠️ ${accountsWithErrors}` : ''} (${totalAccounts} total)`,
-            `Average per account: **${formatSigned(avgPointsPerAccount)} pts** • **${formatDuration(avgDuration)}**`,
-            `Runtime: **${formatDuration(totalDuration)}**`
-        ]
-
-        const globalStatsValue = globalLines.join('\n')
-
-        const fields: { name: string; value: string; inline?: boolean }[] = [
-            { name: '📊 Summary', value: globalStatsValue, inline: false }
-        ]
-
-        if (accountChunks.length === 0) {
-            fields.push({ name: '📋 Accounts', value: '_No results recorded_', inline: false })
-        } else {
-            accountChunks.forEach((chunk, index) => {
-                const name = accountChunks.length === 1 ? '📋 Accounts' : `📋 Accounts (${index + 1}/${accountChunks.length})`
-                fields.push({ name, value: ['```', ...chunk, '```'].join('\n'), inline: false })
-            })
-        }
-
-        // Send webhook
-        if (conclusionWebhookEnabled || ntfyEnabled || webhookEnabled) {
-            await ConclusionWebhook(
-                cfg,
-                '✅ Daily Run Complete',
-                `**v${version}** • ${this.runId}`,
-                fields,
-                accountsWithErrors > 0 ? DISCORD.COLOR_ORANGE : DISCORD.COLOR_GREEN
-            )
-        }
-
-        // Write local JSON report
-        try {
-            const fs = await import('fs')
-            const path = await import('path')
-            const now = new Date()
-            const day = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
-            const baseDir = path.join(process.cwd(), 'reports', day)
-            if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true })
-            const file = path.join(baseDir, `summary_${this.runId}.json`)
-            const payload = {
-                runId: this.runId,
-                timestamp: now.toISOString(),
-                totals: { totalCollected, totalInitial, totalEnd, totalDuration, totalAccounts, accountsWithErrors },
-                perAccount: summaries
-            }
-            fs.writeFileSync(file, JSON.stringify(payload, null, 2), 'utf-8')
-            log('main','REPORT',`Saved report to ${file}`)
-        } catch (e) {
-            log('main','REPORT',`Failed to save report: ${e instanceof Error ? e.message : e}`,'warn')
-        }
-
+        // Use SummaryReporter for modern reporting
+        const reporter = new SummaryReporter(this.config)
+        const summary = reporter.createSummary(accountResults, startTime, endTime)
+        
+        // Generate console output and send notifications (webhooks, ntfy, job state)
+        await reporter.generateReport(summary)
     }
 
     // Run optional auto-update script based on configuration flags.
@@ -1132,19 +1012,6 @@ function formatFullError(label: string, e: unknown, verbose: boolean): string {
         return `${label}:${base} :: ${e.stack.split('\n').slice(0, 4).join(' | ')}`
     }
     return `${label}:${base}`
-}
-
-function formatDuration(ms: number): string {
-    if (!ms || ms < 1000) return `${ms}ms`
-    const sec = Math.floor(ms / 1000)
-    const h = Math.floor(sec / 3600)
-    const m = Math.floor((sec % 3600) / 60)
-    const s = sec % 60
-    const parts: string[] = []
-    if (h) parts.push(`${h}h`)
-    if (m) parts.push(`${m}m`)
-    if (s) parts.push(`${s}s`)
-    return parts.join(' ') || `${ms}ms`
 }
 
 async function main(): Promise<void> {
