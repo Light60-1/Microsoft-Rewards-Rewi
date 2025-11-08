@@ -122,6 +122,8 @@ export class BuyModeSelector {
   }
 
   private displayAccountList(): void {
+    // Note: console.log is intentionally used here for interactive user prompts
+    // This is a CLI menu, not system logging - should go directly to stdout
     console.log('\nAvailable accounts:')
     console.log('─'.repeat(60))
     

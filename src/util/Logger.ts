@@ -1,9 +1,9 @@
 import axios from 'axios'
 import chalk from 'chalk'
 
-import { Ntfy } from './Ntfy'
-import { loadConfig } from './Load'
 import { DISCORD } from '../constants'
+import { loadConfig } from './Load'
+import { Ntfy } from './Ntfy'
 
 /**
  * Safe error logger for catch blocks
@@ -95,7 +95,9 @@ async function sendBatch(url: string, buf: WebhookBuffer) {
         } catch (error) {
             // Re-queue failed batch at front and exit loop
             buf.lines = chunk.concat(buf.lines)
-            console.error('[Webhook] live log delivery failed:', error)
+            // Note: Using stderr directly here to avoid circular dependency with log()
+            // This is an internal logger error that shouldn't go through the logging system
+            process.stderr.write(`[Webhook] live log delivery failed: ${error}\n`)
             break
         }
     }
@@ -255,7 +257,8 @@ export function log(isMobile: boolean | 'main', title: string, message: string, 
             enqueueWebhookLog(liveUrl, cleanStr)
         }
     } catch (error) {
-        console.error('[Logger] Failed to enqueue webhook log:', error)
+        // Note: Using stderr directly to avoid recursion - this is an internal logger error
+        process.stderr.write(`[Logger] Failed to enqueue webhook log: ${error}\n`)
     }
 
     // Return an Error when logging an error so callers can `throw log(...)`

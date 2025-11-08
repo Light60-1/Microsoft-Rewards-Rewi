@@ -1,14 +1,14 @@
-import { BrowserContext, Page } from 'rebrowser-playwright'
-import { CheerioAPI, load } from 'cheerio'
 import { AxiosRequestConfig } from 'axios'
+import { CheerioAPI, load } from 'cheerio'
+import { BrowserContext, Page } from 'rebrowser-playwright'
 
+import { RETRY_LIMITS, SELECTORS, TIMEOUTS, URLS } from '../constants'
 import { MicrosoftRewardsBot } from '../index'
-import { saveSessionData } from '../util/Load'
-import { TIMEOUTS, RETRY_LIMITS, SELECTORS, URLS } from '../constants'
-import { Counters, DashboardData, MorePromotion, PromotionalItem } from '../interface/DashboardData'
-import { QuizData } from '../interface/QuizData'
 import { AppUserData } from '../interface/AppUserData'
+import { Counters, DashboardData, MorePromotion, PromotionalItem } from '../interface/DashboardData'
 import { EarnablePoints } from '../interface/Points'
+import { QuizData } from '../interface/QuizData'
+import { saveSessionData } from '../util/Load'
 import { logError } from '../util/Logger'
 
 
@@ -138,8 +138,10 @@ export default class BrowserFunc {
             await this.reloadPageWithRetry(target, 2)
             
             // Wait for the more-activities element to ensure page is fully loaded
-            await target.waitForSelector(SELECTORS.MORE_ACTIVITIES, { timeout: TIMEOUTS.DASHBOARD_WAIT }).catch(() => {
-                this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', 'Activities element not found, continuing anyway', 'warn')
+            await target.waitForSelector(SELECTORS.MORE_ACTIVITIES, { timeout: TIMEOUTS.DASHBOARD_WAIT }).catch((error) => {
+                // Continuing is intentional: page may still be functional even if this specific element is missing
+                // The script extraction will catch any real issues
+                this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Activities element not found after ${TIMEOUTS.DASHBOARD_WAIT}ms timeout, attempting to proceed: ${error instanceof Error ? error.message : String(error)}`, 'warn')
             })
 
             let scriptContent = await this.extractDashboardScript(target)

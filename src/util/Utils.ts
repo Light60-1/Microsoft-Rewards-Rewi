@@ -10,9 +10,9 @@ export class Util {
         const MAX_WAIT_MS = 3600000 // 1 hour max to prevent infinite waits
         const MIN_WAIT_MS = 0
         
-        // Validate and clamp input
-        if (!Number.isFinite(ms)) {
-            throw new Error(`Invalid wait time: ${ms}. Must be a finite number.`)
+        // Validate and clamp input - explicit NaN check before isFinite
+        if (typeof ms !== 'number' || Number.isNaN(ms) || !Number.isFinite(ms)) {
+            throw new Error(`Invalid wait time: ${ms}. Must be a finite number (not NaN or Infinity).`)
         }
         
         const safeMs = Math.min(Math.max(MIN_WAIT_MS, ms), MAX_WAIT_MS)

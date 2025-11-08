@@ -1,15 +1,27 @@
-import type { Page, Locator } from 'playwright'
-import * as crypto from 'crypto'
-import readline from 'readline'
 import { AxiosRequestConfig } from 'axios'
+import * as crypto from 'crypto'
+import type { Locator, Page } from 'playwright'
+import readline from 'readline'
 
-import { generateTOTP } from '../util/Totp'
-import { saveSessionData } from '../util/Load'
 import { MicrosoftRewardsBot } from '../index'
 import { OAuth } from '../interface/OAuth'
-import { Retry } from '../util/Retry'
-import { LoginState, LoginStateDetector } from '../util/LoginStateDetector'
+import { saveSessionData } from '../util/Load'
 import { logError } from '../util/Logger'
+import { LoginState, LoginStateDetector } from '../util/LoginStateDetector'
+import { Retry } from '../util/Retry'
+import { generateTOTP } from '../util/Totp'
+
+// -------------------------------
+// REFACTORING NOTE (1700+ lines)
+// -------------------------------
+// This file violates Single Responsibility Principle. Consider splitting into:
+// - LoginFlow.ts (main orchestration)
+// - TotpHandler.ts (2FA/TOTP logic)
+// - PasskeyHandler.ts (passkey/biometric prompts)
+// - RecoveryHandler.ts (recovery email detection)
+// - SecurityDetector.ts (ban/block detection)
+// This will improve maintainability and testability.
+// -------------------------------
 
 // -------------------------------
 // Constants / Tunables
@@ -47,8 +59,7 @@ const SIGN_IN_BLOCK_PATTERNS: { re: RegExp; label: string }[] = [
   { re: /incorrect account or password too many times/i, label: 'too-many-incorrect' },
   { re: /used an incorrect account or password too many times/i, label: 'too-many-incorrect-variant' },
   { re: /sign-in has been blocked/i, label: 'sign-in-blocked-phrase' },
-  { re: /your account has been locked/i, label: 'account-locked' },
-  { re: /your account or password is incorrect too many times/i, label: 'incorrect-too-many-times' }
+  { re: /your account has been locked/i, label: 'account-locked' }
 ]
 
 interface SecurityIncident {
@@ -204,6 +215,10 @@ export class Login {
       const stackTrace = e instanceof Error ? e.stack : undefined
       this.bot.log(this.bot.isMobile, 'LOGIN', `Failed login: ${errorMessage}${stackTrace ? '\nStack: ' + stackTrace.split('\n').slice(0, 3).join(' | ') : ''}`, 'error')
       throw new Error(`Login failed for ${email}: ${errorMessage}`)
+    } finally {
+      // Always cleanup compromised interval to prevent memory leaks
+      // The interval is only used during active login sessions
+      this.cleanupCompromisedInterval()
     }
   }
 
@@ -759,7 +774,12 @@ export class Login {
       // Other errors, just log and continue
       this.bot.log(this.bot.isMobile, 'LOGIN', '2FA code entry error: ' + error, 'warn')
     } finally {
-      try { rl.close() } catch {/* ignore */}
+      try { 
+        rl.close() 
+      } catch {
+        // Intentionally silent: readline interface already closed or error during cleanup
+        // This is a cleanup operation that shouldn't throw
+      }
     }
   }
 
@@ -1491,7 +1511,14 @@ export class Login {
     } catch { return false }
   }
 
-  private async tryRecoveryMismatchCheck(page: Page, email: string) { try { await this.detectAndHandleRecoveryMismatch(page, email) } catch {/* ignore */} }
+  private async tryRecoveryMismatchCheck(page: Page, email: string) { 
+    try { 
+      await this.detectAndHandleRecoveryMismatch(page, email) 
+    } catch {
+      // Intentionally silent: Recovery mismatch check is a best-effort security check
+      // Failure here should not break the login flow as the page may simply not have recovery info
+    } 
+  }
   private async detectAndHandleRecoveryMismatch(page: Page, email: string) {
     try {
       const recoveryEmail: string | undefined = this.bot.currentAccountRecoveryEmail
@@ -1652,7 +1679,12 @@ export class Login {
   private startCompromisedInterval() {
     if (this.compromisedInterval) clearInterval(this.compromisedInterval)
     this.compromisedInterval = setInterval(()=>{
-      try { this.bot.log(this.bot.isMobile,'SECURITY','Security standby active. Manual review required before proceeding.','warn') } catch {/* ignore */}
+      try { 
+        this.bot.log(this.bot.isMobile,'SECURITY','Security standby active. Manual review required before proceeding.','warn') 
+      } catch {
+        // Intentionally silent: If logging fails in interval, don't crash the timer
+        // The interval will try again in 5 minutes
+      }
     }, 5*60*1000)
   }
 

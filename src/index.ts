@@ -1,34 +1,47 @@
-import cluster from 'cluster'
+// -------------------------------
+// REFACTORING NOTE (1800+ lines)
+// -------------------------------
+// MicrosoftRewardsBot class is too large and violates Single Responsibility Principle.
+// Consider extracting into separate modules:
+// - DesktopFlow.ts (Desktop automation logic)
+// - MobileFlow.ts (Mobile automation logic)
+// - SummaryReporter.ts (Conclusion/report generation)
+// - BuyModeHandler.ts (Manual spending mode)
+// - ClusterManager.ts (Worker orchestration)
+// This will improve testability and maintainability.
+// -------------------------------
+
+import { spawn } from 'child_process'
 import type { Worker } from 'cluster'
-import type { Page } from 'playwright'
+import cluster from 'cluster'
 import fs from 'fs'
 import path from 'path'
-import { spawn } from 'child_process'
+import type { Page } from 'playwright'
 import { createInterface } from 'readline'
 
 import Browser from './browser/Browser'
 import BrowserFunc from './browser/BrowserFunc'
 import BrowserUtil from './browser/BrowserUtil'
 
-import { log } from './util/Logger'
-import { Util } from './util/Utils'
-import { loadAccounts, loadConfig, saveSessionData } from './util/Load'
 import Axios from './util/Axios'
-import Humanizer from './util/Humanizer'
 import { detectBanReason } from './util/BanDetector'
-import { QueryDiversityEngine } from './util/QueryDiversityEngine'
+import { BuyModeMonitor, BuyModeSelector } from './util/BuyMode'
+import Humanizer from './util/Humanizer'
 import JobState from './util/JobState'
-import { StartupValidator } from './util/StartupValidator'
+import { loadAccounts, loadConfig, saveSessionData } from './util/Load'
+import { log } from './util/Logger'
 import { MobileRetryTracker } from './util/MobileRetryTracker'
+import { QueryDiversityEngine } from './util/QueryDiversityEngine'
 import { SchedulerManager } from './util/SchedulerManager'
-import { BuyModeSelector, BuyModeMonitor } from './util/BuyMode'
+import { StartupValidator } from './util/StartupValidator'
+import { Util } from './util/Utils'
 
+import { Activities } from './functions/Activities'
 import { Login } from './functions/Login'
 import { Workers } from './functions/Workers'
-import { Activities } from './functions/Activities'
 
-import { Account } from './interface/Account'
 import { DISCORD } from './constants'
+import { Account } from './interface/Account'
 
 
 // Main bot class

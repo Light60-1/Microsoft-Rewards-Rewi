@@ -3,10 +3,16 @@ import { Page } from 'rebrowser-playwright'
 import { DashboardData, MorePromotion, PromotionalItem, PunchCard } from '../interface/DashboardData'
 
 import { MicrosoftRewardsBot } from '../index'
-import JobState from '../util/JobState'
-import { Retry } from '../util/Retry'
 import { AdaptiveThrottler } from '../util/AdaptiveThrottler'
+import JobState from '../util/JobState'
 import { logError } from '../util/Logger'
+import { Retry } from '../util/Retry'
+
+// Selector patterns (extracted to avoid magic strings)
+const ACTIVITY_SELECTORS = {
+  byName: (name: string) => `[data-bi-id^="${name}"] .pointLink:not(.contentContainer .pointLink)`,
+  byOfferId: (offerId: string) => `[data-bi-id^="${offerId}"] .pointLink:not(.contentContainer .pointLink)`
+} as const
 
 export class Workers {
     public bot: MicrosoftRewardsBot
@@ -198,10 +204,16 @@ export class Workers {
 
         const name = activity.name.toLowerCase()
         if (name.includes('membercenter') || name.includes('exploreonbing')) {
-            return `[data-bi-id^="${activity.name}"] .pointLink:not(.contentContainer .pointLink)`
+            return ACTIVITY_SELECTORS.byName(activity.name)
         }
 
-        return `[data-bi-id^="${activity.offerId}"] .pointLink:not(.contentContainer .pointLink)`
+        // Validate offerId exists before using it in selector
+        if (!activity.offerId) {
+            this.bot.log(this.bot.isMobile, 'WORKERS', `Activity "${activity.name || activity.title}" has no offerId, falling back to name-based selector`, 'warn')
+            return ACTIVITY_SELECTORS.byName(activity.name)
+        }
+
+        return ACTIVITY_SELECTORS.byOfferId(activity.offerId)
     }
 
     private async prepareActivityPage(page: Page, selector: string, throttle: AdaptiveThrottler): Promise<void> {
@@ -221,7 +233,8 @@ export class Workers {
             return // Skip this activity gracefully instead of waiting 30s
         }
 
-        await page.click(selector)
+        // Click with timeout to prevent indefinite hangs
+        await page.click(selector, { timeout: 10000 })
         page = await this.bot.browser.utils.getLatestTab(page)
 
         const timeoutMs = this.bot.utils.stringToMs(this.bot.config?.globalTimeout ?? '30s') * 2

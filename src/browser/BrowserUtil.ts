@@ -1,5 +1,5 @@
-import { Page } from 'rebrowser-playwright'
 import { load } from 'cheerio'
+import { Page } from 'rebrowser-playwright'
 import { MicrosoftRewardsBot } from '../index'
 import { logError } from '../util/Logger'
 
@@ -84,7 +84,9 @@ export default class BrowserUtil {
             await loc.first().click({ timeout: 500 }).catch(logError('BROWSER-UTIL', `Failed to click ${btn.label}`, this.bot.isMobile))
             this.bot.log(this.bot.isMobile, 'DISMISS-ALL-MESSAGES', `Dismissed: ${btn.label}`)
             return true
-        } catch {
+        } catch (e) {
+            // Silent catch is intentional: button detection/click failures shouldn't break page flow
+            // Most failures are expected (button not present, timing issues, etc.)
             return false
         }
     }
@@ -111,7 +113,8 @@ export default class BrowserUtil {
             }
 
             return 0
-        } catch {
+        } catch (e) {
+            // Silent catch is intentional: overlay detection failures are expected when no overlay present
             return 0
         }
     }
@@ -133,7 +136,8 @@ export default class BrowserUtil {
             await page.keyboard.press('Escape').catch(logError('BROWSER-UTIL', 'Streak dialog Escape failed', this.bot.isMobile))
             this.bot.log(this.bot.isMobile, 'DISMISS-ALL-MESSAGES', 'Dismissed: Streak Protection Dialog Escape')
             return 1
-        } catch {
+        } catch (e) {
+            // Silent catch is intentional: streak dialog detection failures are expected
             return 0
         }
     }
@@ -162,7 +166,8 @@ export default class BrowserUtil {
             }
 
             return 0
-        } catch {
+        } catch (e) {
+            // Silent catch is intentional: terms dialog detection failures are expected
             return 0
         }
     }
