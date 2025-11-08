@@ -126,7 +126,7 @@ Access at `http://localhost:3000` to:
 
 ---
 
-## 🆕 Account Creator
+## 🆕 Account Creator (BETA)
 
 Automatically create new Microsoft accounts with referral link support:
 

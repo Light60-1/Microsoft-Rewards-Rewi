@@ -362,11 +362,11 @@ export function loadAccounts(): Account[] {
 
             if (recoveryRequired) {
                 if (typeof a.recoveryEmail !== 'string') {
-                    throw new Error(`account ${a.email || '<unknown>'} must include a recoveryEmail string`)
+                    throw new Error(`account ${a.email || '<unknown>'} must include a recoveryEmail string (or set "recoveryRequired": false)`)
                 }
                 a.recoveryEmail = String(a.recoveryEmail).trim()
                 if (!a.recoveryEmail || !/@/.test(a.recoveryEmail)) {
-                    throw new Error(`account ${a.email} recoveryEmail must be a valid email address`)
+                    throw new Error(`account ${a.email} recoveryEmail must be a valid email address (got: "${a.recoveryEmail}") - set "recoveryRequired": false if not needed`)
                 }
             } else {
                 if (typeof a.recoveryEmail === 'string' && a.recoveryEmail.trim() !== '') {

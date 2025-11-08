@@ -1,10 +1,10 @@
-import type { Page, BrowserContext } from 'playwright'
-import { log } from '../util/Logger'
-import { DataGenerator } from './DataGenerator'
-import { CreatedAccount } from './types'
 import fs from 'fs'
 import path from 'path'
 import * as readline from 'readline'
+import type { BrowserContext, Page } from 'rebrowser-playwright'
+import { log } from '../util/Logger'
+import { DataGenerator } from './DataGenerator'
+import { CreatedAccount } from './types'
 
 export class AccountCreator {
   private page!: Page
