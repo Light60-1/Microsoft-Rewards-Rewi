@@ -4,7 +4,7 @@ import fs from 'fs'
 import path from 'path'
 
 import { Account } from '../interface/Account'
-import { Config, ConfigSaveFingerprint, ConfigBrowser } from '../interface/Config'
+import { Config, ConfigSaveFingerprint, ConfigBrowser, ConfigScheduling } from '../interface/Config'
 import { Util } from './Utils'
 
 const utils = new Util()
@@ -209,6 +209,8 @@ function normalizeConfig(raw: unknown): Config {
         host: typeof dashboardRaw.host === 'string' ? dashboardRaw.host : '127.0.0.1'
     }
 
+    const scheduling = buildSchedulingConfig(n.scheduling)
+
     const cfg: Config = {
         baseURL: n.baseURL ?? 'https://rewards.bing.com',
         sessionPath: n.sessionPath ?? 'sessions',
@@ -239,10 +241,48 @@ function normalizeConfig(raw: unknown): Config {
         riskManagement,
         dryRun,
         queryDiversity,
-        dashboard
+        dashboard,
+        scheduling
     }
 
     return cfg
+}
+
+function buildSchedulingConfig(raw: unknown): ConfigScheduling | undefined {
+    if (!raw || typeof raw !== 'object') return undefined
+
+    const source = raw as Record<string, unknown>
+    const scheduling: ConfigScheduling = {
+        enabled: source.enabled === true,
+        type: typeof source.type === 'string' ? source.type as ConfigScheduling['type'] : undefined
+    }
+
+    const cronRaw = source.cron
+    if (cronRaw && typeof cronRaw === 'object') {
+        const cronSource = cronRaw as Record<string, unknown>
+        scheduling.cron = {
+            schedule: typeof cronSource.schedule === 'string' ? cronSource.schedule : undefined,
+            workingDirectory: typeof cronSource.workingDirectory === 'string' ? cronSource.workingDirectory : undefined,
+            nodePath: typeof cronSource.nodePath === 'string' ? cronSource.nodePath : undefined,
+            logFile: typeof cronSource.logFile === 'string' ? cronSource.logFile : undefined,
+            user: typeof cronSource.user === 'string' ? cronSource.user : undefined
+        }
+    }
+
+    const taskRaw = source.taskScheduler
+    if (taskRaw && typeof taskRaw === 'object') {
+        const taskSource = taskRaw as Record<string, unknown>
+        scheduling.taskScheduler = {
+            taskName: typeof taskSource.taskName === 'string' ? taskSource.taskName : undefined,
+            schedule: typeof taskSource.schedule === 'string' ? taskSource.schedule : undefined,
+            frequency: typeof taskSource.frequency === 'string' ? taskSource.frequency as 'daily' | 'weekly' | 'once' : undefined,
+            workingDirectory: typeof taskSource.workingDirectory === 'string' ? taskSource.workingDirectory : undefined,
+            runAsUser: typeof taskSource.runAsUser === 'boolean' ? taskSource.runAsUser : undefined,
+            highestPrivileges: typeof taskSource.highestPrivileges === 'boolean' ? taskSource.highestPrivileges : undefined
+        }
+    }
+
+    return scheduling
 }
 
 export function loadAccounts(): Account[] {

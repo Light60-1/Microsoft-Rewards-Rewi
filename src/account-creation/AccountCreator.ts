@@ -11,6 +11,7 @@ export class AccountCreator {
   private dataGenerator: DataGenerator
   private referralUrl?: string
   private rl: readline.Interface
+  private rlClosed = false
 
   constructor(referralUrl?: string) {
     this.referralUrl = referralUrl
@@ -19,6 +20,7 @@ export class AccountCreator {
       input: process.stdin,
       output: process.stdout
     })
+    this.rlClosed = false
   }
 
   // Human-like delay helper
@@ -111,7 +113,6 @@ export class AccountCreator {
     
     const maxWaitTime = 60000 // 60 seconds
     const startTime = Date.now()
-    const startUrl = this.page.url()
     
     try {
       // STEP 1: Wait for any "Creating account" messages to appear AND disappear
@@ -313,21 +314,20 @@ export class AccountCreator {
 
       log(false, 'CREATOR', `✅ Account created successfully: ${confirmedEmail}`, 'log', 'green')
 
-      // Cleanup readline interface
-      this.rl.close()
-
       return createdAccount
 
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       log(false, 'CREATOR', `Error during account creation: ${msg}`, 'error')
       log(false, 'CREATOR', '⚠️  Browser left open for inspection. Press Ctrl+C to exit.', 'warn', 'yellow')
-      
-      // Keep browser open and wait indefinitely
-      await new Promise(() => {}) // Never resolves - keeps process alive
-      
-      this.rl.close()
       return null
+    } finally {
+      try {
+        if (!this.rlClosed) {
+          this.rl.close()
+          this.rlClosed = true
+        }
+      } catch {/* ignore */}
     }
   }
 
@@ -335,11 +335,12 @@ export class AccountCreator {
     if (this.referralUrl) {
       log(false, 'CREATOR', `Navigating to referral URL: ${this.referralUrl}`, 'log', 'cyan')
       await this.page.goto(this.referralUrl, { waitUntil: 'networkidle', timeout: 60000 })
-      await this.humanDelay(1500, 3000)
+      
+      await this.waitForPageStable('REFERRAL_PAGE', 20000)
+      await this.humanDelay(2000, 3000)
       
       log(false, 'CREATOR', 'Looking for "Join Microsoft Rewards" button...', 'log')
       
-      // Multiple selectors for the join button
       const joinButtonSelectors = [
         'a#start-earning-rewards-link',
         'a.cta.learn-more-btn',
@@ -354,7 +355,8 @@ export class AccountCreator {
         
         if (visible) {
           await button.click()
-          await this.humanDelay(2000, 4000)
+          await this.humanDelay(2000, 3000)
+          await this.waitForPageStable('AFTER_JOIN_CLICK', 15000)
           log(false, 'CREATOR', `✅ Clicked join button with selector: ${selector}`, 'log', 'green')
           clicked = true
           break
@@ -368,14 +370,17 @@ export class AccountCreator {
       const url = 'https://login.live.com/'
       log(false, 'CREATOR', `No referral URL - navigating to: ${url}`, 'log', 'cyan')
       await this.page.goto(url, { waitUntil: 'networkidle', timeout: 60000 })
-      await this.humanDelay(1500, 3000)
+      
+      await this.waitForPageStable('LOGIN_PAGE', 20000)
+      await this.humanDelay(2000, 3000)
     }
   }
 
   private async clickCreateAccount(): Promise<void> {
     log(false, 'CREATOR', 'Looking for "Create account" button...', 'log')
     
-    // Multiple selectors for create account button
+    await this.waitForPageStable('BEFORE_CREATE_ACCOUNT', 15000)
+    
     const createAccountSelectors = [
       'a[id*="signup"]',
       'a[href*="signup"]',
@@ -390,7 +395,8 @@ export class AccountCreator {
       try {
         await button.waitFor({ timeout: 5000 })
         await button.click()
-        await this.humanDelay(2000, 3500)
+        await this.humanDelay(2000, 3000)
+        await this.waitForPageStable('AFTER_CREATE_ACCOUNT', 15000)
         
         log(false, 'CREATOR', `✅ Clicked "Create account" with selector: ${selector}`, 'log', 'green')
         return
@@ -404,6 +410,8 @@ export class AccountCreator {
 
   private async generateAndFillEmail(): Promise<string | null> {
     log(false, 'CREATOR', '\n=== Email Configuration ===', 'log', 'cyan')
+    
+    await this.waitForPageStable('EMAIL_PAGE', 15000)
     
     const useAutoGenerate = await this.askQuestion('Generate email automatically? (Y/n): ')
     
@@ -429,8 +437,8 @@ export class AccountCreator {
     await nextBtn.waitFor({ timeout: 15000 })
     await nextBtn.click()
     await this.humanDelay(2000, 3000)
+    await this.waitForPageStable('AFTER_EMAIL_SUBMIT', 20000)
     
-    // Check for any error after clicking Next
     const result = await this.handleEmailErrors(email)
     if (!result.success) {
       return null
@@ -440,7 +448,6 @@ export class AccountCreator {
   }
 
   private async handleEmailErrors(originalEmail: string): Promise<{ success: boolean; email: string | null }> {
-    // Wait for page to settle
     await this.humanDelay(1000, 1500)
     
     const errorLocator = this.page.locator('div[id*="Error"], div[role="alert"]').first()
@@ -488,8 +495,8 @@ export class AccountCreator {
     const nextBtn = this.page.locator('button[data-testid="primaryButton"], button[type="submit"]').first()
     await nextBtn.click()
     await this.humanDelay(2000, 3000)
+    await this.waitForPageStable('RETRY_EMAIL', 15000)
     
-    // Re-check for errors with the new email
     return await this.handleEmailErrors(newEmail)
   }
 
@@ -497,6 +504,7 @@ export class AccountCreator {
     log(false, 'CREATOR', 'Email taken, looking for Microsoft suggestions...', 'log', 'yellow')
     
     await this.humanDelay(2000, 3000)
+    await this.waitForPageStable('EMAIL_SUGGESTIONS', 10000)
     
     // Multiple selectors for suggestions container
     const suggestionSelectors = [
@@ -668,18 +676,16 @@ export class AccountCreator {
   private async fillPassword(): Promise<string | null> {
     log(false, 'CREATOR', 'Waiting for password page...', 'log')
     
-    // Wait for password title to appear (language-independent)
     await this.page.locator('h1[data-testid="title"]').first().waitFor({ timeout: 20000 })
+    await this.waitForPageStable('PASSWORD_PAGE', 15000)
     await this.humanDelay(1000, 2000)
     
     log(false, 'CREATOR', 'Generating strong password...', 'log')
     const password = this.dataGenerator.generatePassword()
     
-    // Find password input
     const passwordInput = this.page.locator('input[type="password"]').first()
     await passwordInput.waitFor({ timeout: 15000 })
     
-    // Clear and fill
     await passwordInput.clear()
     await this.humanDelay(500, 1000)
     await passwordInput.fill(password)
@@ -727,11 +733,12 @@ export class AccountCreator {
   private async fillBirthdate(): Promise<{ day: number; month: number; year: number } | null> {
     log(false, 'CREATOR', 'Filling birthdate...', 'log')
     
+    await this.waitForPageStable('BIRTHDATE_PAGE', 15000)
+    
     const birthdate = this.dataGenerator.generateBirthdate()
     
     try {
-      // Fill day dropdown - wait for the page to be ready
-      await this.humanDelay(1000, 1500)
+      await this.humanDelay(2000, 3000)
       
       const dayButton = this.page.locator('button[name="BirthDay"], button#BirthDayDropdown').first()
       await dayButton.waitFor({ timeout: 15000, state: 'visible' })
@@ -842,10 +849,13 @@ export class AccountCreator {
   private async fillNames(email: string): Promise<{ firstName: string; lastName: string } | null> {
     log(false, 'CREATOR', 'Filling first and last name...', 'log')
     
+    await this.waitForPageStable('NAMES_PAGE', 15000)
+    
     const names = this.dataGenerator.generateNames(email)
     
     try {
-      // Fill first name with multiple selector fallbacks
+      await this.humanDelay(1000, 2000)
+      
       const firstNameSelectors = [
         'input[id*="firstName"]',
         'input[name*="firstName"]',
@@ -1044,6 +1054,7 @@ export class AccountCreator {
           if (yesVisible) {
             await yesButton.click()
             await this.humanDelay(2000, 3000)
+            await this.waitForPageStable('AFTER_KMSI', 15000)
             log(false, 'CREATOR', '✅ Accepted "Stay signed in"', 'log', 'green')
             found = true
             break
@@ -1272,12 +1283,6 @@ export class AccountCreator {
       log(false, 'CREATOR', `Warning: Could not verify account: ${msg}`, 'warn', 'yellow')
     }
   }
-      
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      log(false, 'CREATOR', `Warning: Could not verify account: ${msg}`, 'warn', 'yellow')
-    }
-  }
   
   private async handleRewardsWelcomeTour(): Promise<void> {
     log(false, 'CREATOR', 'Checking for Microsoft Rewards welcome tour...', 'log', 'cyan')
@@ -1337,9 +1342,8 @@ export class AccountCreator {
         if (visible) {
           log(false, 'CREATOR', `Clicking Next button: ${selector}`, 'log', 'cyan')
           await button.click()
-          
-          // CRITICAL: Wait longer after clicking to let animation complete
           await this.humanDelay(3000, 4000)
+          await this.waitForPageStable('AFTER_TOUR_NEXT', 15000)
           
           clickedNext = true
           log(false, 'CREATOR', `✅ Clicked Next (step ${i + 1})`, 'log', 'green')
@@ -1348,7 +1352,6 @@ export class AccountCreator {
       }
       
       if (!clickedNext) {
-        // Try "Pin and start earning" button (final step)
         const pinButtonSelectors = [
           'a#claim-button',
           'a:has-text("Pin and start earning")',
@@ -1364,6 +1367,7 @@ export class AccountCreator {
             log(false, 'CREATOR', 'Clicking "Pin and start earning" button', 'log', 'cyan')
             await button.click()
             await this.humanDelay(3000, 4000)
+            await this.waitForPageStable('AFTER_PIN', 15000)
             log(false, 'CREATOR', '✅ Clicked Pin button', 'log', 'green')
             break
           }
@@ -1430,13 +1434,13 @@ export class AccountCreator {
           log(false, 'CREATOR', 'Clicking "Get started" button', 'log', 'cyan')
           await button.click()
           await this.humanDelay(3000, 4000)
+          await this.waitForPageStable('AFTER_GET_STARTED', 15000)
           log(false, 'CREATOR', '✅ Clicked Get started', 'log', 'green')
           break
         }
       }
     }
     
-    // Handle any other generic popups
     const genericCloseSelectors = [
       'button[aria-label*="Close"]',
       'button[aria-label*="Fermer"]',
@@ -1452,6 +1456,7 @@ export class AccountCreator {
         log(false, 'CREATOR', `Closing popup with selector: ${selector}`, 'log', 'cyan')
         await button.click()
         await this.humanDelay(2000, 3000)
+        await this.waitForPageStable('AFTER_CLOSE_POPUP', 10000)
       }
     }
     
@@ -1500,6 +1505,7 @@ export class AccountCreator {
           log(false, 'CREATOR', `Clicking "Join Microsoft Rewards" button: ${selector}`, 'log', 'cyan')
           await button.click()
           await this.humanDelay(3000, 5000)
+          await this.waitForPageStable('AFTER_JOIN', 20000)
           log(false, 'CREATOR', '✅ Clicked Join button', 'log', 'green')
           joined = true
           break
@@ -1607,7 +1613,10 @@ ${JSON.stringify(accountData, null, 2)}`
   }
 
   async close(): Promise<void> {
-    this.rl.close()
+    if (!this.rlClosed) {
+      this.rl.close()
+      this.rlClosed = true
+    }
     if (this.page && !this.page.isClosed()) {
       await this.page.close()
     }
