@@ -31,7 +31,6 @@
 | **[NTFY Alerts](ntfy.md)** | Mobile push notifications |
 | **[Proxy Setup](proxy.md)** | IP rotation (optional) |
 | **[Docker](docker.md)** | Container deployment |
-| **[Buy Mode](buy-mode.md)** | Manual purchase monitoring |
 
 ---
 

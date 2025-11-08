@@ -53,7 +53,6 @@ When running inside Docker, you can instead rely on `update.docker: true` so the
 - **Risk management**: Leave `riskManagement.enabled` and `banPrediction` on unless you have a reason to reduce telemetry. Raising `riskThreshold` (>75) makes alerts rarer.
 - **Search pacing**: The delay window (`search.settings.delay.min` / `max`) accepts either numbers (ms) or strings like `"2min"`. Keep the range wide enough for natural behaviour.
 - **Dry run**: Set `dryRun: true` to test account rotation without performing tasks. Useful for validating login flow after configuration changes.
-- **Buy mode**: The config entry simply caps the session length. Use `npm run buy` to launch it.
 
 ---
 

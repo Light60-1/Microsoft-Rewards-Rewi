@@ -265,12 +265,6 @@ This creates diverse, natural-looking search patterns.
 
 See [Query Diversity Engine](config.md#query-diversity-engine).
 
-### What is "Buy Mode"?
-
-A manual purchase assistant that monitors your points in real-time while you redeem rewards. Not fully automated—you control the redemption.
-
-See [Buy Mode Guide](buy-mode.md).
-
 ### Can I get notifications?
 
 Yes! The script supports:

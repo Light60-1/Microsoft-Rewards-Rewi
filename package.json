@@ -24,7 +24,6 @@
     "start": "node --enable-source-maps ./dist/index.js",
     "ts-start": "node --loader ts-node/esm ./src/index.ts",
     "dev": "ts-node ./src/index.ts -dev",
-    "buy": "node --enable-source-maps ./dist/index.js -buy",
     "creator": "ts-node ./src/account-creation/cli.ts",
     "dashboard": "node --enable-source-maps ./dist/index.js -dashboard",
     "dashboard-dev": "ts-node ./src/index.ts -dashboard",

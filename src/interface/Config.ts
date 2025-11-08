@@ -23,7 +23,6 @@ export interface Config {
     ntfy: ConfigNtfy;
     update?: ConfigUpdate;
     passesPerRun?: number;
-    buyMode?: ConfigBuyMode; // Optional manual spending mode
     vacation?: ConfigVacation; // Optional monthly contiguous off-days
     crashRecovery?: ConfigCrashRecovery; // Automatic restart / graceful shutdown
     riskManagement?: ConfigRiskManagement; // NEW: Risk-aware throttling and ban prediction
@@ -88,11 +87,6 @@ export interface ConfigUpdate {
     scriptPath?: string; // optional custom path to update script relative to repo root
     autoUpdateConfig?: boolean; // if true, allow auto-update of config.jsonc when remote changes it (default: false to preserve user settings)
     autoUpdateAccounts?: boolean; // if true, allow auto-update of accounts.json when remote changes it (default: false to preserve credentials)
-}
-
-export interface ConfigBuyMode {
-    enabled?: boolean; // if true, force buy mode session
-    maxMinutes?: number; // session duration cap
 }
 
 export interface ConfigVacation {

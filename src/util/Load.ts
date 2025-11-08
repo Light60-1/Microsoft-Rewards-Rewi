@@ -145,11 +145,6 @@ function normalizeConfig(raw: unknown): Config {
     const conclusionWebhook = notifications.conclusionWebhook ?? n.conclusionWebhook ?? { enabled: false, url: '' }
     const ntfy = notifications.ntfy ?? n.ntfy ?? { enabled: false, url: '', topic: '', authToken: '' }
 
-    // Buy Mode
-    const buyMode = n.buyMode ?? {}
-    const buyModeEnabled = typeof buyMode.enabled === 'boolean' ? buyMode.enabled : false
-    const buyModeMax = typeof buyMode.maxMinutes === 'number' ? buyMode.maxMinutes : 45
-
     // Fingerprinting
     const saveFingerprint = (n.fingerprinting?.saveFingerprint ?? n.saveFingerprint) ?? { mobile: false, desktop: false }
 
@@ -244,7 +239,6 @@ function normalizeConfig(raw: unknown): Config {
         update: n.update,
         passesPerRun: passesPerRun,
         vacation: n.vacation,
-        buyMode: { enabled: buyModeEnabled, maxMinutes: buyModeMax },
         crashRecovery: n.crashRecovery || {},
         riskManagement,
         dryRun,

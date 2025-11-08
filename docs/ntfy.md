@@ -51,8 +51,7 @@ Open NTFY app → Add subscription → Enter your topic name
 - 🚨 **Errors** — Script crashes, login failures
 - ⚠️ **Warnings** — Missing points, suspicious activity
 - 🏆 **Milestones** — Account completed successfully
-- 💳 **Buy mode** — Point spending detected
-- 📊 **Summary** — End-of-run report
+-  **Summary** — End-of-run report
 
 ---
 

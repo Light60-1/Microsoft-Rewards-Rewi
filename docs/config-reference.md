@@ -123,11 +123,10 @@ This page mirrors the defaults that ship in `src/config.jsonc` and explains what
 
 ---
 
-## Buy Mode & Updates
+## Updates
 
 | Key | Default | Notes |
 | --- | --- | --- |
-| `buyMode.maxMinutes` | `45` | Session length cap when using `-buy`. |
 | `update.git` | `true` | Run git updater after completion. |
 | `update.docker` | `false` | Use Docker updater instead. |
 | `update.scriptPath` | `setup/update/update.mjs` | Update script path. |

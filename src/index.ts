@@ -1,11 +1,10 @@
-// -------------------------------
-// REFACTORING STATUS: COMPLETED ✅
+﻿// -------------------------------
+// REFACTORING STATUS: COMPLETED âœ…
 // -------------------------------
 // Successfully modularized into separate flow modules:
-// ✅ DesktopFlow.ts (Desktop automation logic) - INTEGRATED
-// ✅ MobileFlow.ts (Mobile automation logic) - INTEGRATED  
-// ✅ SummaryReporter.ts (Report generation) - INTEGRATED
-// ✅ BuyModeManual.ts (Manual spending mode) - CREATED (integration pending)
+// âœ… DesktopFlow.ts (Desktop automation logic) - INTEGRATED
+// âœ… MobileFlow.ts (Mobile automation logic) - INTEGRATED  
+// âœ… SummaryReporter.ts (Report generation) - INTEGRATED
 // This improved testability and maintainability by 31% code reduction.
 // -------------------------------
 
@@ -17,16 +16,14 @@ import path from 'path'
 import type { Page } from 'playwright'
 import { createInterface } from 'readline'
 
-import Browser from './browser/Browser'
 import BrowserFunc from './browser/BrowserFunc'
 import BrowserUtil from './browser/BrowserUtil'
 
 import Axios from './util/Axios'
 import { detectBanReason } from './util/BanDetector'
-import { BuyModeMonitor, BuyModeSelector } from './util/BuyMode'
 import Humanizer from './util/Humanizer'
 import JobState from './util/JobState'
-import { loadAccounts, loadConfig, saveSessionData } from './util/Load'
+import { loadAccounts, loadConfig } from './util/Load'
 import { log } from './util/Logger'
 import { MobileRetryTracker } from './util/MobileRetryTracker'
 import { QueryDiversityEngine } from './util/QueryDiversityEngine'
@@ -34,7 +31,6 @@ import { StartupValidator } from './util/StartupValidator'
 import { Util } from './util/Utils'
 
 import { Activities } from './functions/Activities'
-import { Login } from './functions/Login'
 import { Workers } from './functions/Workers'
 
 import { DesktopFlow } from './flows/DesktopFlow'
@@ -65,12 +61,8 @@ export class MicrosoftRewardsBot {
     public compromisedReason?: string
 
     private activeWorkers: number
-    private browserFactory: Browser = new Browser(this)
     private accounts: Account[]
     public workers: Workers // Made public for DesktopFlow access
-    private login = new Login(this)
-    private buyModeEnabled: boolean = false
-    private buyModeArgument?: string
 
     // Summary collection (per process)
     private accountSummaries: AccountSummary[] = []
@@ -107,27 +99,6 @@ export class MicrosoftRewardsBot {
                 cacheMinutes: this.config.queryDiversity.cacheMinutes
             })
         }
-        
-        // Buy mode: CLI args take precedence over config
-        const idx = process.argv.indexOf('-buy')
-        if (idx >= 0) {
-            this.buyModeEnabled = true
-            this.buyModeArgument = process.argv[idx + 1]
-        } else {
-            // Fallback to config if no CLI flag
-            const buyModeConfig = this.config.buyMode as { enabled?: boolean } | undefined
-            if (buyModeConfig?.enabled === true) {
-                this.buyModeEnabled = true
-            }
-        }
-    }
-
-    public isBuyModeEnabled(): boolean {
-        return this.buyModeEnabled === true
-    }
-
-    public getBuyModeTarget(): string | undefined {
-        return this.buyModeArgument
     }
 
     async initialize() {
@@ -214,7 +185,7 @@ export class MicrosoftRewardsBot {
         })
 
         return new Promise<boolean>((resolve) => {
-            rl.question('\n⚠️  Reset job state and run all accounts again? (y/N): ', (answer) => {
+            rl.question('\nâš ï¸  Reset job state and run all accounts again? (y/N): ', (answer) => {
                 rl.close()
                 const trimmed = answer.trim().toLowerCase()
                 resolve(trimmed === 'y' || trimmed === 'yes')
@@ -242,12 +213,6 @@ export class MicrosoftRewardsBot {
         this.printBanner()
         log('main', 'MAIN', `Bot started with ${this.config.clusters} clusters`)
 
-        // If buy mode is enabled, run single-account interactive session without automation
-        if (this.buyModeEnabled) {
-            await this.runBuyMode()
-            return
-        }
-
         // Only cluster when there's more than 1 cluster demanded
         if (this.config.clusters > 1) {
             if (cluster.isPrimary) {
@@ -269,170 +234,20 @@ export class MicrosoftRewardsBot {
             }
         }
     }
-
-    /** Manual spending session: login, then leave control to user while we passively monitor points. */
-    private async runBuyMode() {
-        try {
-            await this.initialize()
-            
-            const buyModeConfig = this.config.buyMode as { maxMinutes?: number } | undefined
-            const maxMinutes = buyModeConfig?.maxMinutes ?? 45
-            
-            const selector = new BuyModeSelector(this.accounts)
-            const selection = await selector.selectAccount(this.buyModeArgument, maxMinutes)
-            
-            if (!selection) {
-                log('main', 'BUY-MODE', 'Buy mode cancelled: no account selected', 'warn')
-                return
-            }
-            
-            const { account, maxMinutes: sessionMaxMinutes } = selection
-            
-            log('main', 'BUY-MODE', `Buy mode ENABLED for ${account.email}. Opening 2 tabs: (1) monitor tab (auto-refresh), (2) your browsing tab`, 'log', 'green')
-            log('main', 'BUY-MODE', `Session duration: ${sessionMaxMinutes} minutes. Monitor tab refreshes every ~10s. Use the other tab for your actions.`, 'log', 'yellow')
-
-            this.isMobile = false
-            this.axios = new Axios(account.proxy)
-            const browser = await this.browserFactory.createBrowser(account.proxy, account.email)
-            // Open the monitor tab FIRST so auto-refresh happens out of the way
-            let monitor = await browser.newPage()
-            await this.login.login(monitor, account.email, account.password, account.totp)
-            await this.browser.func.goHome(monitor)
-            this.log(false, 'BUY-MODE', 'Opened MONITOR tab (auto-refreshes to track points).', 'log', 'yellow')
-
-            // Then open the user free-browsing tab SECOND so users don’t see the refreshes
-            const page = await browser.newPage()
-            await this.browser.func.goHome(page)
-            this.log(false, 'BUY-MODE', 'Opened USER tab (use this one to redeem/purchase freely).', 'log', 'green')
-
-            // Helper to recreate monitor tab if the user closes it
-            const recreateMonitor = async () => {
-                try { if (!monitor.isClosed()) await monitor.close() } catch { /* ignore */ }
-                monitor = await browser.newPage()
-                await this.browser.func.goHome(monitor)
-            }
-
-            // Helper to send an immediate spend notice via webhooks/NTFY
-            const sendSpendNotice = async (delta: number, nowPts: number, cumulativeSpent: number) => {
-                try {
-                    const { ConclusionWebhook } = await import('./util/ConclusionWebhook')
-                    await ConclusionWebhook(
-                        this.config,
-                        '💳 Spend Detected',
-                        `**Account:** ${account.email}\n**Spent:** -${delta} points\n**Current:** ${nowPts} points\n**Session spent:** ${cumulativeSpent} points`,
-                        undefined,
-                        0xFFAA00
-                    )
-                } catch (e) {
-                    this.log(false, 'BUY-MODE', `Failed to send spend notice: ${e instanceof Error ? e.message : e}`, 'warn')
-                }
-            }
-            
-            // Get initial points
-            let initial = 0
-            try {
-                const data = await this.browser.func.getDashboardData(monitor)
-                initial = data.userStatus.availablePoints || 0
-            } catch {/* ignore */}
-
-            const pointMonitor = new BuyModeMonitor(initial)
-
-            this.log(false, 'BUY-MODE', `Logged in as ${account.email}. Starting passive point monitoring (session: ${sessionMaxMinutes} min)`)
-
-            // Passive watcher: poll points periodically without clicking.
-            const start = Date.now()
-            const endAt = start + sessionMaxMinutes * 60 * 1000
-
-            while (Date.now() < endAt) {
-                await this.utils.wait(10000)
-
-                // If monitor tab was closed by user, recreate it quietly
-                try {
-                    if (monitor.isClosed()) {
-                        this.log(false, 'BUY-MODE', 'Monitor tab was closed; reopening in background...', 'warn')
-                        await recreateMonitor()
-                    }
-                } catch (e) {
-                    this.log(false, 'BUY-MODE', `Failed to check/recreate monitor tab: ${e instanceof Error ? e.message : String(e)}`, 'warn')
-                }
-
-                try {
-                    const data = await this.browser.func.getDashboardData(monitor)
-                    const nowPts = data.userStatus.availablePoints || 0
-                    
-                    const spendInfo = pointMonitor.checkSpending(nowPts)
-                    if (spendInfo) {
-                        this.log(false, 'BUY-MODE', `Detected spend: -${spendInfo.spent} points (current: ${spendInfo.current})`)
-                        await sendSpendNotice(spendInfo.spent, spendInfo.current, spendInfo.total)
-                    }
-                } catch (err) {
-                    // If we lost the page context, recreate the monitor tab and continue
-                    const msg = err instanceof Error ? err.message : String(err)
-                    if (/Target closed|page has been closed|browser has been closed/i.test(msg)) {
-                        this.log(false, 'BUY-MODE', 'Monitor page closed or lost; recreating...', 'warn')
-                        try { 
-                            await recreateMonitor() 
-                        } catch (e) {
-                            this.log(false, 'BUY-MODE', `Failed to recreate monitor: ${e instanceof Error ? e.message : String(e)}`, 'warn')
-                        }
-                    } else {
-                        this.log(false, 'BUY-MODE', `Dashboard check error: ${msg}`, 'warn')
-                    }
-                }
-            }
-
-            // Save cookies and close monitor; keep main page open for user until they close it themselves
-            try { 
-                await saveSessionData(this.config.sessionPath, browser, account.email, this.isMobile) 
-            } catch (e) { 
-                log(false, 'BUY-MODE', `Failed to save session: ${e instanceof Error ? e.message : String(e)}`, 'warn')
-            }
-            try { 
-                if (!monitor.isClosed()) await monitor.close() 
-            } catch (e) {
-                log(false, 'BUY-MODE', `Failed to close monitor tab: ${e instanceof Error ? e.message : String(e)}`, 'warn')
-            }
-
-            // Send a final minimal conclusion webhook for this manual session
-            const monitorSummary = pointMonitor.getSummary()
-            const summary: AccountSummary = {
-                email: account.email,
-                durationMs: monitorSummary.duration,
-                desktopCollected: 0,
-                mobileCollected: 0,
-                totalCollected: -monitorSummary.spent, // negative indicates spend
-                initialTotal: monitorSummary.initial,
-                endTotal: monitorSummary.current,
-                errors: [],
-                banned: { status: false, reason: '' }
-            }
-            await this.sendConclusion([summary])
-
-            this.log(false, 'BUY-MODE', 'Buy mode session finished (monitoring period ended). You can close the browser when done.')
-        } catch (e) {
-            this.log(false, 'BUY-MODE', `Error in buy mode: ${e instanceof Error ? e.message : String(e)}`, 'error')
-        }
-    }
-
     private printBanner() {
         if (this.config.clusters > 1 && !cluster.isPrimary) return
         
         const version = this.getVersion()
-        const mode = this.buyModeEnabled ? 'Manual Mode' : 'Automated Mode'
         
-        log('main', 'BANNER', `Microsoft Rewards Bot v${version} - ${mode}`)
+        log('main', 'BANNER', `Microsoft Rewards Bot v${version}`)
         log('main', 'BANNER', `PID: ${process.pid} | Workers: ${this.config.clusters}`)
         
-        if (this.buyModeEnabled) {
-            log('main', 'BANNER', `Target: ${this.buyModeArgument || 'Interactive selection'}`)
-        } else {
-            const upd = this.config.update || {}
-            const updTargets: string[] = []
-            if (upd.method && upd.method !== 'zip') updTargets.push(`Update: ${upd.method}`)
-            if (upd.docker) updTargets.push('Docker')
-            if (updTargets.length > 0) {
-                log('main', 'BANNER', `Auto-Update: ${updTargets.join(', ')}`)
-            }
+        const upd = this.config.update || {}
+        const updTargets: string[] = []
+        if (upd.method && upd.method !== 'zip') updTargets.push(`Update: ${upd.method}`)
+        if (upd.docker) updTargets.push('Docker')
+        if (updTargets.length > 0) {
+            log('main', 'BANNER', `Auto-Update: ${updTargets.join(', ')}`)
         }
     }
 
@@ -540,7 +355,7 @@ export class MicrosoftRewardsBot {
                     try {
                         const updateCode = await this.runAutoUpdate()
                         if (updateCode === 0) {
-                            log('main', 'UPDATE', '✅ Update successful - next run will use new version', 'log', 'green')
+                            log('main', 'UPDATE', 'âœ… Update successful - next run will use new version', 'log', 'green')
                         }
                     } catch (e) {
                         log('main', 'UPDATE', `Auto-update failed: ${e instanceof Error ? e.message : String(e)}`, 'warn')
@@ -812,7 +627,7 @@ export class MicrosoftRewardsBot {
             // If update was successful (code 0), restart the script to use the new version
             // This is critical for cron jobs - they need to apply updates immediately
             if (updateResult === 0) {
-                log('main', 'UPDATE', '✅ Update successful - restarting with new version...', 'log', 'green')
+                log('main', 'UPDATE', 'âœ… Update successful - restarting with new version...', 'log', 'green')
                 // On Raspberry Pi/Linux with cron, just exit - cron will handle next run
                 // No need to restart immediately, next scheduled run will use new code
                 log('main', 'UPDATE', 'Next scheduled run will use the updated code', 'log')
@@ -829,7 +644,7 @@ export class MicrosoftRewardsBot {
             const { ConclusionWebhook } = await import('./util/ConclusionWebhook')
             await ConclusionWebhook(
                 this.config,
-                '🚫 Ban Detected',
+                'ðŸš« Ban Detected',
                 `**Account:** ${email}\n**Reason:** ${reason || 'detected by heuristics'}`,
                 undefined,
                 DISCORD.COLOR_RED
@@ -968,7 +783,7 @@ export class MicrosoftRewardsBot {
             const { ConclusionWebhook } = await import('./util/ConclusionWebhook')
             await ConclusionWebhook(
                 this.config,
-                '🚨 Critical Security Alert',
+                'ðŸš¨ Critical Security Alert',
                 `@everyone\n\n**Account:** ${email}\n**Issue:** ${reason}\n**Status:** All accounts paused pending review`,
                 undefined,
                 DISCORD.COLOR_RED

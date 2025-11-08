@@ -201,20 +201,6 @@ The build process regenerates `package-lock.json` inside the container to ensure
 - **Native performance on all architectures**
 - **Raspberry Pi users won't encounter binary mismatch errors**
 
-### Buy Mode Not Supported
-
-**Buy Mode cannot be used in Docker** because it requires interactive terminal input. Use Buy Mode only in local installations:
-
-```bash
-# ✅ Works locally
-npm run buy
-
-# ❌ Does not work in Docker
-docker exec microsoft-rewards-script npm run buy
-```
-
-For manual redemptions, run the bot locally outside Docker.
-
 ### Headless Mode Required
 
 Docker containers **must run in headless mode**. The Dockerfile automatically sets `FORCE_HEADLESS=1`. Do not disable this.
