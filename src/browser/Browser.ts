@@ -1,11 +1,11 @@
-import playwright, { BrowserContext } from 'rebrowser-playwright'
-import { newInjectedContext } from 'fingerprint-injector'
 import { FingerprintGenerator } from 'fingerprint-generator'
+import { newInjectedContext } from 'fingerprint-injector'
+import playwright, { BrowserContext } from 'rebrowser-playwright'
 
 import { MicrosoftRewardsBot } from '../index'
+import { AccountProxy } from '../interface/Account'
 import { loadSessionData, saveFingerprintData } from '../util/Load'
 import { updateFingerprintUserAgent } from '../util/UserAgent'
-import { AccountProxy } from '../interface/Account'
 
 class Browser {
     private bot: MicrosoftRewardsBot
