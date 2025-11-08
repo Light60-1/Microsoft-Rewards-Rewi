@@ -11,7 +11,6 @@
  * - Mobile retry logic
  */
 
-import type { Page } from 'playwright'
 import type { MicrosoftRewardsBot } from '../index'
 import type { Account } from '../interface/Account'
 import { saveSessionData } from '../util/Load'
@@ -56,8 +55,7 @@ export class MobileFlow {
             this.bot.log(true, 'MOBILE-FLOW', 'Browser started successfully')
 
             // Login into MS Rewards, then respect compromised mode
-            const login = (this.bot as unknown as { login: { login: (page: Page, email: string, password: string, totp?: string) => Promise<void>; getMobileAccessToken: (page: Page, email: string, totp?: string) => Promise<string> } }).login
-            await login.login(this.bot.homePage, account.email, account.password, account.totp)
+            await this.bot.login.login(this.bot.homePage, account.email, account.password, account.totp)
             
             if (this.bot.compromisedModeActive) {
                 keepBrowserOpen = true
@@ -84,7 +82,7 @@ export class MobileFlow {
                 return { initialPoints: 0, collectedPoints: 0 }
             }
             
-            const accessToken = await login.getMobileAccessToken(this.bot.homePage, account.email, account.totp)
+            const accessToken = await this.bot.login.getMobileAccessToken(this.bot.homePage, account.email, account.totp)
             await this.bot.browser.func.goHome(this.bot.homePage)
 
             const data = await this.bot.browser.func.getDashboardData()

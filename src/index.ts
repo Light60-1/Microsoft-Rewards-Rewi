@@ -31,6 +31,7 @@ import { StartupValidator } from './util/StartupValidator'
 import { Util } from './util/Utils'
 
 import { Activities } from './functions/Activities'
+import { Login } from './functions/Login'
 import { Workers } from './functions/Workers'
 
 import { DesktopFlow } from './flows/DesktopFlow'
@@ -47,6 +48,7 @@ export class MicrosoftRewardsBot {
     public config
     public utils: Util
     public activities: Activities = new Activities(this)
+    public login!: Login // Fixed: Login instance needed by flows
     public browser: {
         func: BrowserFunc,
         utils: BrowserUtil
@@ -88,6 +90,7 @@ export class MicrosoftRewardsBot {
             func: new BrowserFunc(this),
             utils: new BrowserUtil(this)
         }
+        this.login = new Login(this) // Fixed: Initialize Login instance
         this.workers = new Workers(this)
         this.humanizer = new Humanizer(this.utils, this.config.humanization)
         this.activeWorkers = this.config.clusters
