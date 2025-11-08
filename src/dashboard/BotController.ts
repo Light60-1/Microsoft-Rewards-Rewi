@@ -1,6 +1,7 @@
-import { dashboardState } from './state'
 import type { MicrosoftRewardsBot } from '../index'
+import { log as botLog } from '../util/Logger'
 import { getErrorMessage } from '../util/Utils'
+import { dashboardState } from './state'
 
 export class BotController {
   private botInstance: MicrosoftRewardsBot | null = null
@@ -11,7 +12,7 @@ export class BotController {
   }
 
   private log(message: string, level: 'log' | 'warn' | 'error' = 'log'): void {
-    console.log(`[BotController] ${message}`)
+    botLog('main', 'BOT-CONTROLLER', message, level)
     
     dashboardState.addLog({
       timestamp: new Date().toISOString(),

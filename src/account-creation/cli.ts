@@ -1,9 +1,9 @@
 import Browser from '../browser/Browser'
-import { AccountCreator } from './AccountCreator'
-import { log } from '../util/Logger'
 import { MicrosoftRewardsBot } from '../index'
+import { log } from '../util/Logger'
+import { AccountCreator } from './AccountCreator'
 
-async function main() {
+async function main(): Promise<void> {
   // Get referral URL from command line args
   const args = process.argv.slice(2)
   const referralUrl = args[0] // Optional referral URL

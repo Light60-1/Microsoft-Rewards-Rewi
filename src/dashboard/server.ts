@@ -1,11 +1,16 @@
 import express from 'express'
-import { createServer } from 'http'
-import { WebSocketServer, WebSocket } from 'ws'
-import path from 'path'
 import fs from 'fs'
-import { apiRouter } from './routes'
-import { dashboardState, DashboardLog } from './state'
+import { createServer } from 'http'
+import path from 'path'
+import { WebSocket, WebSocketServer } from 'ws'
 import { log as botLog } from '../util/Logger'
+import { apiRouter } from './routes'
+import { DashboardLog, dashboardState } from './state'
+
+// Dashboard logging helper
+const dashLog = (message: string, type: 'log' | 'warn' | 'error' = 'log'): void => {
+  botLog('main', 'DASHBOARD', message, type)
+}
 
 const PORT = process.env.DASHBOARD_PORT ? parseInt(process.env.DASHBOARD_PORT) : 3000
 const HOST = process.env.DASHBOARD_HOST || '127.0.0.1'
@@ -80,15 +85,15 @@ export class DashboardServer {
   private setupWebSocket(): void {
     this.wss.on('connection', (ws: WebSocket) => {
       this.clients.add(ws)
-      console.log('[Dashboard] WebSocket client connected')
+      dashLog('WebSocket client connected')
 
       ws.on('close', () => {
         this.clients.delete(ws)
-        console.log('[Dashboard] WebSocket client disconnected')
+        dashLog('WebSocket client disconnected')
       })
 
       ws.on('error', (error) => {
-        console.error('[Dashboard] WebSocket error:', error)
+        dashLog(`WebSocket error: ${error instanceof Error ? error.message : String(error)}`, 'error')
       })
 
       // Send initial data on connect
@@ -140,7 +145,7 @@ export class DashboardServer {
         try {
           client.send(payload)
         } catch (error) {
-          console.error('[Dashboard] Error broadcasting update:', error)
+          dashLog(`Error broadcasting update: ${error instanceof Error ? error.message : String(error)}`, 'error')
         }
       }
     }
@@ -148,15 +153,15 @@ export class DashboardServer {
 
   public start(): void {
     this.server.listen(PORT, HOST, () => {
-      console.log(`[Dashboard] Server running on http://${HOST}:${PORT}`)
-      console.log('[Dashboard] WebSocket ready for live logs')
+      dashLog(`Server running on http://${HOST}:${PORT}`)
+      dashLog('WebSocket ready for live logs')
     })
   }
 
   public stop(): void {
     this.wss.close()
     this.server.close()
-    console.log('[Dashboard] Server stopped')
+    dashLog('Server stopped')
   }
 }
 

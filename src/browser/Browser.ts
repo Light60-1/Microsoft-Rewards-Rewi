@@ -165,8 +165,10 @@ class Browser {
                             // Hide automation markers
                             ['__nightmare', '__playwright', '__pw_manual', '__webdriver_script_fn', 'webdriver'].forEach(prop => {
                                 try {
-                                    if (prop in window) delete window[prop];
-                                } catch {}
+                                    if (prop in window) delete (window as Record<string, unknown>)[prop];
+                                } catch {
+                                    // Silently ignore: property deletion may be blocked by browser security
+                                }
                             });
 
                             // Override permissions to avoid detection

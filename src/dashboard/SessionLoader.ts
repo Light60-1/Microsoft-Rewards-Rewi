@@ -39,8 +39,8 @@ export function loadPointsFromSessions(email: string): number | undefined {
     }
 
     return undefined
-  } catch (error) {
-    console.error(`[Dashboard] Error loading points for ${email}:`, error)
+  } catch {
+    // Silently ignore: session loading is optional fallback
     return undefined
   }
 }
@@ -77,8 +77,8 @@ export function loadAllPointsFromSessions(): Map<string, number> {
         continue
       }
     }
-  } catch (error) {
-    console.error('[Dashboard] Error loading points from sessions:', error)
+  } catch {
+    // Silently ignore: session loading is optional fallback
   }
 
   return pointsMap
@@ -112,8 +112,8 @@ export function loadPointsFromJobState(email: string): number | undefined {
     }
 
     return undefined
-  } catch (error) {
-    console.error(`[Dashboard] Error loading job state for ${email}:`, error)
+  } catch {
+    // Silently ignore: job state loading is optional fallback
     return undefined
   }
 }

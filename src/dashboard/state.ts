@@ -50,7 +50,8 @@ class DashboardState {
       try {
         listener(type, data)
       } catch (error) {
-        console.error('[Dashboard State] Error notifying listener:', error)
+        // Silently ignore listener errors to prevent state corruption
+        // Listeners are non-critical (UI updates, logging)
       }
     }
   }

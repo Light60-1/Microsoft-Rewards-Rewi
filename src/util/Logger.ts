@@ -58,7 +58,7 @@ function getBuffer(url: string): WebhookBuffer {
     return buf
 }
 
-async function sendBatch(url: string, buf: WebhookBuffer) {
+async function sendBatch(url: string, buf: WebhookBuffer): Promise<void> {
     if (buf.sending) return
     buf.sending = true
     while (buf.lines.length > 0) {

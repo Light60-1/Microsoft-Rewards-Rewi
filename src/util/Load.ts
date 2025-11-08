@@ -7,6 +7,10 @@ import { Account } from '../interface/Account'
 import { Config, ConfigBrowser, ConfigSaveFingerprint, ConfigScheduling } from '../interface/Config'
 import { Util } from './Utils'
 
+
+
+
+
 const utils = new Util()
 
 let configCache: Config
@@ -72,11 +76,10 @@ function stripJsonComments(input: string): string {
 // Normalize both legacy (flat) and new (nested) config schemas into the flat Config interface
 function normalizeConfig(raw: unknown): Config {
     // TYPE SAFETY NOTE: Using `any` here is necessary for backwards compatibility
-    // The config format has evolved from flat structure to nested structure over time
-    // We need to support both formats dynamically without knowing which one we'll receive
-    // Alternative approaches (discriminated unions, multiple interfaces) would require
-    // runtime type checking on every property access, making the code much more complex
-    // The validation happens implicitly through the Config interface return type
+    // JUSTIFIED USE OF `any`: The config format has evolved from flat → nested structure over time
+    // This needs to support BOTH formats for backward compatibility with existing user configs
+    // Runtime validation happens through explicit property checks and the Config interface return type ensures type safety at function boundary
+    // Alternative approaches (discriminated unions, conditional types) would require extensive runtime checks making code significantly more complex
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const n = (raw || {}) as any
 
@@ -350,9 +353,9 @@ export function loadAccounts(): Account[] {
         if (!Array.isArray(parsed)) throw new Error('accounts must be an array')
         // minimal shape validation
         for (const entry of parsed) {
-            // TYPE SAFETY NOTE: Using `any` for account validation
-            // Accounts come from user-provided JSON with unknown structure
-            // We validate each property explicitly below rather than trusting the type
+            // JUSTIFIED USE OF `any`: Accounts come from untrusted user JSON with unpredictable structure
+            // We perform explicit runtime validation of each property below (typeof checks, regex validation, etc.)
+            // This is safer than trusting a type assertion to a specific interface
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const a = entry as any
             if (!a || typeof a.email !== 'string' || typeof a.password !== 'string') {
@@ -452,7 +455,12 @@ export function loadConfig(): Config {
     }
 }
 
-export async function loadSessionData(sessionPath: string, email: string, isMobile: boolean, saveFingerprint: ConfigSaveFingerprint) {
+interface SessionData {
+    cookies: Cookie[]
+    fingerprint?: BrowserFingerprintWithHeaders
+}
+
+export async function loadSessionData(sessionPath: string, email: string, isMobile: boolean, saveFingerprint: ConfigSaveFingerprint): Promise<SessionData> {
     try {
         // Fetch cookie file
         const cookieFile = path.join(__dirname, '../browser/', sessionPath, email, `${isMobile ? 'mobile_cookies' : 'desktop_cookies'}.json`)

@@ -40,7 +40,12 @@ import { Activities } from './functions/Activities'
 import { Login } from './functions/Login'
 import { Workers } from './functions/Workers'
 
-import { DISCORD } from './constants'
+import { DesktopFlow } from './flows/DesktopFlow'
+import { MobileFlow } from './flows/MobileFlow'
+// import { SummaryReporter } from './flows/SummaryReporter' // TODO: Integrate in Phase 3
+// import { BuyModeHandler } from './flows/BuyModeHandler' // TODO: Integrate in Phase 3
+
+import { DISCORD, TIMEOUTS } from './constants'
 import { Account } from './interface/Account'
 
 
@@ -66,7 +71,7 @@ export class MicrosoftRewardsBot {
     private activeWorkers: number
     private browserFactory: Browser = new Browser(this)
     private accounts: Account[]
-    private workers: Workers
+    public workers: Workers // Made public for DesktopFlow access
     private login = new Login(this)
     private buyModeEnabled: boolean = false
     private buyModeArgument?: string
@@ -264,7 +269,7 @@ export class MicrosoftRewardsBot {
                 await this.runTasks(this.accounts)
                 if (pass < passes) {
                     log('main', 'MAIN', `Completed pass ${pass}/${passes}. Waiting before next pass...`)
-                    await this.utils.wait(60000) // 1 minute between passes
+                    await this.utils.wait(TIMEOUTS.ONE_MINUTE)
                 }
             }
         }
@@ -564,7 +569,7 @@ export class MicrosoftRewardsBot {
                 await this.runTasks(chunk)
                 if (pass < passes) {
                     log('main', 'MAIN-WORKER', `Completed pass ${pass}/${passes}. Waiting before next pass...`)
-                    await this.utils.wait(60000) // 1 minute between passes
+                    await this.utils.wait(TIMEOUTS.ONE_MINUTE)
                 }
             }
         })
@@ -876,252 +881,18 @@ export class MicrosoftRewardsBot {
     }
 
     async Desktop(account: Account) {
-        log(false,'FLOW','Desktop() invoked')
-        const browser = await this.browserFactory.createBrowser(account.proxy, account.email)
-        let keepBrowserOpen = false
-        try {
-            this.homePage = await browser.newPage()
-
-            log(this.isMobile, 'MAIN', 'Starting browser')
-
-            // Login into MS Rewards, then optionally stop if compromised
-            await this.login.login(this.homePage, account.email, account.password, account.totp)
-
-            if (this.compromisedModeActive) {
-                // User wants the page to remain open for manual recovery. Do not proceed to tasks.
-                keepBrowserOpen = true
-                const reason = this.compromisedReason || 'security-issue'
-                log(this.isMobile, 'SECURITY', `Account security check failed (${reason}). Browser kept open for manual review: ${account.email}`, 'warn', 'yellow')
-                try {
-                    const { ConclusionWebhook } = await import('./util/ConclusionWebhook')
-                    await ConclusionWebhook(
-                        this.config,
-                        '🔐 Security Check',
-                        `**Account:** ${account.email}\n**Status:** ${reason}\n**Action:** Browser kept open, activities paused`,
-                        undefined,
-                        0xFFAA00
-                    )
-                } catch {/* ignore */}
-                // Save session for convenience, but do not close the browser
-                try { 
-                    await saveSessionData(this.config.sessionPath, this.homePage.context(), account.email, this.isMobile) 
-                } catch (e) {
-                    log(this.isMobile, 'SECURITY', `Failed to save session: ${e instanceof Error ? e.message : String(e)}`, 'warn')
-                }
-                return { initialPoints: 0, collectedPoints: 0 }
-            }
-
-            await this.browser.func.goHome(this.homePage)
-
-            const data = await this.browser.func.getDashboardData()
-
-            const initial = data.userStatus.availablePoints
-
-            log(this.isMobile, 'MAIN-POINTS', `Current point count: ${initial}`)
-
-            const browserEnarablePoints = await this.browser.func.getBrowserEarnablePoints()
-
-            // Tally all the desktop points
-            const pointsCanCollect = browserEnarablePoints.dailySetPoints +
-                browserEnarablePoints.desktopSearchPoints +
-                browserEnarablePoints.morePromotionsPoints
-
-            log(this.isMobile, 'MAIN-POINTS', `You can earn ${pointsCanCollect} points today`)
-
-            if (pointsCanCollect === 0) {
-                // Extra diagnostic breakdown so users know WHY it's zero
-                log(this.isMobile, 'MAIN-POINTS', `Breakdown (desktop): dailySet=${browserEnarablePoints.dailySetPoints} search=${browserEnarablePoints.desktopSearchPoints} promotions=${browserEnarablePoints.morePromotionsPoints}`)
-                log(this.isMobile, 'MAIN-POINTS', 'All desktop earnable buckets are zero. This usually means: tasks already completed today OR the daily reset has not happened yet for your time zone. If you still want to force run activities set execution.runOnZeroPoints=true in config.', 'log', 'yellow')
-            }
-
-            // If runOnZeroPoints is false and 0 points to earn, don't continue
-            if (!this.config.runOnZeroPoints && pointsCanCollect === 0) {
-                log(this.isMobile, 'MAIN', 'No points to earn and "runOnZeroPoints" is set to "false", stopping!', 'log', 'yellow')
-                return { initialPoints: initial, collectedPoints: 0 }
-            }
-
-            // Open a new tab to where the tasks are going to be completed
-            const workerPage = await browser.newPage()
-
-            // Go to homepage on worker page
-            await this.browser.func.goHome(workerPage)
-
-            // Complete daily set
-            if (this.config.workers.doDailySet) {
-                await this.workers.doDailySet(workerPage, data)
-            }
-
-            // Complete more promotions
-            if (this.config.workers.doMorePromotions) {
-                await this.workers.doMorePromotions(workerPage, data)
-            }
-
-            // Complete punch cards
-            if (this.config.workers.doPunchCards) {
-                await this.workers.doPunchCard(workerPage, data)
-            }
-
-            // Do desktop searches
-            if (this.config.workers.doDesktopSearch) {
-                await this.activities.doSearch(workerPage, data)
-            }
-
-            // Fetch points BEFORE closing (avoid page closed reload error)
-            const after = await this.browser.func.getCurrentPoints().catch(()=>initial)
-            return {
-                initialPoints: initial,
-                collectedPoints: (after - initial) || 0
-            }
-        } finally {
-            if (!keepBrowserOpen) {
-                try {
-                    await this.browser.func.closeBrowser(browser, account.email)
-                } catch (closeError) {
-                    const message = closeError instanceof Error ? closeError.message : String(closeError)
-                    this.log(this.isMobile, 'CLOSE-BROWSER', `Failed to close desktop context: ${message}`, 'warn')
-                }
-            }
-        }
+        log(false, 'FLOW', 'Desktop() - delegating to DesktopFlow module')
+        const desktopFlow = new DesktopFlow(this)
+        return await desktopFlow.run(account)
     }
 
     async Mobile(
         account: Account,
         retryTracker = new MobileRetryTracker(this.config.searchSettings.retryMobileSearchAmount)
     ): Promise<{ initialPoints: number; collectedPoints: number }> {
-        log(true,'FLOW','Mobile() invoked')
-        const browser = await this.browserFactory.createBrowser(account.proxy, account.email)
-        let keepBrowserOpen = false
-        let browserClosed = false
-        try {
-            this.homePage = await browser.newPage()
-
-            log(this.isMobile, 'MAIN', 'Starting browser')
-
-            // Login into MS Rewards, then respect compromised mode
-            await this.login.login(this.homePage, account.email, account.password, account.totp)
-            if (this.compromisedModeActive) {
-                keepBrowserOpen = true
-                const reason = this.compromisedReason || 'security-issue'
-                log(this.isMobile, 'SECURITY', `Mobile security check failed (${reason}). Browser kept open for manual review: ${account.email}`, 'warn', 'yellow')
-                try {
-                    const { ConclusionWebhook } = await import('./util/ConclusionWebhook')
-                    await ConclusionWebhook(
-                        this.config,
-                        '🔐 Security Check (Mobile)',
-                        `**Account:** ${account.email}\n**Status:** ${reason}\n**Action:** Browser kept open, mobile activities paused`,
-                        undefined,
-                        0xFFAA00
-                    )
-                } catch {/* ignore */}
-                try {
-                    await saveSessionData(this.config.sessionPath, this.homePage.context(), account.email, this.isMobile)
-                } catch (e) {
-                    log(this.isMobile, 'SECURITY', `Failed to save session: ${e instanceof Error ? e.message : String(e)}`, 'warn')
-                }
-                return { initialPoints: 0, collectedPoints: 0 }
-            }
-            const accessToken = await this.login.getMobileAccessToken(this.homePage, account.email, account.totp)
-            await this.browser.func.goHome(this.homePage)
-
-            const data = await this.browser.func.getDashboardData()
-            const initialPoints = data.userStatus.availablePoints || 0
-
-            const browserEnarablePoints = await this.browser.func.getBrowserEarnablePoints()
-            const appEarnablePoints = await this.browser.func.getAppEarnablePoints(accessToken)
-
-            const pointsCanCollect = browserEnarablePoints.mobileSearchPoints + appEarnablePoints.totalEarnablePoints
-
-            log(this.isMobile, 'MAIN-POINTS', `You can earn ${pointsCanCollect} points today (Browser: ${browserEnarablePoints.mobileSearchPoints} points, App: ${appEarnablePoints.totalEarnablePoints} points)`)
-
-            if (pointsCanCollect === 0) {
-                log(this.isMobile, 'MAIN-POINTS', `Breakdown (mobile): browserSearch=${browserEnarablePoints.mobileSearchPoints} appTotal=${appEarnablePoints.totalEarnablePoints}`)
-                log(this.isMobile, 'MAIN-POINTS', 'All mobile earnable buckets are zero. Causes: mobile searches already maxed, daily set finished, or daily rollover not reached yet. You can force execution by setting execution.runOnZeroPoints=true.', 'log', 'yellow')
-            }
-
-            // If runOnZeroPoints is false and 0 points to earn, don't continue
-            if (!this.config.runOnZeroPoints && pointsCanCollect === 0) {
-                log(this.isMobile, 'MAIN', 'No points to earn and "runOnZeroPoints" is set to "false", stopping!', 'log', 'yellow')
-
-                return {
-                    initialPoints: initialPoints,
-                    collectedPoints: 0
-                }
-            }
-            // Do daily check in
-            if (this.config.workers.doDailyCheckIn) {
-                await this.activities.doDailyCheckIn(accessToken, data)
-            }
-
-            // Do read to earn
-            if (this.config.workers.doReadToEarn) {
-                await this.activities.doReadToEarn(accessToken, data)
-            }
-
-            // Do mobile searches
-            const configuredRetries = Number(this.config.searchSettings.retryMobileSearchAmount ?? 0)
-            const maxMobileRetries = Number.isFinite(configuredRetries) ? configuredRetries : 0
-
-            if (this.config.workers.doMobileSearch) {
-                // If no mobile searches data found, stop (Does not always exist on new accounts)
-                if (data.userStatus.counters.mobileSearch) {
-                    // Open a new tab to where the tasks are going to be completed
-                    const workerPage = await browser.newPage()
-
-                    // Go to homepage on worker page
-                    await this.browser.func.goHome(workerPage)
-
-                    await this.activities.doSearch(workerPage, data)
-
-                    // Fetch current search points
-                    const mobileSearchPoints = (await this.browser.func.getSearchPoints()).mobileSearch?.[0]
-
-                    if (mobileSearchPoints && (mobileSearchPoints.pointProgressMax - mobileSearchPoints.pointProgress) > 0) {
-                        const shouldRetry = retryTracker.registerFailure()
-
-                        if (!shouldRetry) {
-                            const exhaustedAttempts = retryTracker.getAttemptCount()
-                            log(this.isMobile, 'MAIN', `Max retry limit of ${maxMobileRetries} reached after ${exhaustedAttempts} attempt(s). Exiting retry loop`, 'warn')
-                        } else {
-                            const attempt = retryTracker.getAttemptCount()
-                            log(this.isMobile, 'MAIN', `Attempt ${attempt}/${maxMobileRetries}: Unable to complete mobile searches, bad User-Agent? Increase search delay? Retrying...`, 'log', 'yellow')
-
-                            // Close mobile browser before retrying to release resources
-                            try {
-                                await this.browser.func.closeBrowser(browser, account.email)
-                                browserClosed = true
-                            } catch (closeError) {
-                                const message = closeError instanceof Error ? closeError.message : String(closeError)
-                                this.log(this.isMobile, 'CLOSE-BROWSER', `Failed to close mobile context before retry: ${message}`, 'warn')
-                            }
-
-                            // Create a new browser and try again with the same tracker
-                            return await this.Mobile(account, retryTracker)
-                        }
-                    }
-                } else {
-                    log(this.isMobile, 'MAIN', 'Unable to fetch search points, your account is most likely too "new" for this! Try again later!', 'warn')
-                }
-            }
-
-            const afterPointAmount = await this.browser.func.getCurrentPoints()
-
-            log(this.isMobile, 'MAIN-POINTS', `The script collected ${afterPointAmount - initialPoints} points today`)
-
-            return {
-                initialPoints: initialPoints,
-                collectedPoints: (afterPointAmount - initialPoints) || 0
-            }
-        } finally {
-            if (!keepBrowserOpen && !browserClosed) {
-                try {
-                    await this.browser.func.closeBrowser(browser, account.email)
-                    browserClosed = true
-                } catch (closeError) {
-                    const message = closeError instanceof Error ? closeError.message : String(closeError)
-                    this.log(this.isMobile, 'CLOSE-BROWSER', `Failed to close mobile context: ${message}`, 'warn')
-                }
-            }
-        }
+        log(true, 'FLOW', 'Mobile() - delegating to MobileFlow module')
+        const mobileFlow = new MobileFlow(this)
+        return await mobileFlow.run(account, retryTracker)
     }
 
     private async sendConclusion(summaries: AccountSummary[]) {
@@ -1376,7 +1147,7 @@ function formatDuration(ms: number): string {
     return parts.join(' ') || `${ms}ms`
 }
 
-async function main() {
+async function main(): Promise<void> {
     // Check for dashboard mode flag (standalone dashboard)
     if (process.argv.includes('-dashboard')) {
         const { startDashboardServer } = await import('./dashboard/server')

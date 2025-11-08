@@ -4,7 +4,25 @@ import { BrowserFingerprintWithHeaders } from 'fingerprint-generator'
 import { log } from './Logger'
 import { Retry } from './Retry'
 
-import { ChromeVersion, EdgeVersion, Architecture, Platform } from '../interface/UserAgentUtil'
+import { Architecture, ChromeVersion, EdgeVersion, Platform } from '../interface/UserAgentUtil'
+
+interface UserAgentMetadata {
+    mobile: boolean
+    isMobile: boolean
+    platform: string
+    fullVersionList: Array<{ brand: string; version: string }>
+    brands: Array<{ brand: string; version: string }>
+    platformVersion: string
+    architecture: string
+    bitness: string
+    model: string
+    uaFullVersion: string
+}
+
+interface UserAgentResult {
+    userAgent: string
+    userAgentMetadata: UserAgentMetadata
+}
 
 const NOT_A_BRAND_VERSION = '99'
 const EDGE_VERSION_URL = 'https://edgeupdates.microsoft.com/api/products'
@@ -24,7 +42,7 @@ type EdgeVersionResult = {
 let edgeVersionCache: { data: EdgeVersionResult; expiresAt: number } | null = null
 let edgeVersionInFlight: Promise<EdgeVersionResult> | null = null
 
-export async function getUserAgent(isMobile: boolean) {
+export async function getUserAgent(isMobile: boolean): Promise<UserAgentResult> {
     const system = getSystemComponents(isMobile)
     const app = await getAppComponents(isMobile)
 
@@ -133,7 +151,17 @@ export function getSystemComponents(mobile: boolean): string {
     return 'Windows NT 10.0; Win64; x64'
 }
 
-export async function getAppComponents(isMobile: boolean) {
+interface AppComponents {
+    not_a_brand_version: string
+    not_a_brand_major_version: string
+    edge_version: string
+    edge_major_version: string
+    chrome_version: string
+    chrome_major_version: string
+    chrome_reduced_version: string
+}
+
+export async function getAppComponents(isMobile: boolean): Promise<AppComponents> {
     const versions = await getEdgeVersions(isMobile)
     const edgeVersion = isMobile ? versions.android : versions.windows as string
     const edgeMajorVersion = edgeVersion?.split('.')[0]

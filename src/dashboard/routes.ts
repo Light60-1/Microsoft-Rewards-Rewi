@@ -1,9 +1,9 @@
-import { Router, Request, Response } from 'express'
+import { Request, Response, Router } from 'express'
 import fs from 'fs'
 import path from 'path'
-import { dashboardState } from './state'
-import { loadAccounts, loadConfig, getConfigPath } from '../util/Load'
+import { getConfigPath, loadAccounts, loadConfig } from '../util/Load'
 import { botController } from './BotController'
+import { dashboardState } from './state'
 
 export const apiRouter = Router()
 
@@ -17,8 +17,8 @@ function ensureAccountsLoaded(): void {
     try {
       const loadedAccounts = loadAccounts()
       dashboardState.initializeAccounts(loadedAccounts.map(a => a.email))
-    } catch (error) {
-      console.error('[Dashboard] Failed to load accounts:', error)
+    } catch {
+      // Silently ignore: accounts loading is optional for API fallback
     }
   }
 }
