@@ -137,14 +137,17 @@ npm run creator
 # With referral link (earn rewards credit)
 npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE&ref=rafsrchae
 
-# With recovery email for account security
+# With recovery email (will prompt for verification code)
 npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -r backup@gmail.com
 
-# With 2FA enabled automatically
+# With 2FA enabled (will prompt for QR code scan)
 npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE --2fa
 
-# Full automation mode (skip all prompts)
-npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -r backup@gmail.com -y --2fa
+# Skip all prompts (no recovery email or 2FA)
+npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y
+
+# Full security with auto-accept (requires manual code/QR scan)
+npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -r backup@gmail.com --2fa -y
 ```
 
 **✨ Features:**
@@ -162,8 +165,20 @@ npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -r backup@gmail.co
 **🎛️ Command Arguments:**
 - `<url>` — Referral URL (optional)
 - `-r <email>` — Recovery email address
-- `-y` — Auto-accept mode (skip prompts)
-- `--2fa` — Enable 2FA automatically
+- `-y` — Auto-accept mode (skip interactive prompts)
+- `--2fa` — Enable 2FA setup
+
+**⚙️ How Flags Work:**
+
+| Command | Recovery Email | 2FA | Notes |
+|---------|---------------|-----|-------|
+| `npm run creator` | ❓ Prompts | ❓ Prompts | Interactive mode |
+| `npm run creator -y` | ❌ Skipped | ❌ Skipped | No security features |
+| `npm run creator -r email` | ✅ Uses email | ❓ Prompts | Only recovery |
+| `npm run creator --2fa` | ❓ Prompts | ✅ Enabled | Only 2FA |
+| `npm run creator -r email -y` | ✅ Uses email | ❌ Skipped | No prompt for 2FA |
+| `npm run creator --2fa -y` | ❌ Skipped | ✅ Enabled | No prompt for recovery |
+| `npm run creator -r email --2fa -y` | ✅ Uses email | ✅ Enabled | Full automation |
 
 **📋 What happens:**
 1. Creates Microsoft account (email, password, birthdate, names)

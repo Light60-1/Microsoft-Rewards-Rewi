@@ -631,17 +631,23 @@ export class AccountCreator {
       let recoveryCode: string | undefined
       
       try {
-        // Setup recovery email if requested
-        const emailResult = await this.setupRecoveryEmail(confirmedEmail)
-        if (emailResult) recoveryEmailUsed = emailResult
+        // Setup recovery email (interactive if no -r flag and no -y flag)
+        if (this.recoveryEmail || !this.autoAccept) {
+          const emailResult = await this.setupRecoveryEmail(confirmedEmail)
+          if (emailResult) recoveryEmailUsed = emailResult
+        } else {
+          log(false, 'CREATOR', 'Skipping recovery email setup (-y without -r)', 'log', 'gray')
+        }
         
-        // Setup 2FA if requested
+        // Setup 2FA (only if --2fa flag OR interactive prompt accepts)
         if (this.enable2FA || (!this.autoAccept && await this.ask2FASetup())) {
           const tfaResult = await this.setup2FA()
           if (tfaResult) {
             totpSecret = tfaResult.totpSecret
             recoveryCode = tfaResult.recoveryCode
           }
+        } else {
+          log(false, 'CREATOR', 'Skipping 2FA setup', 'log', 'gray')
         }
       } catch (error) {
         log(false, 'CREATOR', `Post-setup error: ${error}`, 'warn', 'yellow')
@@ -2208,7 +2214,7 @@ ${JSON.stringify(accountData, null, 2)}`
   /**
    * Setup recovery email for the account
    */
-  private async setupRecoveryEmail(currentEmail: string): Promise<string | undefined> {
+  private async setupRecoveryEmail(_currentEmail: string): Promise<string | undefined> {
     try {
       log(false, 'CREATOR', '📧 Setting up recovery email...', 'log', 'cyan')
       

@@ -54,20 +54,32 @@ npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -r backup@gmail.co
 | `-y` | Auto-accept mode (skip prompts) | `-y` |
 | `--2fa` | Enable 2FA automatically | `--2fa` |
 
+**⚠️ Important: How `-y` Works**
+
+The `-y` flag **skips interactive prompts**, but **respects the flags you provide**:
+
+- `npm run creator -y` → Skips recovery email AND 2FA (nothing setup)
+- `npm run creator -r email@example.com -y` → Uses recovery email, skips 2FA
+- `npm run creator --2fa -y` → Skips recovery email, forces 2FA
+- `npm run creator -r email@example.com --2fa -y` → Uses both (full automation)
+
 **Examples:**
 
 ```bash
-# Minimal (no options)
+# Minimal (no options, will prompt for everything)
 npm run creator
 
-# With referral only
+# With referral only (will prompt for recovery email & 2FA)
 npm run creator https://rewards.bing.com/welcome?rh=B395E9D7
 
-# With recovery email (will be asked for code)
+# With recovery email (will be asked for code, then prompts for 2FA)
 npm run creator -r mybackup@gmail.com
 
-# Full automation with 2FA
-npm run creator https://rewards.bing.com/welcome?rh=B395E9D7 -r backup@gmail.com -y --2fa
+# Full automation with 2FA (no prompts, but requires manual code entry)
+npm run creator https://rewards.bing.com/welcome?rh=B395E9D7 -r backup@gmail.com --2fa -y
+
+# Skip everything (fastest, no security features)
+npm run creator https://rewards.bing.com/welcome?rh=B395E9D7 -y
 ```
 
 ### Interactive Flow
