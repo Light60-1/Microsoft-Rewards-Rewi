@@ -3,7 +3,6 @@ import * as crypto from 'crypto'
 import type { Locator, Page } from 'playwright'
 import readline from 'readline'
 
-import { TIMEOUTS } from '../constants'
 import { MicrosoftRewardsBot } from '../index'
 import { OAuth } from '../interface/OAuth'
 import { saveSessionData } from '../util/Load'
@@ -40,19 +39,32 @@ const SELECTORS = {
 
 const LOGIN_TARGET = { host: 'rewards.bing.com', path: '/' }
 
+// Centralized timeouts to replace magic numbers throughout the file
 const DEFAULT_TIMEOUTS = {
   loginMaxMs: (() => {
     const val = Number(process.env.LOGIN_MAX_WAIT_MS || 180000)
-    // IMPROVED: Use isFinite instead of isNaN for consistency
     return (!Number.isFinite(val) || val < 10000 || val > 600000) ? 180000 : val
   })(),
   short: 200,
   medium: 800,
   long: 1500,
+  veryLong: 2000,
+  extraLong: 3000,
   oauthMaxMs: 180000,
   portalWaitMs: 15000,
   elementCheck: 100,
-  fastPoll: 500
+  fastPoll: 500,
+  emailFieldWait: 8000,
+  passwordFieldWait: 4000,
+  rewardsPortalCheck: 8000,
+  navigationTimeout: 30000,
+  navigationTimeoutLinux: 60000,
+  totpThrottle: 5000,
+  totpWait: 1200,
+  passkeyNoPromptLog: 10000,
+  twoFactorTimeout: 120000,
+  bingVerificationMaxIterations: 10,
+  bingVerificationMaxIterationsMobile: 8
 } as const
 
 // Security pattern bundle
@@ -93,6 +105,72 @@ export class Login {
     this.cleanupCompromisedInterval()
   }
 
+  /**
+   * Reusable navigation with retry logic and chrome-error recovery
+   * Eliminates duplicate navigation code throughout the file
+   */
+  private async navigateWithRetry(
+    page: Page, 
+    url: string, 
+    context: string,
+    maxAttempts = 3
+  ): Promise<{ success: boolean; recoveryUsed: boolean }> {
+    const isLinux = process.platform === 'linux'
+    const navigationTimeout = isLinux ? DEFAULT_TIMEOUTS.navigationTimeoutLinux : DEFAULT_TIMEOUTS.navigationTimeout
+    
+    let navigationSucceeded = false
+    let recoveryUsed = false
+    let attempts = 0
+    
+    while (!navigationSucceeded && attempts < maxAttempts) {
+      attempts++
+      try {
+        await page.goto(url, { 
+          waitUntil: 'domcontentloaded',
+          timeout: navigationTimeout
+        })
+        navigationSucceeded = true
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        
+        // Chrome-error recovery pattern
+        if (errorMsg.includes('chrome-error://chromewebdata/')) {
+          this.bot.log(this.bot.isMobile, context, `Navigation interrupted by chrome-error (attempt ${attempts}/${maxAttempts}), attempting recovery...`, 'warn')
+          
+          await this.bot.utils.wait(DEFAULT_TIMEOUTS.long)
+          
+          try {
+            await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
+            navigationSucceeded = true
+            recoveryUsed = true
+            this.bot.log(this.bot.isMobile, context, '✓ Recovery successful via reload')
+          } catch (reloadError) {
+            if (attempts < maxAttempts) {
+              this.bot.log(this.bot.isMobile, context, `Reload failed (attempt ${attempts}/${maxAttempts}), trying fresh navigation...`, 'warn')
+              await this.bot.utils.wait(DEFAULT_TIMEOUTS.veryLong)
+            } else {
+              throw reloadError
+            }
+          }
+        } else if (errorMsg.includes('ERR_PROXY_CONNECTION_FAILED') || errorMsg.includes('ERR_TUNNEL_CONNECTION_FAILED')) {
+          this.bot.log(this.bot.isMobile, context, `Proxy connection failed (attempt ${attempts}/${maxAttempts}): ${errorMsg}`, 'warn')
+          if (attempts < maxAttempts) {
+            await this.bot.utils.wait(DEFAULT_TIMEOUTS.extraLong * attempts)
+          } else {
+            throw new Error(`Proxy connection failed for ${context} - check proxy configuration`)
+          }
+        } else if (attempts < maxAttempts) {
+          this.bot.log(this.bot.isMobile, context, `Navigation failed (attempt ${attempts}/${maxAttempts}): ${errorMsg}`, 'warn')
+          await this.bot.utils.wait(DEFAULT_TIMEOUTS.veryLong * attempts)
+        } else {
+          throw error
+        }
+      }
+    }
+    
+    return { success: navigationSucceeded, recoveryUsed }
+  }
+
   // --------------- Public API ---------------
   async login(page: Page, email: string, password: string, totpSecret?: string) {
     try {
@@ -115,58 +193,12 @@ export class Login {
         return
       }
 
-      const isLinux = process.platform === 'linux'
-      const navigationTimeout = isLinux ? 60000 : 30000
-      
-      // IMPROVEMENT: Try initial navigation with better error handling
-      let navigationSucceeded = false
-      let recoveryUsed = false
-      let attempts = 0
-      const maxAttempts = 3
-      
-      while (!navigationSucceeded && attempts < maxAttempts) {
-        attempts++
-        try {
-          await page.goto('https://www.bing.com/rewards/dashboard', { 
-            waitUntil: 'domcontentloaded',
-            timeout: navigationTimeout
-          })
-          navigationSucceeded = true
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error)
-          
-          // If interrupted by chrome-error, retry with reload approach
-          if (errorMsg.includes('chrome-error://chromewebdata/')) {
-            this.bot.log(this.bot.isMobile, 'LOGIN', `Navigation interrupted by chrome-error (attempt ${attempts}/${maxAttempts}), attempting recovery...`, 'warn')
-            
-            // Wait a bit for page to settle
-            await this.bot.utils.wait(1500) // Increased from 1000ms
-            
-            // Try reload which usually fixes the issue
-            try {
-              await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
-              navigationSucceeded = true
-              recoveryUsed = true
-              this.bot.log(this.bot.isMobile, 'LOGIN', '✓ Recovery successful via reload')
-            } catch (reloadError) {
-              // Last resort: try goto again
-              if (attempts < maxAttempts) {
-                this.bot.log(this.bot.isMobile, 'LOGIN', `Reload failed (attempt ${attempts}/${maxAttempts}), trying fresh navigation...`, 'warn')
-                await this.bot.utils.wait(2000) // Increased from 1500ms
-              } else {
-                throw reloadError // Exhausted attempts
-              }
-            }
-          } else if (attempts < maxAttempts) {
-            // Different error, retry with backoff
-            this.bot.log(this.bot.isMobile, 'LOGIN', `Navigation failed (attempt ${attempts}/${maxAttempts}): ${errorMsg}`, 'warn')
-            await this.bot.utils.wait(2000 * attempts) // Exponential backoff
-          } else {
-            // Exhausted attempts, rethrow
-            throw error
-          }
-        }
-      }
+      // IMPROVEMENT: Use centralized navigation retry logic
+      const { success: navigationSucceeded, recoveryUsed } = await this.navigateWithRetry(
+        page,
+        'https://www.bing.com/rewards/dashboard',
+        'LOGIN'
+      )
       
       if (!navigationSucceeded) {
         throw new Error('Failed to navigate to dashboard after multiple attempts')
@@ -174,7 +206,7 @@ export class Login {
       
       // Only check for HTTP 400 if recovery was NOT used (to avoid double reload)
       if (!recoveryUsed) {
-        await this.bot.utils.wait(500)
+        await this.bot.utils.wait(DEFAULT_TIMEOUTS.fastPoll)
         const content = await page.content().catch(() => '')
         const hasHttp400 = content.includes('HTTP ERROR 400') || 
                           content.includes('This page isn\'t working') ||
@@ -182,8 +214,10 @@ export class Login {
         
         if (hasHttp400) {
           this.bot.log(this.bot.isMobile, 'LOGIN', 'HTTP 400 detected in content, reloading...', 'warn')
-          await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
-          await this.bot.utils.wait(1000)
+          const isLinux = process.platform === 'linux'
+          const timeout = isLinux ? DEFAULT_TIMEOUTS.navigationTimeoutLinux : DEFAULT_TIMEOUTS.navigationTimeout
+          await page.reload({ waitUntil: 'domcontentloaded', timeout })
+          await this.bot.utils.wait(DEFAULT_TIMEOUTS.medium)
         }
       }
       
@@ -247,61 +281,19 @@ export class Login {
     url.searchParams.set('access_type', 'offline_access')
     url.searchParams.set('login_hint', email)
 
-    const isLinux = process.platform === 'linux'
-    const navigationTimeout = isLinux ? 60000 : 30000
-    
-    let navigationSucceeded = false
-    let recoveryUsed = false
-    let attempts = 0
-    const maxAttempts = 3
-    
-    while (!navigationSucceeded && attempts < maxAttempts) {
-      attempts++
-      try {
-        await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: navigationTimeout })
-        navigationSucceeded = true
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error)
-        
-        if (errorMsg.includes('chrome-error://chromewebdata/')) {
-          this.bot.log(this.bot.isMobile, 'LOGIN-APP', `OAuth navigation interrupted by chrome-error (attempt ${attempts}/${maxAttempts}), recovering...`, 'warn')
-          await this.bot.utils.wait(1500)
-          
-          try {
-            await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
-            navigationSucceeded = true
-            recoveryUsed = true
-            this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'OAuth recovery successful')
-          } catch (reloadError) {
-            if (attempts < maxAttempts) {
-              this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Reload failed (attempt ${attempts}/${maxAttempts}), retrying...`, 'warn')
-              await this.bot.utils.wait(2000)
-            } else {
-              throw reloadError
-            }
-          }
-        } else if (errorMsg.includes('ERR_PROXY_CONNECTION_FAILED') || errorMsg.includes('ERR_TUNNEL_CONNECTION_FAILED')) {
-          this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Proxy connection failed (attempt ${attempts}/${maxAttempts}): ${errorMsg}`, 'warn')
-          if (attempts < maxAttempts) {
-            await this.bot.utils.wait(3000 * attempts)
-          } else {
-            throw new Error('Proxy connection failed for OAuth - check proxy configuration')
-          }
-        } else if (attempts < maxAttempts) {
-          this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Navigation failed (attempt ${attempts}/${maxAttempts}): ${errorMsg}`, 'warn')
-          await this.bot.utils.wait(2000 * attempts)
-        } else {
-          throw error
-        }
-      }
-    }
+    // Use centralized navigation retry logic
+    const { success: navigationSucceeded, recoveryUsed } = await this.navigateWithRetry(
+      page,
+      url.href,
+      'LOGIN-APP'
+    )
     
     if (!navigationSucceeded) {
       throw new Error('Failed to navigate to OAuth page after multiple attempts')
     }
     
     if (!recoveryUsed) {
-      await this.bot.utils.wait(500)
+      await this.bot.utils.wait(DEFAULT_TIMEOUTS.fastPoll)
       const content = await page.content().catch((err) => {
         this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Failed to get page content for HTTP 400 check: ${err}`, 'warn')
         return ''
@@ -312,8 +304,10 @@ export class Login {
       
       if (hasHttp400) {
         this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'HTTP 400 detected, reloading...', 'warn')
-        await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
-        await this.bot.utils.wait(1000)
+        const isLinux = process.platform === 'linux'
+        const timeout = isLinux ? DEFAULT_TIMEOUTS.navigationTimeoutLinux : DEFAULT_TIMEOUTS.navigationTimeout
+        await page.reload({ waitUntil: 'domcontentloaded', timeout })
+        await this.bot.utils.wait(DEFAULT_TIMEOUTS.medium)
       }
     }
     const start = Date.now()
@@ -410,35 +404,12 @@ export class Login {
   private async tryReuseExistingSession(page: Page): Promise<boolean> {
     const homeUrl = 'https://rewards.bing.com/'
     try {
-      const isLinux = process.platform === 'linux'
-      const navigationTimeout = isLinux ? 60000 : 30000
-      
-      // Try navigation with error recovery
-      let navigationSucceeded = false
-      let recoveryUsed = false
-      try {
-        await page.goto(homeUrl, { timeout: navigationTimeout })
-        navigationSucceeded = true
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error)
-        
-        if (errorMsg.includes('chrome-error://chromewebdata/')) {
-          this.bot.log(this.bot.isMobile, 'LOGIN', 'Session check interrupted, recovering...', 'warn')
-          await this.bot.utils.wait(1000)
-          
-          try {
-            await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
-            navigationSucceeded = true
-            recoveryUsed = true
-          } catch (reloadError) {
-            await this.bot.utils.wait(1500)
-            await page.goto(homeUrl, { timeout: navigationTimeout })
-            navigationSucceeded = true
-          }
-        } else {
-          throw error
-        }
-      }
+      // Use centralized navigation retry logic
+      const { success: navigationSucceeded, recoveryUsed } = await this.navigateWithRetry(
+        page,
+        homeUrl,
+        'LOGIN'
+      )
       
       if (!navigationSucceeded) return false
       
@@ -446,7 +417,7 @@ export class Login {
       
       // Only check HTTP 400 if recovery was NOT used
       if (!recoveryUsed) {
-        await this.bot.utils.wait(500)
+        await this.bot.utils.wait(DEFAULT_TIMEOUTS.fastPoll)
         const content = await page.content().catch(() => '')
         const hasHttp400 = content.includes('HTTP ERROR 400') || 
                           content.includes('This page isn\'t working') ||
@@ -454,8 +425,10 @@ export class Login {
         
         if (hasHttp400) {
           this.bot.log(this.bot.isMobile, 'LOGIN', 'HTTP 400 on session check, reloading...', 'warn')
-          await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
-          await this.bot.utils.wait(1000)
+          const isLinux = process.platform === 'linux'
+          const timeout = isLinux ? DEFAULT_TIMEOUTS.navigationTimeoutLinux : DEFAULT_TIMEOUTS.navigationTimeout
+          await page.reload({ waitUntil: 'domcontentloaded', timeout })
+          await this.bot.utils.wait(DEFAULT_TIMEOUTS.medium)
         }
       }
       await this.bot.browser.utils.reloadBadPage(page)
@@ -1244,63 +1217,21 @@ export class Login {
     try {
       this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Verifying Bing auth context')
       
-      const isLinux = process.platform === 'linux'
-      const navigationTimeout = isLinux ? 60000 : 30000
       const verificationUrl = 'https://www.bing.com/fd/auth/signin?action=interactive&provider=windows_live_id&return_url=https%3A%2F%2Fwww.bing.com%2F'
       
-      let navigationSucceeded = false
-      let attempts = 0
-      const maxAttempts = 3
-      
-      while (!navigationSucceeded && attempts < maxAttempts) {
-        attempts++
-        try {
-          await page.goto(verificationUrl, { 
-            waitUntil: 'domcontentloaded',
-            timeout: navigationTimeout 
-          })
-          navigationSucceeded = true
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error)
-          
-          if (errorMsg.includes('chrome-error://chromewebdata/')) {
-            this.bot.log(this.bot.isMobile, 'LOGIN-BING', `Bing verification interrupted by chrome-error (attempt ${attempts}/${maxAttempts}), recovering...`, 'warn')
-            await this.bot.utils.wait(1500)
-            
-            try {
-              await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
-              navigationSucceeded = true
-              this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Bing verification recovery successful')
-            } catch (reloadError) {
-              if (attempts < maxAttempts) {
-                this.bot.log(this.bot.isMobile, 'LOGIN-BING', `Reload failed (attempt ${attempts}/${maxAttempts}), retrying navigation...`, 'warn')
-                await this.bot.utils.wait(2000)
-              } else {
-                throw reloadError
-              }
-            }
-          } else if (errorMsg.includes('ERR_PROXY_CONNECTION_FAILED') || errorMsg.includes('ERR_TUNNEL_CONNECTION_FAILED')) {
-            this.bot.log(this.bot.isMobile, 'LOGIN-BING', `Proxy connection failed (attempt ${attempts}/${maxAttempts}): ${errorMsg}`, 'warn')
-            if (attempts < maxAttempts) {
-              await this.bot.utils.wait(3000 * attempts)
-            } else {
-              throw new Error('Proxy connection failed for Bing verification - check proxy configuration')
-            }
-          } else if (attempts < maxAttempts) {
-            this.bot.log(this.bot.isMobile, 'LOGIN-BING', `Navigation failed (attempt ${attempts}/${maxAttempts}): ${errorMsg}`, 'warn')
-            await this.bot.utils.wait(2000 * attempts)
-          } else {
-            throw error
-          }
-        }
-      }
+      // Use centralized navigation retry logic
+      const { success: navigationSucceeded } = await this.navigateWithRetry(
+        page,
+        verificationUrl,
+        'LOGIN-BING'
+      )
       
       if (!navigationSucceeded) {
         this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Bing verification navigation failed after multiple attempts', 'warn')
         return
       }
       
-      await this.bot.utils.wait(800)
+      await this.bot.utils.wait(DEFAULT_TIMEOUTS.medium)
       const content = await page.content().catch(() => '')
       const hasHttp400 = content.includes('HTTP ERROR 400') || 
                         content.includes('This page isn\'t working') ||
@@ -1308,11 +1239,13 @@ export class Login {
       
       if (hasHttp400) {
         this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'HTTP 400 detected during Bing verification, reloading...', 'warn')
-        await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout }).catch(logError('LOGIN-BING', 'Reload after HTTP 400 failed', this.bot.isMobile))
-        await this.bot.utils.wait(1000)
+        const isLinux = process.platform === 'linux'
+        const timeout = isLinux ? DEFAULT_TIMEOUTS.navigationTimeoutLinux : DEFAULT_TIMEOUTS.navigationTimeout
+        await page.reload({ waitUntil: 'domcontentloaded', timeout }).catch(logError('LOGIN-BING', 'Reload after HTTP 400 failed', this.bot.isMobile))
+        await this.bot.utils.wait(DEFAULT_TIMEOUTS.medium)
       }
       
-      const maxIterations = this.bot.isMobile ? 8 : 10
+      const maxIterations = this.bot.isMobile ? DEFAULT_TIMEOUTS.bingVerificationMaxIterationsMobile : DEFAULT_TIMEOUTS.bingVerificationMaxIterations
       for (let i = 0; i < maxIterations; i++) {
         const u = new URL(page.url())
         
@@ -1700,7 +1633,6 @@ export class Login {
       clearInterval(this.compromisedInterval)
       this.compromisedInterval = undefined
     }
-    // IMPROVED: Using centralized constant instead of magic number (5*60*1000)
     this.compromisedInterval = setInterval(()=>{
       try { 
         this.bot.log(this.bot.isMobile,'SECURITY','Security standby active. Manual review required before proceeding.','warn') 
@@ -1708,7 +1640,7 @@ export class Login {
         // Intentionally silent: If logging fails in interval, don't crash the timer
         // The interval will try again in 5 minutes
       }
-    }, TIMEOUTS.FIVE_MINUTES)
+    }, 300000) // 5 minutes = 300000ms
   }
 
   private cleanupCompromisedInterval() {

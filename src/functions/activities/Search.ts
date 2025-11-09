@@ -308,7 +308,8 @@ export class Search extends Workers {
 
             const trendsData = this.extractJsonFromResponse(rawText)
             if (!trendsData) {
-               throw  this.bot.log(this.bot.isMobile, 'SEARCH-GOOGLE-TRENDS', 'Failed to parse Google Trends response', 'error')
+                this.bot.log(this.bot.isMobile, 'SEARCH-GOOGLE-TRENDS', 'Failed to parse Google Trends response', 'error')
+                throw new Error('Failed to parse Google Trends response')
             }
 
             const mappedTrendsData = trendsData.map(query => [query[0], query[9]!.slice(1)])
