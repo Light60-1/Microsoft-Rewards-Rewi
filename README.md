@@ -1,369 +1,186 @@
-<div align="center"><div align="center">
+<div align="center">
 
+<img src="assets/logo.png" alt="Microsoft Rewards Bot Logo" width="200"/>
 
+# Microsoft Rewards Bot
 
-<img src="assets/logo.png" alt="Microsoft Rewards Bot Logo" width="200"/><img src="assets/logo.png" alt="Microsoft Rewards Bot Logo" width="200"/>
+**Automate your Microsoft Rewards points collection effortlessly**
 
+[![Discord](https://img.shields.io/badge/💬_Join_Discord-7289DA?style=for-the-badge&logo=discord)](https://discord.gg/k5uHkx9mne) 
+[![GitHub](https://img.shields.io/badge/⭐_Star_Project-yellow?style=for-the-badge&logo=github)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot)
+[![Version](https://img.shields.io/badge/version-2.56.0-blue?style=for-the-badge)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/releases)
+[![License](https://img.shields.io/badge/license-CC_BY--NC--SA_4.0-green?style=for-the-badge)](LICENSE)
 
+</div>
 
-# Microsoft Rewards Bot# Microsoft Rewards Bot
+---
 
+##  About
 
+This TypeScript-based automation bot helps you maximize your **Microsoft Rewards** points by automatically completing daily tasks, searches, quizzes, and promotional offers. Designed with sophisticated anti-detection measures and human-like behavior patterns to ensure safe, reliable operation.
 
-**Automate your Microsoft Rewards points collection effortlessly****Automate your Microsoft Rewards points collection effortlessly**
+### ✨ Key Features
 
-
-
-[![Discord](https://img.shields.io/badge/💬_Join_Discord-7289DA?style=for-the-badge&logo=discord)](https://discord.gg/k5uHkx9mne) [![Discord](https://img.shields.io/badge/💬_Join_Discord-7289DA?style=for-the-badge&logo=discord)](https://discord.gg/k5uHkx9mne) 
-
-[![GitHub](https://img.shields.io/badge/⭐_Star_Project-yellow?style=for-the-badge&logo=github)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot)[![GitHub](https://img.shields.io/badge/⭐_Star_Project-yellow?style=for-the-badge&logo=github)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot)
-
-[![Version](https://img.shields.io/badge/version-2.56.0-blue?style=for-the-badge)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/releases)[![Version](https://img.shields.io/badge/version-2.56.0-blue?style=for-the-badge)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/releases)
-
-[![License](https://img.shields.io/badge/license-CC_BY--NC--SA_4.0-green?style=for-the-badge)](LICENSE)[![License](https://img.shields.io/badge/license-CC_BY--NC--SA_4.0-green?style=for-the-badge)](LICENSE)
-
-
-
-</div></div>
-
-
-
-------
-
-
-
-## 🎯 What It Does##  About
-
-
-
-Automatically completes Microsoft Rewards tasks to maximize your points:This TypeScript-based automation bot helps you maximize your **Microsoft Rewards** points by automatically completing daily tasks, searches, quizzes, and promotional offers. Designed with sophisticated anti-detection measures and human-like behavior patterns to ensure safe, reliable operation.
-
-
-
-- ✅ **Desktop & Mobile Searches** — 30+ desktop + 20+ mobile Bing searches### ✨ Key Features
-
-- ✅ **Daily Activities** — Quizzes, polls, daily sets
-
-- ✅ **Promotional Offers** — Special tasks and bonuses- 🔍 **Automated Searches** — Desktop and mobile Bing searches with natural patterns
-
-- ✅ **Punch Cards** — Multi-day challenges- 📅 **Daily Activities** — Quizzes, polls, daily sets, and punch cards
-
-- ✅ **Human-like Behavior** — Advanced anti-detection- 🤖 **Human-like Behavior** — Advanced humanization system to avoid detection
-
-- ✅ **Multi-Account Support** — Manage unlimited accounts- 🛡️ **Risk Management** — Built-in ban detection and prediction with ML algorithms
-
-- ✅ **Automatic Scheduling** — Set it and forget it- ⏰ **Automatic Scheduling** — Easy configuration for cron (Linux/Raspberry Pi) and Windows Task Scheduler
-
-- ✅ **Notifications** — Discord webhooks & push alerts- 🔔 **Notifications** — Discord webhooks and NTFY push alerts
-
+- 🔍 **Automated Searches** — Desktop and mobile Bing searches with natural patterns
+- 📅 **Daily Activities** — Quizzes, polls, daily sets, and punch cards
+- 🤖 **Human-like Behavior** — Advanced humanization system to avoid detection
+- 🛡️ **Risk Management** — Built-in ban detection and prediction with ML algorithms
+- ⏰ **Automatic Scheduling** — Easy configuration for cron (Linux/Raspberry Pi) and Windows Task Scheduler
+- 🔔 **Notifications** — Discord webhooks and NTFY push alerts
 - 🐳 **Docker Support** — Easy containerized deployment
-
----- 🔐 **Multi-Account** — Manage multiple accounts with parallel execution
-
+- 🔐 **Multi-Account** — Manage multiple accounts with parallel execution
 - 🌐 **Proxy Support** — Optional proxy configuration for enhanced privacy
 
-## 🚀 Quick Start
-
 ---
 
-### Prerequisites
-
 ## 🚀 Quick Start
 
-- **Node.js 20+** → [Download](https://nodejs.org/)
+### ⚡ Prerequisites
 
-- **Git** (optional) → [Download](https://git-scm.com/) or download ZIP### ⚡ Prerequisites
-
-
-
-### Installation- **Node.js 20+** (v22 recommended) — [Download here](https://nodejs.org/)
-
+- **Node.js 20+** (v22 recommended) — [Download here](https://nodejs.org/)
 - **Git** (optional) — [Download here](https://git-scm.com/) or download project as ZIP
 
-```bash
+### 🎯 3-Step Setup
 
-# 1. Get the project### 🎯 3-Step Setup
-
-git clone https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot.git
-
-cd Microsoft-Rewards-Bot1. **Get the project:**
-
+1. **Get the project:**
    ```bash
-
-# 2. Install dependencies   git clone https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot.git
-
-npm i   cd Microsoft-Rewards-Bot
-
+   git clone https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot.git
+   cd Microsoft-Rewards-Bot
    ```
-
-# 3. Create accounts with referral (earn +7,500 points/month!)   Or download ZIP: [Code → Download ZIP](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/archive/refs/heads/main.zip)
-
-npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
+   Or download ZIP: [Code → Download ZIP](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/archive/refs/heads/main.zip)
 
 2. **Install dependencies:**
-
-# 4. Configure   ```bash
-
-npm run setup   npm i
-
+   ```bash
+   npm i
    ```
 
-# 5. Run
-
-npm start3. **Create accounts & configure:**
-
-```   ```bash
-
+3. **Create accounts & configure:**
+   ```bash
    # Use our account creator (recommended - earn +7,500 points/month!)
-
-**📖 [Complete Setup Guide](docs/getting-started.md)** — Detailed step-by-step instructions   npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
-
+   npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
    
-
----   # Or use setup wizard
-
+   # Or use setup wizard
    npm run setup
+   ```
 
-## 🆕 Account Creator   ```
-
-
-
-**💰 Earn +7,500 bonus points per month per referral!****📖 Need detailed instructions? See [Getting Started Guide](docs/getting-started.md)**
-
-
-
-Automatically create Microsoft accounts with full security:---
-
-
-
-```bash## 📚 Documentation
-
-# Full automation (referral + recovery email + 2FA)
-
-npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.comFor detailed configuration, advanced features, and troubleshooting, visit our comprehensive documentation:
-
-```
-
-**👉 [Complete Documentation](docs/index.md)**
-
-**What it does:**
-
-- Creates realistic Microsoft account### Quick Links
-
-- Enrolls in Rewards with YOUR referral link
-
-- Adds recovery email + 2FA with TOTP| Topic | Description |
-
-- Saves everything to `accounts-created/` folder|-------|-------------|
-
-| **[Getting Started](docs/getting-started.md)** | Detailed installation and first-run guide |
-
-**📖 [Creator Guide](src/account-creation/README.md) | [Getting Started](docs/getting-started.md)**| **[Configuration](docs/config.md)** | Complete configuration options reference |
-
-| **[Accounts & 2FA](docs/accounts.md)** | Setting up accounts with TOTP authentication |
-
----| **[Dashboard](src/dashboard/README.md)** | 🆕 Local web dashboard for monitoring and control |
-
-| **[External Scheduling](docs/schedule.md)** | Use OS schedulers for automation |
-
-## 📊 Dashboard| **[Docker Deployment](docs/docker.md)** | Running in containers |
-
-| **[Humanization](docs/humanization.md)** | Anti-detection and natural behavior |
-
-Monitor and control your bot through a web interface:| **[Notifications](docs/conclusionwebhook.md)** | Discord webhooks and NTFY setup |
-
-| **[Proxy Setup](docs/proxy.md)** | Configuring proxies for privacy |
-
-```bash| **[Troubleshooting](docs/diagnostics.md)** | Debug common issues and capture logs |
-
-npm run dashboard
-
-# Access at http://localhost:3000---
-
-```
-
-## 📊 Dashboard (BETA)
-
-**Features:**
-
-- Real-time points and account statusMonitor and control your bot through a local web interface:
-
-- Live log streaming
-
-- Manual sync controls```bash
-
-- Configuration editor# Start dashboard separately
-
-- Historical metricsnpm run dashboard
-
-
-
-**📖 [Dashboard Documentation](src/dashboard/README.md)**# Or enable auto-start in config.jsonc:
-
-{
-
----  "dashboard": {
-
-    "enabled": true,
-
-## ⏰ Automatic Scheduling    "port": 3000
-
-  }
-
-Run the bot automatically every day:}
-
-```
-
-```jsonc
-
-// src/config.jsoncAccess at `http://localhost:3000` to:
-
-{- 📈 View real-time points and account status
-
-  "scheduling": {- 📋 Monitor live logs with WebSocket streaming
-
-    "enabled": true,- 🔄 Manually sync individual accounts
-
-    "type": "auto",- ⚙️ Edit configuration with automatic backup
-
-    "cron": { "schedule": "0 9 * * *" }  // 9 AM daily- 📊 View historical run summaries and metrics
-
-  }
-
-}**[📖 Full Dashboard API Documentation](src/dashboard/README.md)**
-
-```
+**📖 Need detailed instructions? See [Getting Started Guide](docs/getting-started.md)**
 
 ---
-
-Then just run once:
-
-```bash## 🆕 Account Creator (BETA)
-
-npm start
-
-```Automatically create new Microsoft accounts with advanced security features:
-
-
-
-The bot will automatically schedule itself. Perfect for Raspberry Pi!```bash
-
-# Interactive mode (asks everything)
-
-**📖 [Scheduling Guide](docs/schedule.md)**npm run creator
-
-
-
----# With referral link (earn rewards credit)
-
-npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE
 
 ## 📚 Documentation
 
-# Auto-accept mode (enables recovery + 2FA automatically)
+For detailed configuration, advanced features, and troubleshooting, visit our comprehensive documentation:
 
-| Topic | Description |npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y
+**👉 [Complete Documentation](docs/index.md)**
 
+### Quick Links
+
+| Topic | Description |
 |-------|-------------|
-
-| **[Getting Started](docs/getting-started.md)** | Complete setup tutorial |# With specific recovery email (auto-detected, no flag needed!)
-
-| **[Configuration](docs/config.md)** | All settings explained |npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
-
-| **[Accounts & 2FA](docs/accounts.md)** | Account setup with TOTP |
-
-| **[Scheduling](docs/schedule.md)** | Automatic daily runs |# Just recovery email, no referral
-
-| **[Dashboard](src/dashboard/README.md)** | Web interface guide |npm run creator -y myrecovery@gmail.com
-
-| **[Docker](docs/docker.md)** | Container deployment |```
-
-| **[Notifications](docs/conclusionwebhook.md)** | Discord & NTFY alerts |
-
-| **[Proxy Setup](docs/proxy.md)** | IP rotation |**✨ Features:**
-
-| **[Humanization](docs/humanization.md)** | Anti-detection |- 🎯 **Language-independent** — Works in any language
-
-| **[Troubleshooting](docs/diagnostics.md)** | Debug issues |- 🔐 **Strong passwords** — Automatically generated (12-16 chars)
-
-- 📧 **Realistic emails** — 200+ name database for natural-looking addresses
-
-**📖 [Full Documentation Index](docs/index.md)**- 🎂 **Natural birthdates** — Random age 18-50 years old
-
-- 🛡️ **Recovery email** — Optional backup email for account recovery
-
----- 🔒 **2FA support** — TOTP authentication with Google Authenticator
-
-- 🔑 **TOTP secrets** — Extracts and saves secret keys
-
-## ⚠️ Disclaimer- 💾 **Complete backups** — Saves all details including recovery codes
-
-- 🤖 **CAPTCHA support** — Manual solving (human verification)
-
-**Use at your own risk.** This script automates Microsoft Rewards, which may violate their Terms of Service. Using automation can result in:- � **Organized storage** — Individual files per account
-
-
-
-- Account suspension or permanent ban**🎛️ Command Arguments (SIMPLIFIED!):**
-
-- Loss of points and rewards- `<url>` — Referral URL (auto-detected if starts with http)
-
-- Restriction from future participation- `<email>` — Recovery email (auto-detected if contains @)
-
-- `-y` — Auto-accept mode (enables recovery + 2FA automatically)
-
-**This project is for educational purposes only.** The developers are not responsible for any actions taken against your account.
-
-**That's it! No more confusing flags.** 🎉
+| **[Getting Started](docs/getting-started.md)** | Detailed installation and first-run guide |
+| **[Configuration](docs/config.md)** | Complete configuration options reference |
+| **[Accounts & 2FA](docs/accounts.md)** | Setting up accounts with TOTP authentication |
+| **[Dashboard](src/dashboard/README.md)** | 🆕 Local web dashboard for monitoring and control |
+| **[External Scheduling](docs/schedule.md)** | Use OS schedulers for automation |
+| **[Docker Deployment](docs/docker.md)** | Running in containers |
+| **[Humanization](docs/humanization.md)** | Anti-detection and natural behavior |
+| **[Notifications](docs/conclusionwebhook.md)** | Discord webhooks and NTFY setup |
+| **[Proxy Setup](docs/proxy.md)** | Configuring proxies for privacy |
+| **[Troubleshooting](docs/diagnostics.md)** | Debug common issues and capture logs |
 
 ---
 
+## 📊 Dashboard (BETA)
+
+Monitor and control your bot through a local web interface:
+
+```bash
+# Start dashboard separately
+npm run dashboard
+
+# Or enable auto-start in config.jsonc:
+{
+  "dashboard": {
+    "enabled": true,
+    "port": 3000
+  }
+}
+```
+
+Access at `http://localhost:3000` to:
+- 📈 View real-time points and account status
+- 📋 Monitor live logs with WebSocket streaming
+- 🔄 Manually sync individual accounts
+- ⚙️ Edit configuration with automatic backup
+- 📊 View historical run summaries and metrics
+
+**[📖 Full Dashboard API Documentation](src/dashboard/README.md)**
+
+---
+
+## 🆕 Account Creator (BETA)
+
+Automatically create new Microsoft accounts with advanced security features:
+
+```bash
+# Interactive mode (asks everything)
+npm run creator
+
+# With referral link (earn rewards credit)
+npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE
+
+# Auto-accept mode (enables recovery + 2FA automatically)
+npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y
+
+# With specific recovery email (auto-detected, no flag needed!)
+npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
+
+# Just recovery email, no referral
+npm run creator -y myrecovery@gmail.com
+```
+
+**✨ Features:**
+- 🎯 **Language-independent** — Works in any language
+- 🔐 **Strong passwords** — Automatically generated (12-16 chars)
+- 📧 **Realistic emails** — 200+ name database for natural-looking addresses
+- 🎂 **Natural birthdates** — Random age 18-50 years old
+- 🛡️ **Recovery email** — Optional backup email for account recovery
+- 🔒 **2FA support** — TOTP authentication with Google Authenticator
+- 🔑 **TOTP secrets** — Extracts and saves secret keys
+- 💾 **Complete backups** — Saves all details including recovery codes
+- 🤖 **CAPTCHA support** — Manual solving (human verification)
+- � **Organized storage** — Individual files per account
+
+**🎛️ Command Arguments (SIMPLIFIED!):**
+- `<url>` — Referral URL (auto-detected if starts with http)
+- `<email>` — Recovery email (auto-detected if contains @)
+- `-y` — Auto-accept mode (enables recovery + 2FA automatically)
+
+**That's it! No more confusing flags.** 🎉
+
 **⚙️ How It Works:**
 
-## 📄 License
-
 | Command | Recovery Email | 2FA | Notes |
-
-Licensed under **CC BY-NC-SA 4.0** — Personal use only, no commercial use.|---------|---------------|-----|-------|
-
+|---------|---------------|-----|-------|
 | `npm run creator` | ❓ Prompts | ❓ Prompts | Interactive mode |
-
-See [LICENSE](LICENSE) for details.| `npm run creator -y` | ✅ Prompts for email | ✅ Enabled | Auto-accept all |
-
+| `npm run creator -y` | ✅ Prompts for email | ✅ Enabled | Auto-accept all |
 | `npm run creator -y backup@gmail.com` | ✅ Uses provided email | ✅ Enabled | Full automation |
-
----| `npm run creator URL -y` | ✅ Prompts for email | ✅ Enabled | With referral |
-
+| `npm run creator URL -y` | ✅ Prompts for email | ✅ Enabled | With referral |
 | `npm run creator URL -y backup@gmail.com` | ✅ Uses provided email | ✅ Enabled | Complete setup |
 
-## 🙏 Acknowledgments
-
 **📋 What happens:**
-
-- Built with [Playwright](https://playwright.dev/) and [ReBrowser](https://github.com/rebrowser/rebrowser-playwright)1. Creates Microsoft account (email, password, birthdate, names)
-
-- Thanks to all [contributors](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/graphs/contributors)2. Enrolls in Microsoft Rewards (if referral URL provided)
-
+1. Creates Microsoft account (email, password, birthdate, names)
+2. Enrolls in Microsoft Rewards (if referral URL provided)
 3. **[Optional]** Adds recovery email with verification
-
----4. **[Optional]** Sets up 2FA with TOTP (Google Authenticator compatible)
-
+4. **[Optional]** Sets up 2FA with TOTP (Google Authenticator compatible)
 5. Extracts and saves TOTP secret key and recovery code
+6. Saves complete account info to `accounts-created/` directory
 
-<div align="center">6. Saves complete account info to `accounts-created/` directory
-
-
-
-**Made with ❤️ by the community****🔐 Saved Information:**
-
+**🔐 Saved Information:**
 - Email and password
-
-[Documentation](docs/index.md) • [Discord](https://discord.gg/k5uHkx9mne) • [Issues](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)- Full name and birthdate
-
+- Full name and birthdate
 - Referral URL (if used)
-
-</div>- Recovery email (if added)
-
+- Recovery email (if added)
 - TOTP secret key (for authenticator apps)
 - 5-part recovery code (emergency access)
 
