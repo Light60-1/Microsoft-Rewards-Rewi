@@ -8,7 +8,7 @@
 
 [![Discord](https://img.shields.io/badge/💬_Discord-7289DA?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/k5uHkx9mne) 
 [![GitHub](https://img.shields.io/badge/⭐_Star-yellow?style=for-the-badge&logo=github&logoColor=black)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot)
-[![Version](https://img.shields.io/badge/v2.56.0-blue?style=for-the-badge)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/releases)
+[![Version](https://img.shields.io/badge/v2.56.2-blue?style=for-the-badge)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/releases)
 
 </div>
 
