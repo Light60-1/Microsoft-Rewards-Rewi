@@ -177,7 +177,7 @@ export class Login {
         const content = await page.content().catch(() => '')
         const hasHttp400 = content.includes('HTTP ERROR 400') || 
                           content.includes('This page isn\'t working') ||
-                          content.includes('Cette page ne fonctionne pas')
+                          content.includes('This page is not working')
         
         if (hasHttp400) {
           this.bot.log(this.bot.isMobile, 'LOGIN', 'HTTP 400 detected in content, reloading...', 'warn')
@@ -188,11 +188,19 @@ export class Login {
       
       await this.disableFido(page)
       
-      const [, , portalCheck] = await Promise.allSettled([
+      const [reloadResult, totpResult, portalCheck] = await Promise.allSettled([
         this.bot.browser.utils.reloadBadPage(page),
         this.tryAutoTotp(page, 'initial landing'),
         page.waitForSelector('html[data-role-name="RewardsPortal"]', { timeout: 3000 })
       ])
+      
+      // Log any failures for debugging (non-critical)
+      if (reloadResult.status === 'rejected') {
+        this.bot.log(this.bot.isMobile, 'LOGIN', `Reload check failed (non-critical): ${reloadResult.reason}`, 'warn')
+      }
+      if (totpResult.status === 'rejected') {
+        this.bot.log(this.bot.isMobile, 'LOGIN', `Auto-TOTP check failed (non-critical): ${totpResult.reason}`, 'warn')
+      }
       
       await this.checkAccountLocked(page)
 
@@ -293,10 +301,13 @@ export class Login {
     
     if (!recoveryUsed) {
       await this.bot.utils.wait(500)
-      const content = await page.content().catch(() => '')
+      const content = await page.content().catch((err) => {
+        this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Failed to get page content for HTTP 400 check: ${err}`, 'warn')
+        return ''
+      })
       const hasHttp400 = content.includes('HTTP ERROR 400') || 
                         content.includes('This page isn\'t working') ||
-                        content.includes('Cette page ne fonctionne pas')
+                        content.includes('This page is not working')
       
       if (hasHttp400) {
         this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'HTTP 400 detected, reloading...', 'warn')
@@ -435,7 +446,7 @@ export class Login {
         const content = await page.content().catch(() => '')
         const hasHttp400 = content.includes('HTTP ERROR 400') || 
                           content.includes('This page isn\'t working') ||
-                          content.includes('Cette page ne fonctionne pas')
+                          content.includes('This page is not working')
         
         if (hasHttp400) {
           this.bot.log(this.bot.isMobile, 'LOGIN', 'HTTP 400 on session check, reloading...', 'warn')
@@ -1289,7 +1300,7 @@ export class Login {
       const content = await page.content().catch(() => '')
       const hasHttp400 = content.includes('HTTP ERROR 400') || 
                         content.includes('This page isn\'t working') ||
-                        content.includes('Cette page ne fonctionne pas')
+                        content.includes('This page is not working')
       
       if (hasHttp400) {
         this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'HTTP 400 detected during Bing verification, reloading...', 'warn')

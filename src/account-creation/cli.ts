@@ -25,13 +25,15 @@ async function main(): Promise<void> {
   }
   
   // Banner
-  console.log('\n' + '='.repeat(60))
+  log(false, 'CREATOR-CLI', '', 'log') // Empty line
+  log(false, 'CREATOR-CLI', '='.repeat(60), 'log', 'cyan')
   log(false, 'CREATOR-CLI', '🚀 Microsoft Account Creator', 'log', 'cyan')
-  console.log('='.repeat(60))
-  console.log('\x1b[33m⚠️  DO NOT INTERACT WITH THE BROWSER DURING AUTOMATION\x1b[0m')
-  console.log('\x1b[33m   Everything is fully automated. Any interaction may break the process.\x1b[0m')
-  console.log('\x1b[33m   Only interact when explicitly asked (e.g., CAPTCHA solving).\x1b[0m')
-  console.log('='.repeat(60) + '\n')
+  log(false, 'CREATOR-CLI', '='.repeat(60), 'log', 'cyan')
+  log(false, 'CREATOR-CLI', '⚠️  DO NOT INTERACT WITH THE BROWSER DURING AUTOMATION', 'warn', 'yellow')
+  log(false, 'CREATOR-CLI', '   Everything is fully automated. Any interaction may break the process.', 'warn', 'yellow')
+  log(false, 'CREATOR-CLI', '   Only interact when explicitly asked (e.g., CAPTCHA solving).', 'warn', 'yellow')
+  log(false, 'CREATOR-CLI', '='.repeat(60), 'log', 'cyan')
+  log(false, 'CREATOR-CLI', '', 'log') // Empty line
   
   // Display detected arguments
   if (referralUrl) {
@@ -52,7 +54,7 @@ async function main(): Promise<void> {
     log(false, 'CREATOR-CLI', '💡 Tip: Use -y flag to auto-accept all prompts', 'log', 'gray')
   }
   
-  console.log()
+  log(false, 'CREATOR-CLI', '', 'log') // Empty line
   
   // Create a temporary bot instance to access browser creation
   const bot = new MicrosoftRewardsBot(false)
@@ -81,9 +83,10 @@ async function main(): Promise<void> {
     
     if (result) {
       // Success banner
-      console.log('\n' + '='.repeat(60))
+      log(false, 'CREATOR-CLI', '', 'log') // Empty line
+      log(false, 'CREATOR-CLI', '='.repeat(60), 'log', 'green')
       log(false, 'CREATOR-CLI', '✅ ACCOUNT CREATED SUCCESSFULLY!', 'log', 'green')
-      console.log('='.repeat(60))
+      log(false, 'CREATOR-CLI', '='.repeat(60), 'log', 'green')
       
       // Display account details
       log(false, 'CREATOR-CLI', `📧 Email: ${result.email}`, 'log', 'cyan')
@@ -95,9 +98,10 @@ async function main(): Promise<void> {
         log(false, 'CREATOR-CLI', '🔗 Referral: Linked', 'log', 'green')
       }
       
-      console.log('='.repeat(60))
+      log(false, 'CREATOR-CLI', '='.repeat(60), 'log', 'green')
       log(false, 'CREATOR-CLI', '💾 Account details saved to accounts-created/ directory', 'log', 'green')
-      console.log('='.repeat(60) + '\n')
+      log(false, 'CREATOR-CLI', '='.repeat(60), 'log', 'green')
+      log(false, 'CREATOR-CLI', '', 'log') // Empty line
       
       // Keep browser open - don't close
       log(false, 'CREATOR-CLI', '✅ Account creation complete! Browser will remain open.', 'log', 'green')
@@ -108,9 +112,11 @@ async function main(): Promise<void> {
       await new Promise(() => {}) // Never resolves
     } else {
       // Failure
-      console.log('\n' + '='.repeat(60))
+      log(false, 'CREATOR-CLI', '', 'log') // Empty line
+      log(false, 'CREATOR-CLI', '='.repeat(60), 'error')
       log(false, 'CREATOR-CLI', '❌ ACCOUNT CREATION FAILED', 'error')
-      console.log('='.repeat(60) + '\n')
+      log(false, 'CREATOR-CLI', '='.repeat(60), 'error')
+      log(false, 'CREATOR-CLI', '', 'log') // Empty line
       
       await browserContext.close()
       process.exit(1)
@@ -118,9 +124,11 @@ async function main(): Promise<void> {
     
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
-    console.log('\n' + '='.repeat(60))
+    log(false, 'CREATOR-CLI', '', 'log') // Empty line
+    log(false, 'CREATOR-CLI', '='.repeat(60), 'error')
     log(false, 'CREATOR-CLI', `❌ Fatal error: ${msg}`, 'error')
-    console.log('='.repeat(60) + '\n')
+    log(false, 'CREATOR-CLI', '='.repeat(60), 'error')
+    log(false, 'CREATOR-CLI', '', 'log') // Empty line
     process.exit(1)
   }
 }

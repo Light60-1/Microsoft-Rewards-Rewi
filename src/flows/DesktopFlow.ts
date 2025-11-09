@@ -12,6 +12,7 @@
 
 import type { MicrosoftRewardsBot } from '../index'
 import type { Account } from '../interface/Account'
+import { createBrowserInstance } from '../util/BrowserFactory'
 import { saveSessionData } from '../util/Load'
 
 export interface DesktopFlowResult {
@@ -34,11 +35,8 @@ export class DesktopFlow {
     async run(account: Account): Promise<DesktopFlowResult> {
         this.bot.log(false, 'DESKTOP-FLOW', 'Starting desktop automation flow')
         
-        // FIXED: Use proper typed access instead of unsafe type assertion
-        const browserModule = await import('../browser/Browser')
-        const Browser = browserModule.default
-        const browserInstance = new Browser(this.bot)
-        const browser = await browserInstance.createBrowser(account.proxy, account.email)
+        // IMPROVED: Use centralized browser factory to eliminate duplication
+        const browser = await createBrowserInstance(this.bot, account.proxy, account.email)
         
         let keepBrowserOpen = false
         

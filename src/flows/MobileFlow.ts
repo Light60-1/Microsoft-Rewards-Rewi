@@ -13,6 +13,7 @@
 
 import type { MicrosoftRewardsBot } from '../index'
 import type { Account } from '../interface/Account'
+import { createBrowserInstance } from '../util/BrowserFactory'
 import { saveSessionData } from '../util/Load'
 import { MobileRetryTracker } from '../util/MobileRetryTracker'
 
@@ -40,11 +41,8 @@ export class MobileFlow {
     ): Promise<MobileFlowResult> {
         this.bot.log(true, 'MOBILE-FLOW', 'Starting mobile automation flow')
         
-        // FIXED: Use proper typed access instead of unsafe type assertion
-        const browserModule = await import('../browser/Browser')
-        const Browser = browserModule.default
-        const browserInstance = new Browser(this.bot)
-        const browser = await browserInstance.createBrowser(account.proxy, account.email)
+        // IMPROVED: Use centralized browser factory to eliminate duplication
+        const browser = await createBrowserInstance(this.bot, account.proxy, account.email)
         
         let keepBrowserOpen = false
         let browserClosed = false

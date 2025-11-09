@@ -201,7 +201,7 @@ export default class BrowserUtil {
             const isNetworkError = $('body.neterror').length
             const hasHttp400Error = html.includes('HTTP ERROR 400') || 
                                    html.includes('This page isn\'t working') ||
-                                   html.includes('Cette page ne fonctionne pas')
+                                   html.includes('This page is not working')
 
             if (isNetworkError || hasHttp400Error) {
                 const errorType = hasHttp400Error ? 'HTTP 400' : 'network error'

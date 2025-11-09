@@ -50,9 +50,10 @@ export default class BrowserFunc {
                 this.bot.log(this.bot.isMobile, 'GO-HOME', `Account suspension detected by content text (iteration ${iteration})`, 'error')
                 return true
             }
-        } catch (e) {
+        } catch (error) {
             // Ignore errors in text check - not critical
-            this.bot.log(this.bot.isMobile, 'GO-HOME', `Suspension text check skipped: ${e}`, 'warn')
+            const errorMsg = error instanceof Error ? error.message : String(error)
+            this.bot.log(this.bot.isMobile, 'GO-HOME', `Suspension text check skipped: ${errorMsg}`, 'warn')
         }
         
         return false
@@ -141,7 +142,8 @@ export default class BrowserFunc {
             await target.waitForSelector(SELECTORS.MORE_ACTIVITIES, { timeout: TIMEOUTS.DASHBOARD_WAIT }).catch((error) => {
                 // Continuing is intentional: page may still be functional even if this specific element is missing
                 // The script extraction will catch any real issues
-                this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Activities element not found after ${TIMEOUTS.DASHBOARD_WAIT}ms timeout, attempting to proceed: ${error instanceof Error ? error.message : String(error)}`, 'warn')
+                const errorMsg = error instanceof Error ? error.message : String(error)
+                this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Activities element not found after ${TIMEOUTS.DASHBOARD_WAIT}ms timeout, attempting to proceed: ${errorMsg}`, 'warn')
             })
 
             let scriptContent = await this.extractDashboardScript(target)
@@ -151,7 +153,10 @@ export default class BrowserFunc {
                 
                 // Force a navigation retry once before failing hard
                 await this.goHome(target)
-                await target.waitForLoadState('domcontentloaded', { timeout: TIMEOUTS.VERY_LONG }).catch(logError('BROWSER-FUNC', 'Dashboard recovery load failed', this.bot.isMobile))
+                await target.waitForLoadState('domcontentloaded', { timeout: TIMEOUTS.VERY_LONG }).catch((error) => {
+                    const errorMsg = error instanceof Error ? error.message : String(error)
+                    this.bot.log(this.bot.isMobile, 'BROWSER-FUNC', `Dashboard recovery load failed: ${errorMsg}`, 'warn')
+                })
                 await this.bot.utils.wait(this.bot.isMobile ? TIMEOUTS.LONG : TIMEOUTS.MEDIUM)
                 
                 scriptContent = await this.extractDashboardScript(target)

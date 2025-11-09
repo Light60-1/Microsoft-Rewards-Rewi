@@ -28,6 +28,15 @@
         
         /* Module Resolution Options */
         "moduleResolution": "node",
+        "baseUrl": "./src",
+        "paths": {
+            "@constants": ["constants"],
+            "@interfaces/*": ["interface/*"],
+            "@utils/*": ["util/*"],
+            "@browser/*": ["browser/*"],
+            "@functions/*": ["functions/*"],
+            "@flows/*": ["flows/*"]
+        },
         "types": ["node"],
         "esModuleInterop": true,
         

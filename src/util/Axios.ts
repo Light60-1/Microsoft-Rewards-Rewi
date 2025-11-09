@@ -87,7 +87,8 @@ class AxiosClient {
             return bypassInstance.request(config)
         }
 
-        let lastError: unknown
+        // FIXED: Initialize lastError to prevent throwing undefined
+        let lastError: unknown = new Error('Request failed with unknown error')
         const maxAttempts = 2
         
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
