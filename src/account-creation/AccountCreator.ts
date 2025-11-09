@@ -73,26 +73,13 @@ export class AccountCreator {
   ): Promise<T | null> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        // Only log first attempt if it fails
         const result = await operation()
-        
-        // Only log success if it took multiple attempts
-        if (attempt > 1) {
-          log(false, 'CREATOR', `[${context}] ✅ Success on attempt ${attempt}`, 'log', 'green')
-        }
         return result
       } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error)
-        
         if (attempt < maxRetries) {
-          // Only log first failure
-          if (attempt === 1) {
-            log(false, 'CREATOR', `[${context}] Retrying (${msg.substring(0, 50)})`, 'warn', 'yellow')
-          }
           const delayMs = initialDelayMs * Math.pow(2, attempt - 1)
           await this.page.waitForTimeout(delayMs)
         } else {
-          log(false, 'CREATOR', `[${context}] ❌ Failed after ${maxRetries} attempts`, 'error')
           return null
         }
       }
@@ -129,14 +116,12 @@ export class AccountCreator {
       }
       
       if (!anyVisible) {
-        log(false, 'CREATOR', `[${context}] ✅ Dropdown closed`, 'log', 'green')
         return true
       }
       
       await this.page.waitForTimeout(500)
     }
     
-    log(false, 'CREATOR', `[${context}] ⚠️ Dropdown may still be open`, 'warn', 'yellow')
     return false
   }
 
@@ -145,22 +130,13 @@ export class AccountCreator {
    */
   private async verifyInputValue(
     selector: string,
-    expectedValue: string,
-    context: string
+    expectedValue: string
   ): Promise<boolean> {
     try {
       const input = this.page.locator(selector).first()
       const actualValue = await input.inputValue().catch(() => '')
-      
-      if (actualValue === expectedValue) {
-        log(false, 'CREATOR', `[${context}] ✅ Input value verified: ${expectedValue}`, 'log', 'green')
-        return true
-      } else {
-        log(false, 'CREATOR', `[${context}] ⚠️ Value mismatch: expected "${expectedValue}", got "${actualValue}"`, 'warn', 'yellow')
-        return false
-      }
+      return actualValue === expectedValue
     } catch (error) {
-      log(false, 'CREATOR', `[${context}] ⚠️ Could not verify input value`, 'warn', 'yellow')
       return false
     }
   }
@@ -169,9 +145,7 @@ export class AccountCreator {
    * CRITICAL: Verify no errors are displayed on the page
    * Returns true if no errors found, false if errors present
    */
-  private async verifyNoErrors(context: string): Promise<boolean> {
-    log(false, 'CREATOR', `[${context}] Checking for error messages...`, 'log', 'cyan')
-    
+  private async verifyNoErrors(): Promise<boolean> {
     const errorSelectors = [
       'div[id*="Error"]',
       'div[id*="error"]',
@@ -190,7 +164,7 @@ export class AccountCreator {
         
         if (isVisible) {
           const errorText = await errorElement.textContent().catch(() => 'Unknown error')
-          log(false, 'CREATOR', `[${context}] ❌ Error detected: ${errorText}`, 'error')
+          log(false, 'CREATOR', `Error detected: ${errorText}`, 'error')
           return false
         }
       } catch {
@@ -198,7 +172,6 @@ export class AccountCreator {
       }
     }
     
-    log(false, 'CREATOR', `[${context}] ✅ No errors detected`, 'log', 'green')
     return true
   }
 
@@ -271,7 +244,7 @@ export class AccountCreator {
       }
       
       // STEP 3: Verify no errors on new page
-      const noErrors = await this.verifyNoErrors(`${context}_TRANSITION`)
+      const noErrors = await this.verifyNoErrors()
       if (!noErrors) {
         log(false, 'CREATOR', `[${context}] ❌ Errors found after transition`, 'error')
         return false
@@ -344,7 +317,7 @@ export class AccountCreator {
     }
     
     // Check 3: No errors appeared
-    const noErrors = await this.verifyNoErrors(`${context}_CLICK`)
+    const noErrors = await this.verifyNoErrors()
     if (!noErrors) {
       log(false, 'CREATOR', `[${context}] ❌ Errors appeared after click`, 'error')
       return false
@@ -401,12 +374,6 @@ export class AccountCreator {
         }
       }
       
-      // Success - only log if it took a while (over 5s)
-      const elapsed = Date.now() - startTime
-      if (elapsed > 5000) {
-        log(false, 'CREATOR', `[${context}] ✅ Page stable (${elapsed}ms)`, 'log', 'green')
-      }
-      
       return true
       
     } catch (error) {
@@ -416,7 +383,6 @@ export class AccountCreator {
         // Timeout is not critical - page might still be usable
         return true
       }
-      log(false, 'CREATOR', `[${context}] ⚠️ Stability issue: ${msg}`, 'warn', 'yellow')
       return false
     }
   }
@@ -426,8 +392,6 @@ export class AccountCreator {
    * This happens AFTER CAPTCHA and can take several seconds
    */
   private async waitForAccountCreation(): Promise<boolean> {
-    log(false, 'CREATOR', '⏳ Waiting for Microsoft to create the account...', 'log', 'cyan')
-    
     const maxWaitTime = 60000 // 60 seconds
     const startTime = Date.now()
     
@@ -447,21 +411,16 @@ export class AccountCreator {
         const visible = await element.isVisible().catch(() => false)
         
         if (visible) {
-          log(false, 'CREATOR', `Account creation message detected: "${messageSelector}"`, 'log', 'yellow')
-          
           // Wait for this message to disappear
           try {
             await element.waitFor({ state: 'hidden', timeout: 45000 })
-            log(false, 'CREATOR', '✅ Account creation message gone', 'log', 'green')
           } catch {
-            log(false, 'CREATOR', '⚠️ Creation message still present after 45s', 'warn', 'yellow')
+            // Continue even if message persists
           }
         }
       }
       
       // STEP 2: Wait for URL to stabilize or change to expected page
-      log(false, 'CREATOR', 'Waiting for navigation to complete...', 'log', 'cyan')
-      
       let urlStableCount = 0
       let lastUrl = this.page.url()
       
@@ -475,11 +434,9 @@ export class AccountCreator {
           
           // URL has been stable for 3 consecutive checks
           if (urlStableCount >= 3) {
-            log(false, 'CREATOR', `✅ URL stable at: ${currentUrl}`, 'log', 'green')
             break
           }
         } else {
-          log(false, 'CREATOR', `URL changed: ${lastUrl} → ${currentUrl}`, 'log', 'yellow')
           lastUrl = currentUrl
           urlStableCount = 0
         }
@@ -491,14 +448,9 @@ export class AccountCreator {
       // STEP 4: Additional safety delay
       await this.humanDelay(3000, 5000)
       
-      const elapsed = Date.now() - startTime
-      log(false, 'CREATOR', `✅ Account creation complete (waited ${elapsed}ms)`, 'log', 'green')
-      
       return true
       
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      log(false, 'CREATOR', `⚠️ Account creation wait failed: ${msg}`, 'warn', 'yellow')
       return false
     }
   }
@@ -524,15 +476,12 @@ export class AccountCreator {
       const isEnabled = await element.isEnabled().catch(() => true)
       
       if (!isEnabled) {
-        log(false, 'CREATOR', `[${context}] Element found but disabled: ${selector}`, 'warn', 'yellow')
         return false
       }
       
-      log(false, 'CREATOR', `[${context}] ✅ Element ready: ${selector}`, 'log', 'green')
       return true
       
     } catch (error) {
-      log(false, 'CREATOR', `[${context}] Element not ready: ${selector}`, 'warn', 'yellow')
       return false
     }
   }
@@ -541,7 +490,7 @@ export class AccountCreator {
     try {
       this.page = await context.newPage()
 
-      log(false, 'CREATOR', 'Starting account creation process...', 'log', 'cyan')
+      log(false, 'CREATOR', '🚀 Starting account creation...', 'log', 'cyan')
 
       // Navigate to signup page
       await this.navigateToSignup()
@@ -550,13 +499,13 @@ export class AccountCreator {
       await this.clickCreateAccount()
 
       // Generate email and fill it (handles suggestions automatically)
-      const emailResult = await this.generateAndFillEmail()
+      const emailResult = await this.generateAndFillEmail(this.autoAccept)
       if (!emailResult) {
         log(false, 'CREATOR', 'Failed to configure email', 'error')
         return null
       }
 
-      log(false, 'CREATOR', `Email accepted: ${emailResult}`, 'log', 'green')
+      log(false, 'CREATOR', `✅ Email: ${emailResult}`, 'log', 'green')
 
       // Wait for password page and fill it
       const password = await this.fillPassword()
@@ -575,8 +524,6 @@ export class AccountCreator {
       // Extract final email from identity badge to confirm
       const finalEmail = await this.extractEmail()
       const confirmedEmail = finalEmail || emailResult
-      
-      log(false, 'CREATOR', `Using email: ${confirmedEmail}`, 'log', 'green')
 
       // Fill birthdate
       const birthdate = await this.fillBirthdate()
@@ -715,13 +662,11 @@ export class AccountCreator {
 
   private async navigateToSignup(): Promise<void> {
     if (this.referralUrl) {
-      log(false, 'CREATOR', `Navigating to referral URL: ${this.referralUrl}`, 'log', 'cyan')
+      log(false, 'CREATOR', '🔗 Navigating to referral link...', 'log', 'cyan')
       await this.page.goto(this.referralUrl, { waitUntil: 'networkidle', timeout: 60000 })
       
       await this.waitForPageStable('REFERRAL_PAGE', 10000)
       await this.humanDelay(1000, 2000)
-      
-      log(false, 'CREATOR', 'Looking for "Join Microsoft Rewards" button...', 'log')
       
       const joinButtonSelectors = [
         'a#start-earning-rewards-link',
@@ -739,27 +684,28 @@ export class AccountCreator {
           const urlBefore = this.page.url()
           
           await button.click()
-          await this.humanDelay(2000, 3000)
+          // OPTIMIZED: Reduced delay after Join click
+          await this.humanDelay(1000, 1500)
           
           // CRITICAL: Verify the click actually did something
           const urlAfter = this.page.url()
           
           if (urlAfter !== urlBefore || urlAfter.includes('login.live.com') || urlAfter.includes('signup')) {
-            log(false, 'CREATOR', `✅ Join button worked (${urlBefore} → ${urlAfter})`, 'log', 'green')
-            await this.waitForPageStable('AFTER_JOIN_CLICK', 8000)
+            // OPTIMIZED: Reduced from 8000ms to 3000ms
+            await this.waitForPageStable('AFTER_JOIN_CLICK', 3000)
             clickSuccess = true
             break
           } else {
-            log(false, 'CREATOR', '⚠️ Join button clicked but no navigation - retrying', 'warn', 'yellow')
-            await this.humanDelay(2000, 3000)
+            // OPTIMIZED: Reduced retry delay
+            await this.humanDelay(1000, 1500)
             // Try clicking again
             await button.click()
-            await this.humanDelay(2000, 3000)
+            await this.humanDelay(1000, 1500)
             
             const urlRetry = this.page.url()
             if (urlRetry !== urlBefore) {
-              log(false, 'CREATOR', '✅ Join button worked on retry', 'log', 'green')
-              await this.waitForPageStable('AFTER_JOIN_CLICK', 8000)
+              // OPTIMIZED: Reduced from 8000ms to 3000ms
+              await this.waitForPageStable('AFTER_JOIN_CLICK', 3000)
               clickSuccess = true
               break
             }
@@ -768,25 +714,24 @@ export class AccountCreator {
       }
       
       if (!clickSuccess) {
-        log(false, 'CREATOR', '⚠️ Join button not found or did not work - continuing to login page', 'warn', 'yellow')
         // Navigate directly to signup
         await this.page.goto('https://login.live.com/', { waitUntil: 'networkidle', timeout: 30000 })
-        await this.waitForPageStable('DIRECT_LOGIN', 8000)
+        // OPTIMIZED: Reduced from 8000ms to 3000ms
+        await this.waitForPageStable('DIRECT_LOGIN', 3000)
       }
     } else {
-      const url = 'https://login.live.com/'
-      log(false, 'CREATOR', `No referral URL - navigating to: ${url}`, 'log', 'cyan')
-      await this.page.goto(url, { waitUntil: 'networkidle', timeout: 60000 })
+      log(false, 'CREATOR', '🌐 Navigating to Microsoft login...', 'log', 'cyan')
+      await this.page.goto('https://login.live.com/', { waitUntil: 'networkidle', timeout: 60000 })
       
-      await this.waitForPageStable('LOGIN_PAGE', 20000)
-      await this.humanDelay(2000, 3000)
+      // OPTIMIZED: Reduced from 20000ms to 5000ms
+      await this.waitForPageStable('LOGIN_PAGE', 5000)
+      await this.humanDelay(1000, 1500)
     }
   }
 
   private async clickCreateAccount(): Promise<void> {
-    log(false, 'CREATOR', 'Looking for "Create account" button...', 'log')
-    
-    await this.waitForPageStable('BEFORE_CREATE_ACCOUNT', 8000)
+    // OPTIMIZED: Page is already stable from navigateToSignup(), no need to wait again
+    // await this.waitForPageStable('BEFORE_CREATE_ACCOUNT', 3000) // REMOVED
     
     const createAccountSelectors = [
       'a[id*="signup"]',
@@ -800,25 +745,28 @@ export class AccountCreator {
       const button = this.page.locator(selector).first()
       
       try {
-        await button.waitFor({ timeout: 5000 })
+        // OPTIMIZED: Reduced timeout from 5000ms to 2000ms
+        await button.waitFor({ timeout: 2000 })
         
         const urlBefore = this.page.url()
         await button.click()
-        await this.humanDelay(1500, 2500)
+        
+        // OPTIMIZED: Reduced delay from 1500-2500ms to 500-1000ms (click is instant)
+        await this.humanDelay(500, 1000)
         
         // CRITICAL: Verify click worked
         const urlAfter = this.page.url()
         const emailFieldAppeared = await this.page.locator('input[type="email"]').first().isVisible().catch(() => false)
         
         if (urlAfter !== urlBefore || emailFieldAppeared) {
-          await this.waitForPageStable('AFTER_CREATE_ACCOUNT', 8000)
-          log(false, 'CREATOR', '✅ Navigated to account creation page', 'log', 'green')
+          // OPTIMIZED: Reduced from 3000ms to 1000ms - email field is already visible
+          await this.humanDelay(1000, 1500)
           return
         } else {
-          log(false, 'CREATOR', '⚠️ Create account button did not navigate - trying next selector', 'warn', 'yellow')
           continue
         }
       } catch {
+        // Selector not found, try next one immediately
         continue
       }
     }
@@ -826,21 +774,29 @@ export class AccountCreator {
     throw new Error('Could not find working "Create account" button')
   }
 
-  private async generateAndFillEmail(): Promise<string | null> {
-    log(false, 'CREATOR', '\n=== Email Configuration ===', 'log', 'cyan')
+  private async generateAndFillEmail(autoAccept = false): Promise<string | null> {
+    log(false, 'CREATOR', '📧 Configuring email...', 'log', 'cyan')
     
-    await this.waitForPageStable('EMAIL_PAGE', 15000)
-    
-    const useAutoGenerate = await this.askQuestion('Generate email automatically? (Y/n): ')
+    // OPTIMIZED: Page is already stable from clickCreateAccount(), minimal wait needed
+    await this.humanDelay(500, 1000)
     
     let email: string
     
-    if (useAutoGenerate.toLowerCase() === 'n' || useAutoGenerate.toLowerCase() === 'no') {
-      email = await this.askQuestion('Enter your email: ')
-      log(false, 'CREATOR', `Using custom email: ${email}`, 'log', 'cyan')
-    } else {
+    if (autoAccept) {
+      // Auto mode: generate automatically
       email = this.dataGenerator.generateEmail()
-      log(false, 'CREATOR', `Generated realistic email: ${email}`, 'log', 'cyan')
+      log(false, 'CREATOR', `Generated realistic email (auto mode): ${email}`, 'log', 'cyan')
+    } else {
+      // Interactive mode: ask user
+      const useAutoGenerate = await this.askQuestion('Generate email automatically? (Y/n): ')
+      
+      if (useAutoGenerate.toLowerCase() === 'n' || useAutoGenerate.toLowerCase() === 'no') {
+        email = await this.askQuestion('Enter your email: ')
+        log(false, 'CREATOR', `Using custom email: ${email}`, 'log', 'cyan')
+      } else {
+        email = this.dataGenerator.generateEmail()
+        log(false, 'CREATOR', `Generated realistic email: ${email}`, 'log', 'cyan')
+      }
     }
 
     const emailInput = this.page.locator('input[type="email"]').first()
@@ -887,17 +843,18 @@ export class AccountCreator {
     
     log(false, 'CREATOR', 'Clicking Next button...', 'log')
     const nextBtn = this.page.locator('button[data-testid="primaryButton"], button[type="submit"]').first()
-    await nextBtn.waitFor({ timeout: 15000 })
+    await nextBtn.waitFor({ timeout: 10000 })
     
     // CRITICAL: Get current URL before clicking
     const urlBeforeClick = this.page.url()
     
     await nextBtn.click()
-    await this.humanDelay(2000, 3000)
-    await this.waitForPageStable('AFTER_EMAIL_SUBMIT', 20000)
+    // OPTIMIZED: Reduced delay after clicking Next
+    await this.humanDelay(1000, 1500)
+    await this.waitForPageStable('AFTER_EMAIL_SUBMIT', 10000)
     
     // CRITICAL: Verify the click had an effect
-    log(false, 'CREATOR', 'Verifying email submission was processed...', 'log', 'cyan')
+
     const urlAfterClick = this.page.url()
     
     if (urlBeforeClick === urlAfterClick) {
@@ -927,8 +884,17 @@ export class AccountCreator {
     return result.email
   }
 
-  private async handleEmailErrors(originalEmail: string): Promise<{ success: boolean; email: string | null }> {
+  private async handleEmailErrors(originalEmail: string, retryCount = 0): Promise<{ success: boolean; email: string | null }> {
     await this.humanDelay(1000, 1500)
+    
+    // CRITICAL: Prevent infinite retry loops
+    const MAX_EMAIL_RETRIES = 5
+    if (retryCount >= MAX_EMAIL_RETRIES) {
+      log(false, 'CREATOR', `❌ Max email retries (${MAX_EMAIL_RETRIES}) reached - giving up`, 'error')
+      log(false, 'CREATOR', '⚠️  Browser left open. Press Ctrl+C to exit.', 'warn', 'yellow')
+      await new Promise(() => {})
+      return { success: false, email: null }
+    }
     
     const errorLocator = this.page.locator('div[id*="Error"], div[role="alert"]').first()
     const errorVisible = await errorLocator.isVisible().catch(() => false)
@@ -939,17 +905,17 @@ export class AccountCreator {
     }
     
     const errorText = await errorLocator.textContent().catch(() => '') || ''
-    log(false, 'CREATOR', `Email error: ${errorText}`, 'warn', 'yellow')
+    log(false, 'CREATOR', `Email error: ${errorText} (attempt ${retryCount + 1}/${MAX_EMAIL_RETRIES})`, 'warn', 'yellow')
     
     // Check for reserved domain error
     if (errorText && (errorText.toLowerCase().includes('reserved') || errorText.toLowerCase().includes('réservé'))) {
-      return await this.handleReservedDomain(originalEmail)
+      return await this.handleReservedDomain(originalEmail, retryCount)
     }
     
     // Check for email taken error
     if (errorText && (errorText.toLowerCase().includes('taken') || errorText.toLowerCase().includes('pris') || 
         errorText.toLowerCase().includes('already') || errorText.toLowerCase().includes('déjà'))) {
-      return await this.handleEmailTaken()
+      return await this.handleEmailTaken(retryCount)
     }
     
     log(false, 'CREATOR', 'Unknown error type, pausing for inspection', 'error')
@@ -958,7 +924,7 @@ export class AccountCreator {
     return { success: false, email: null }
   }
 
-  private async handleReservedDomain(originalEmail: string): Promise<{ success: boolean; email: string | null }> {
+  private async handleReservedDomain(originalEmail: string, retryCount = 0): Promise<{ success: boolean; email: string | null }> {
     log(false, 'CREATOR', `Domain blocked: ${originalEmail.split('@')[1]}`, 'warn', 'yellow')
     
     const username = originalEmail.split('@')[0]
@@ -982,10 +948,8 @@ export class AccountCreator {
         const emailDomain = newEmail.split('@')[1]
         
         if (inputValue === newEmail || (inputValue === emailUsername && (emailDomain === 'outlook.com' || emailDomain === 'hotmail.com' || emailDomain === 'outlook.fr'))) {
-          log(false, 'CREATOR', '[EMAIL_RETRY] ✅ Value verified (domain may be separated)', 'log', 'green')
           return true
         } else {
-          log(false, 'CREATOR', `[EMAIL_RETRY] ⚠️ Unexpected value: "${inputValue}"`, 'warn', 'yellow')
           throw new Error('Email retry input value not verified')
         }
       },
@@ -1004,10 +968,10 @@ export class AccountCreator {
     await this.humanDelay(2000, 3000)
     await this.waitForPageStable('RETRY_EMAIL', 15000)
     
-    return await this.handleEmailErrors(newEmail)
+    return await this.handleEmailErrors(newEmail, retryCount + 1)
   }
 
-  private async handleEmailTaken(): Promise<{ success: boolean; email: string | null }> {
+  private async handleEmailTaken(retryCount = 0): Promise<{ success: boolean; email: string | null }> {
     log(false, 'CREATOR', 'Email taken, looking for Microsoft suggestions...', 'log', 'yellow')
     
     await this.humanDelay(2000, 3000)
@@ -1018,7 +982,8 @@ export class AccountCreator {
       'div[data-testid="suggestions"]',
       'div[role="toolbar"]',
       'div.fui-TagGroup',
-      'div[class*="suggestions"]'
+      'div[class*="suggestions"]',
+      'div[class*="TagGroup"]'
     ]
     
     let suggestionsContainer = null
@@ -1033,7 +998,7 @@ export class AccountCreator {
     }
     
     if (!suggestionsContainer) {
-      log(false, 'CREATOR', 'No suggestions found', 'warn', 'yellow')
+      log(false, 'CREATOR', 'No suggestions found from Microsoft', 'warn', 'yellow')
       
       // Debug: check HTML content
       const pageContent = await this.page.content()
@@ -1041,9 +1006,51 @@ export class AccountCreator {
       const hasToolbar = pageContent.includes('role="toolbar"')
       log(false, 'CREATOR', `Debug - suggestions in HTML: ${hasDataTestId}, toolbar: ${hasToolbar}`, 'warn', 'yellow')
       
-      log(false, 'CREATOR', '⚠️  Browser left open. Press Ctrl+C to exit.', 'warn', 'yellow')
-      await new Promise(() => {})
-      return { success: false, email: null }
+      // CRITICAL FIX: Generate a new email automatically instead of freezing
+      log(false, 'CREATOR', '🔄 Generating a new email automatically...', 'log', 'cyan')
+      
+      const newEmail = this.dataGenerator.generateEmail()
+      log(false, 'CREATOR', `Generated new email: ${newEmail}`, 'log', 'cyan')
+      
+      // Clear and fill the email input with the new email
+      const emailInput = this.page.locator('input[type="email"]').first()
+      
+      const retryFillSuccess = await this.retryOperation(
+        async () => {
+          await emailInput.clear()
+          await this.humanDelay(800, 1500)
+          await emailInput.fill(newEmail)
+          await this.humanDelay(1200, 2500)
+          
+          // SMART VERIFICATION: Microsoft may separate domain
+          const inputValue = await emailInput.inputValue().catch(() => '')
+          const emailUsername = newEmail.split('@')[0]
+          const emailDomain = newEmail.split('@')[1]
+          
+          if (inputValue === newEmail || (inputValue === emailUsername && (emailDomain === 'outlook.com' || emailDomain === 'hotmail.com' || emailDomain === 'outlook.fr'))) {
+            return true
+          } else {
+            throw new Error('Email auto-retry input value not verified')
+          }
+        },
+        'EMAIL_AUTO_RETRY_FILL',
+        3,
+        1000
+      )
+      
+      if (!retryFillSuccess) {
+        log(false, 'CREATOR', 'Failed to fill new email after retries', 'error')
+        return { success: false, email: null }
+      }
+      
+      // Click Next to submit the new email
+      const nextBtn = this.page.locator('button[data-testid="primaryButton"], button[type="submit"]').first()
+      await nextBtn.click()
+      await this.humanDelay(2000, 3000)
+      await this.waitForPageStable('AUTO_RETRY_EMAIL', 15000)
+      
+      // Recursively check the new email (with retry count incremented)
+      return await this.handleEmailErrors(newEmail, retryCount + 1)
     }
     
     // Find all suggestion buttons
@@ -1187,7 +1194,7 @@ export class AccountCreator {
       // Wait a bit more and check for errors
       await this.humanDelay(2000, 3000)
       
-      const hasErrors = !(await this.verifyNoErrors(`NEXT_${step.toUpperCase()}`))
+      const hasErrors = !(await this.verifyNoErrors())
       if (hasErrors) {
         log(false, 'CREATOR', `❌ Errors detected after clicking Next (${step})`, 'error')
         return false
@@ -1202,13 +1209,13 @@ export class AccountCreator {
   }
 
   private async fillPassword(): Promise<string | null> {
-    log(false, 'CREATOR', 'Waiting for password page...', 'log')
+
     
     await this.page.locator('h1[data-testid="title"]').first().waitFor({ timeout: 20000 })
     await this.waitForPageStable('PASSWORD_PAGE', 15000)
     await this.humanDelay(1000, 2000)
     
-    log(false, 'CREATOR', 'Generating strong password...', 'log')
+    log(false, 'CREATOR', '🔐 Generating password...', 'log', 'cyan')
     const password = this.dataGenerator.generatePassword()
     
     const passwordInput = this.page.locator('input[type="password"]').first()
@@ -1223,7 +1230,7 @@ export class AccountCreator {
         await this.humanDelay(1200, 2500) // INCREASED from 800-2000
         
         // Verify value was filled correctly
-        const verified = await this.verifyInputValue('input[type="password"]', password, 'PASSWORD_INPUT')
+        const verified = await this.verifyInputValue('input[type="password"]', password)
         if (!verified) {
           throw new Error('Password input value not verified')
         }
@@ -1246,7 +1253,7 @@ export class AccountCreator {
   }
 
   private async extractEmail(): Promise<string | null> {
-    log(false, 'CREATOR', 'Extracting email from identity badge...', 'log')
+
     
     // Multiple selectors for identity badge (language-independent)
     const badgeSelectors = [
@@ -1280,7 +1287,7 @@ export class AccountCreator {
   }
 
   private async fillBirthdate(): Promise<{ day: number; month: number; year: number } | null> {
-    log(false, 'CREATOR', 'Filling birthdate...', 'log')
+    log(false, 'CREATOR', '🎂 Filling birthdate...', 'log', 'cyan')
     
     await this.waitForPageStable('BIRTHDATE_PAGE', 15000)
     
@@ -1405,8 +1412,7 @@ export class AccountCreator {
           // Verify value was filled correctly
           const verified = await this.verifyInputValue(
             'input[name="BirthYear"], input[type="number"]',
-            birthdate.year.toString(),
-            'YEAR_INPUT'
+            birthdate.year.toString()
           )
           
           if (!verified) {
@@ -1428,7 +1434,7 @@ export class AccountCreator {
       log(false, 'CREATOR', `✅ Birthdate filled: ${birthdate.day}/${birthdate.month}/${birthdate.year}`, 'log', 'green')
       
       // CRITICAL: Verify no errors appeared after filling birthdate
-      const noErrors = await this.verifyNoErrors('BIRTHDATE_VERIFICATION')
+      const noErrors = await this.verifyNoErrors()
       if (!noErrors) {
         log(false, 'CREATOR', '❌ Errors detected after filling birthdate', 'error')
         return null
@@ -1466,7 +1472,7 @@ export class AccountCreator {
   }
 
   private async fillNames(email: string): Promise<{ firstName: string; lastName: string } | null> {
-    log(false, 'CREATOR', 'Filling first and last name...', 'log')
+    log(false, 'CREATOR', '👤 Filling name...', 'log', 'cyan')
     
     await this.waitForPageStable('NAMES_PAGE', 15000)
     
@@ -1566,8 +1572,11 @@ export class AccountCreator {
       
       log(false, 'CREATOR', `✅ Names filled: ${names.firstName} ${names.lastName}`, 'log', 'green')
       
+      // CRITICAL: Uncheck marketing opt-in checkbox (decline promotional emails)
+      await this.uncheckMarketingOptIn()
+      
       // CRITICAL: Verify no errors appeared after filling names
-      const noErrors = await this.verifyNoErrors('NAMES_VERIFICATION')
+      const noErrors = await this.verifyNoErrors()
       if (!noErrors) {
         log(false, 'CREATOR', '❌ Errors detected after filling names', 'error')
         return null
@@ -1598,6 +1607,62 @@ export class AccountCreator {
       const msg = error instanceof Error ? error.message : String(error)
       log(false, 'CREATOR', `Error filling names: ${msg}`, 'error')
       return null
+    }
+  }
+
+  private async uncheckMarketingOptIn(): Promise<void> {
+    try {
+      log(false, 'CREATOR', 'Checking for marketing opt-in checkbox...', 'log', 'cyan')
+      
+      // Multiple selectors for the marketing checkbox
+      const checkboxSelectors = [
+        'input#marketingOptIn',
+        'input[data-testid="marketingOptIn"]',
+        'input[name="marketingOptIn"]',
+        'input[aria-label*="information, tips, and offers"]'
+      ]
+      
+      let checkbox = null
+      for (const selector of checkboxSelectors) {
+        const element = this.page.locator(selector).first()
+        const visible = await element.isVisible().catch(() => false)
+        if (visible) {
+          checkbox = element
+          log(false, 'CREATOR', `Found marketing checkbox with selector: ${selector}`, 'log', 'cyan')
+          break
+        }
+      }
+      
+      if (!checkbox) {
+        log(false, 'CREATOR', 'No marketing checkbox found (may not exist on this page)', 'log', 'gray')
+        return
+      }
+      
+      // Check if the checkbox is already checked
+      const isChecked = await checkbox.isChecked().catch(() => false)
+      
+      if (isChecked) {
+        log(false, 'CREATOR', 'Marketing checkbox is checked, unchecking it...', 'log', 'yellow')
+        
+        // Click to uncheck
+        await checkbox.click()
+        await this.humanDelay(500, 1000)
+        
+        // Verify it was unchecked
+        const stillChecked = await checkbox.isChecked().catch(() => true)
+        if (!stillChecked) {
+          log(false, 'CREATOR', '✅ Marketing opt-in unchecked successfully', 'log', 'green')
+        } else {
+          log(false, 'CREATOR', '⚠️ Failed to uncheck marketing opt-in', 'warn', 'yellow')
+        }
+      } else {
+        log(false, 'CREATOR', '✅ Marketing opt-in already unchecked', 'log', 'green')
+      }
+      
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      log(false, 'CREATOR', `Marketing opt-in handling error: ${msg}`, 'warn', 'yellow')
+      // Don't fail the whole process for this
     }
   }
 

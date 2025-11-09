@@ -14,7 +14,7 @@ async function main(): Promise<void> {
   for (const arg of args) {
     if (!arg) continue
     
-    if (arg === '-y') {
+    if (arg === '-y' || arg === '--yes' || arg === 'y' || arg === 'Y') {
       autoAccept = true
     } else if (arg.startsWith('http')) {
       referralUrl = arg
@@ -27,6 +27,12 @@ async function main(): Promise<void> {
   // Banner
   console.log('\n' + '='.repeat(60))
   log(false, 'CREATOR-CLI', '🚀 Microsoft Account Creator', 'log', 'cyan')
+  console.log('='.repeat(60))
+  
+  // WARNING MESSAGE
+  log(false, 'CREATOR-CLI', '⚠️  DO NOT INTERACT WITH THE BROWSER DURING AUTOMATION', 'warn', 'red')
+  log(false, 'CREATOR-CLI', '   Everything is fully automated. Any interaction may break the process.', 'log', 'yellow')
+  log(false, 'CREATOR-CLI', '   Only interact when explicitly asked (e.g., CAPTCHA solving).', 'log', 'yellow')
   console.log('='.repeat(60) + '\n')
   
   // Display detected arguments
@@ -41,9 +47,11 @@ async function main(): Promise<void> {
   }
   
   if (autoAccept) {
-    log(false, 'CREATOR-CLI', '⚡ Auto-accept mode: recovery + 2FA will be enabled', 'log', 'cyan')
+    log(false, 'CREATOR-CLI', '⚡ Auto-accept mode ENABLED (-y flag detected)', 'log', 'green')
+    log(false, 'CREATOR-CLI', '🤖 All prompts will be auto-accepted', 'log', 'cyan')
   } else {
     log(false, 'CREATOR-CLI', '🤖 Interactive mode: you will be asked for options', 'log', 'cyan')
+    log(false, 'CREATOR-CLI', '💡 Tip: Use -y flag to auto-accept all prompts', 'log', 'gray')
   }
   
   console.log()
