@@ -4,90 +4,95 @@
 
 # Microsoft Rewards Bot
 
-**Automate your Microsoft Rewards points collection effortlessly**
+**Automate your Microsoft Rewards points collection**
 
-[![Discord](https://img.shields.io/badge/💬_Join_Discord-7289DA?style=for-the-badge&logo=discord)](https://discord.gg/k5uHkx9mne) 
-[![GitHub](https://img.shields.io/badge/⭐_Star_Project-yellow?style=for-the-badge&logo=github)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot)
-[![Version](https://img.shields.io/badge/version-2.56.0-blue?style=for-the-badge)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/releases)
-[![License](https://img.shields.io/badge/license-CC_BY--NC--SA_4.0-green?style=for-the-badge)](LICENSE)
+[![Discord](https://img.shields.io/badge/💬_Discord-7289DA?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/k5uHkx9mne) 
+[![GitHub](https://img.shields.io/badge/⭐_Star-yellow?style=for-the-badge&logo=github&logoColor=black)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot)
+[![Version](https://img.shields.io/badge/v2.56.0-blue?style=for-the-badge)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/releases)
 
 </div>
 
 ---
 
-##  About
+## 💡 What is this?
 
-This TypeScript-based automation bot helps you maximize your **Microsoft Rewards** points by automatically completing daily tasks, searches, quizzes, and promotional offers. Designed with sophisticated anti-detection measures and human-like behavior patterns to ensure safe, reliable operation.
+A **TypeScript bot** that automatically earns Microsoft Rewards points by completing:
 
-### ✨ Key Features
+- 🔍 Desktop & mobile Bing searches
+- 📋 Daily quizzes, polls, and activities  
+- 🎁 Promotional offers and punch cards
+- 📚 Read-to-earn tasks
 
-- 🔍 **Automated Searches** — Desktop and mobile Bing searches with natural patterns
-- 📅 **Daily Activities** — Quizzes, polls, daily sets, and punch cards
-- 🤖 **Human-like Behavior** — Advanced humanization system to avoid detection
-- 🛡️ **Risk Management** — Built-in ban detection and prediction with ML algorithms
-- ⏰ **Automatic Scheduling** — Easy configuration for cron (Linux/Raspberry Pi) and Windows Task Scheduler
-- 🔔 **Notifications** — Discord webhooks and NTFY push alerts
-- 🐳 **Docker Support** — Easy containerized deployment
-- 🔐 **Multi-Account** — Manage multiple accounts with parallel execution
-- 🌐 **Proxy Support** — Optional proxy configuration for enhanced privacy
+**Built with anti-detection** to work safely and reliably.
+
+---
+
+## ✨ Features
+
+- 🤖 **Human-like behavior** — Natural search patterns
+- ⏰ **Auto-scheduling** — Set it and forget it
+- � **Multi-account support** — Manage multiple accounts
+- 🔔 **Notifications** — Discord webhooks & mobile alerts
+- 🐳 **Docker ready** — Easy containerized deployment
+- 🌐 **Proxy support** — Enhanced privacy (optional)
 
 ---
 
 ## 🚀 Quick Start
 
-### ⚡ Prerequisites
+### Prerequisites
 
-- **Node.js 20+** (v22 recommended) — [Download here](https://nodejs.org/)
-- **Git** (optional) — [Download here](https://git-scm.com/) or download project as ZIP
+- **Node.js 20+** (v22 recommended) — [Download](https://nodejs.org/)
+- **Microsoft account(s)** with email + password
 
-### 🎯 3-Step Setup
+### Installation
 
-1. **Get the project:**
-   ```bash
-   git clone https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot.git
-   cd Microsoft-Rewards-Bot
-   ```
-   Or download ZIP: [Code → Download ZIP](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/archive/refs/heads/main.zip)
+```bash
+# 1. Download the project
+git clone https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot.git
+cd Microsoft-Rewards-Bot
 
-2. **Install dependencies:**
-   ```bash
-   npm i
-   ```
+# 2. Install dependencies
+npm install
 
-3. **Create accounts & configure:**
-   ```bash
-   # Use our account creator (recommended - earn +7,500 points/month!)
-   npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
-   
-   # Or use setup wizard
-   npm run setup
-   ```
+# 3. Setup and run
+npm run setup
+```
 
-**📖 Need detailed instructions? See [Getting Started Guide](docs/getting-started.md)**
+**That's it!** The wizard will guide you through account setup and start earning points.
+
+### 📖 Need Help?
+
+**First time using the bot?** → [📘 Getting Started Guide](docs/getting-started.md)
+
+The complete guide covers:
+- ✅ Detailed installation steps
+- ✅ Creating Microsoft accounts with referrals (+7,500 points/month!)
+- ✅ Setting up 2FA authentication
+- ✅ Configuration options
+- ✅ Troubleshooting common issues
 
 ---
 
 ## 📚 Documentation
 
-For detailed configuration, advanced features, and troubleshooting, visit our comprehensive documentation:
+**New to the bot?** Start here: **[📘 Getting Started Guide](docs/getting-started.md)**
 
-**👉 [Complete Documentation](docs/index.md)**
+**Need specific info?** Check the **[📖 Documentation Hub](docs/index.md)**
 
-### Quick Links
+<details>
+<summary><strong>📑 Quick Links</strong></summary>
 
-| Topic | Description |
+| Guide | Description |
 |-------|-------------|
-| **[Getting Started](docs/getting-started.md)** | Detailed installation and first-run guide |
-| **[Configuration](docs/config.md)** | Complete configuration options reference |
-| **[Accounts & 2FA](docs/accounts.md)** | Setting up accounts with TOTP authentication |
-| **[Dashboard](src/dashboard/README.md)** | 🆕 Local web dashboard for monitoring and control |
-| **[External Scheduling](docs/schedule.md)** | Use OS schedulers for automation |
-| **[Docker Deployment](docs/docker.md)** | Running in containers |
-| **[Humanization](docs/humanization.md)** | Anti-detection and natural behavior |
-| **[Notifications](docs/conclusionwebhook.md)** | Discord webhooks and NTFY setup |
-| **[Error Reporting](docs/ERROR_REPORTING.md)** | 🆕 Automatic error reporting to help improve the project |
-| **[Proxy Setup](docs/proxy.md)** | Configuring proxies for privacy |
-| **[Troubleshooting](docs/diagnostics.md)** | Debug common issues and capture logs |
+| **[Getting Started](docs/getting-started.md)** | Complete installation tutorial |
+| **[Accounts & 2FA](docs/accounts.md)** | Setup accounts with authentication |
+| **[Configuration](docs/config.md)** | Customize bot behavior |
+| **[Scheduling](docs/schedule.md)** | Automate with cron/Task Scheduler |
+| **[Notifications](docs/notifications.md)** | Discord & mobile alerts |
+| **[Troubleshooting](docs/troubleshooting.md)** | Fix common issues |
+
+</details>
 
 ---
 
@@ -127,17 +132,9 @@ Automatically create new Microsoft accounts with advanced security features:
 # Interactive mode (asks everything)
 npm run creator
 
-# With referral link (earn rewards credit)
-npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE
-
-# Auto-accept mode (enables recovery + 2FA automatically)
-npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y
-
 # With specific recovery email (auto-detected, no flag needed!)
 npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
 
-# Just recovery email, no referral
-npm run creator -y myrecovery@gmail.com
 ```
 
 **✨ Features:**
@@ -210,7 +207,7 @@ Configure automatic task scheduling directly from `config.jsonc` - **perfect for
 
 **Then simply run:**
 ```bash
-npm run start
+npm start
 ```
 
 The bot will automatically configure cron (Linux/Raspberry Pi) or Task Scheduler (Windows) for you!
@@ -315,74 +312,39 @@ All while maintaining **natural behavior patterns** to minimize detection risk.
 
 ---
 
-## 🆘 Getting Help
+## 🆘 Need Help?
 
-- 💬 **[Join our Discord](https://discord.gg/k5uHkx9mne)** — Community support and updates
-- 📖 **[Documentation Hub](docs/index.md)** — Complete guides and references
-- 🐛 **[Report Issues](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)** — Bug reports and feature requests
-- 📧 **[Troubleshooting Guide](docs/diagnostics.md)** — Debug common issues
+- 💬 **[Discord Community](https://discord.gg/k5uHkx9mne)** — Get support & updates
+- 📖 **[Documentation](docs/index.md)** — Complete guides
+- 🐛 **[Report Bug](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)** — Found an issue?
+- � **[Troubleshooting](docs/troubleshooting.md)** — Fix common problems
 
 ---
 
 ## ⚠️ Disclaimer
 
-**Use at your own risk.** This script automates interactions with Microsoft Rewards, which may violate [Microsoft's Terms of Service](https://www.microsoft.com/en-us/servicesagreement/). Using automation tools can result in:
+This bot automates Microsoft Rewards interactions, which **may violate their Terms of Service**.
 
-- ⚠️ Account suspension or permanent ban
-- 🚫 Loss of accumulated points and rewards
-- 🔒 Restriction from future participation
+**Risks:**
+- ⚠️ Account suspension or ban
+- 🚫 Loss of points and rewards
 
-**This project is provided for educational and research purposes only.** The developers and contributors:
-- Are **not responsible** for any actions taken by Microsoft against your account
-- Do **not encourage** violating terms of service
-- Provide **no guarantees** regarding account safety
-
-**Use responsibly and at your own discretion.**
+**Educational purposes only.** Use at your own risk.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License**.
+**CC BY-NC-SA 4.0** — Personal use only, no commercial use.
 
-**You may:**
-- ✅ Use for personal, non-commercial purposes
-- ✅ Modify the code for your own use
-- ✅ Share with others (with same restrictions)
-- ✅ Submit improvements via pull requests
-
-**You may NOT:**
-- ❌ Use for commercial purposes
-- ❌ Sell or monetize this software
-- ❌ Remove license/copyright notices
-
-See [LICENSE](LICENSE) for complete terms.
-
----
-
-## 🙏 Acknowledgments
-
-- Built with [Playwright](https://playwright.dev/) and [ReBrowser](https://github.com/rebrowser/rebrowser-playwright)
-- Thanks to all [contributors](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/graphs/contributors)
-- Community support via [Discord](https://discord.gg/k5uHkx9mne)
-
----
-
-## 🌟 Support the Project
-
-If you find this project helpful:
-
-- ⭐ **Star the repository** on GitHub
-- 💬 **Join our Discord** community
-- 🐛 **Report bugs** and suggest features
-- 📖 **Contribute** to documentation
+See [LICENSE](LICENSE) for details.
 
 ---
 
 <div align="center">
 
-**Made with ❤️ by the community**
+**⭐ Star the repo** • **💬 [Join Discord](https://discord.gg/k5uHkx9mne)** • **� [Documentation](docs/index.md)**
 
-[Documentation](docs/index.md) • [Discord](https://discord.gg/k5uHkx9mne) • [Issues](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)
+Made with ❤️ by the community
 
 </div>
