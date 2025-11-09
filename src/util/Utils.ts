@@ -170,3 +170,35 @@ export class Util {
     }
 
 }
+
+/**
+ * Extract short error message from unknown error type (max 120 chars)
+ * @param error - Error object or unknown value
+ * @returns Truncated string representation of the error
+ * @example shortErrorMessage(new Error('Something went wrong')) // 'Something went wrong'
+ * @example shortErrorMessage(null) // 'unknown'
+ */
+export function shortErrorMessage(error: unknown): string {
+    if (error == null) return 'unknown'
+    if (error instanceof Error) return error.message.substring(0, 120)
+    const str = String(error)
+    return str.substring(0, 120)
+}
+
+/**
+ * Format detailed error message with optional stack trace
+ * @param label - Error context label (e.g., 'desktop', 'mobile', 'login')
+ * @param error - Error object or unknown value
+ * @param includeStack - Whether to include stack trace (default: false)
+ * @returns Formatted error string with label and optionally stack trace
+ * @example formatDetailedError('desktop', new Error('Failed'), true) // 'desktop:Failed :: at line1 | at line2...'
+ * @example formatDetailedError('mobile', 'timeout') // 'mobile:timeout'
+ */
+export function formatDetailedError(label: string, error: unknown, includeStack: boolean = false): string {
+    const baseMessage = shortErrorMessage(error)
+    if (includeStack && error instanceof Error && error.stack) {
+        const stackLines = error.stack.split('\n').slice(0, 4).join(' | ')
+        return `${label}:${baseMessage} :: ${stackLines}`
+    }
+    return `${label}:${baseMessage}`
+}

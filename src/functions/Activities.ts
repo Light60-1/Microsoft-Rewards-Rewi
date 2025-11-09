@@ -92,13 +92,14 @@ export class Activities {
                     await this.doUrlReward(page)
                     break
                 case 'unsupported':
-                    // FIXED: Added explicit default case
-                    this.bot.log(this.bot.isMobile, 'ACTIVITY', `Skipped activity "${activity.title}" | Reason: Unsupported type: "${String((activity as { promotionType?: string }).promotionType)}"!`, 'warn')
+                    this.bot.log(this.bot.isMobile, 'ACTIVITY', `Skipped activity "${activity.title}" | Reason: Unsupported type: "${(activity as { promotionType?: string }).promotionType || 'unknown'}"`, 'warn')
                     break
-                default:
-                    // Exhaustiveness check - should never reach here due to ActivityKind type
+                default: {
+                    // Exhaustiveness check - TypeScript ensures all ActivityKind types are handled
+                    const _exhaustive: never = kind
                     this.bot.log(this.bot.isMobile, 'ACTIVITY', `Unexpected activity kind for "${activity.title}"`, 'error')
-                    break
+                    return _exhaustive
+                }
             }
         } catch (e) {
             this.bot.log(this.bot.isMobile, 'ACTIVITY', `Dispatcher error for "${activity.title}": ${e instanceof Error ? e.message : e}`, 'error')

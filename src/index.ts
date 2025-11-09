@@ -16,7 +16,7 @@ import { log } from './util/Logger'
 import { MobileRetryTracker } from './util/MobileRetryTracker'
 import { QueryDiversityEngine } from './util/QueryDiversityEngine'
 import { StartupValidator } from './util/StartupValidator'
-import { Util } from './util/Utils'
+import { formatDetailedError, shortErrorMessage, Util } from './util/Utils'
 
 import { Activities } from './functions/Activities'
 import { Login } from './functions/Login'
@@ -877,20 +877,9 @@ function isWorkerMessage(msg: unknown): msg is WorkerMessage {
     return m.type === 'summary' && Array.isArray(m.data)
 }
 
-function shortErr(e: unknown): string {
-    if (e == null) return 'unknown'
-    if (e instanceof Error) return e.message.substring(0, 120)
-    const s = String(e)
-    return s.substring(0, 120)
-}
-
-function formatFullError(label: string, e: unknown, verbose: boolean): string {
-    const base = shortErr(e)
-    if (verbose && e instanceof Error && e.stack) {
-        return `${label}:${base} :: ${e.stack.split('\n').slice(0, 4).join(' | ')}`
-    }
-    return `${label}:${base}`
-}
+// Use utility functions from Utils.ts
+const shortErr = shortErrorMessage
+const formatFullError = formatDetailedError
 
 async function main(): Promise<void> {
     // Check for dashboard mode flag (standalone dashboard)
@@ -981,23 +970,41 @@ async function main(): Promise<void> {
     const bootstrap = async () => {
         try {
             // Check for updates BEFORE initializing and running tasks
+            // CRITICAL: Only restart if update script explicitly indicates new version was installed
             try {
                 const updateResult = await rewardsBot.runAutoUpdate().catch((e) => {
                     log('main', 'UPDATE', `Auto-update check failed: ${e instanceof Error ? e.message : String(e)}`, 'warn')
                     return -1
                 })
                 
+                // FIXED: Only restart on exit code 0 AND if update actually happened
+                // The update script returns 0 even when no update is needed, which causes infinite loop
+                // Solution: Check for marker file that update script creates when actual update happens
                 if (updateResult === 0) {
-                    log('main', 'UPDATE', '✅ Update successful - restarting with new version...', 'log', 'green')
+                    const updateMarkerPath = path.join(process.cwd(), '.update-happened')
+                    const updateHappened = fs.existsSync(updateMarkerPath)
                     
-                    // Restart the process with the same arguments
-                    const { spawn } = await import('child_process')
-                    const child = spawn(process.execPath, process.argv.slice(1), {
-                        detached: true,
-                        stdio: 'inherit'
-                    })
-                    child.unref()
-                    process.exit(0)
+                    if (updateHappened) {
+                        // Remove marker file
+                        try {
+                            fs.unlinkSync(updateMarkerPath)
+                        } catch {
+                            // Ignore cleanup errors
+                        }
+                        
+                        log('main', 'UPDATE', '✅ Update successful - restarting with new version...', 'log', 'green')
+                        
+                        // Restart the process with the same arguments
+                        const { spawn } = await import('child_process')
+                        const child = spawn(process.execPath, process.argv.slice(1), {
+                            detached: true,
+                            stdio: 'inherit'
+                        })
+                        child.unref()
+                        process.exit(0)
+                    } else {
+                        log('main', 'UPDATE', 'Already up to date, continuing with bot execution')
+                    }
                 }
             } catch (updateError) {
                 log('main', 'UPDATE', `Update check failed (continuing): ${updateError instanceof Error ? updateError.message : String(updateError)}`, 'warn')

@@ -13,7 +13,7 @@
 import type { MicrosoftRewardsBot } from '../index'
 import type { Account } from '../interface/Account'
 import { createBrowserInstance } from '../util/BrowserFactory'
-import { saveSessionData } from '../util/Load'
+import { handleCompromisedMode } from './FlowUtils'
 
 export interface DesktopFlowResult {
     initialPoints: number
@@ -66,32 +66,9 @@ export class DesktopFlow {
             await this.bot.login.login(this.bot.homePage, account.email, account.password, account.totp)
 
             if (this.bot.compromisedModeActive) {
-                // User wants the page to remain open for manual recovery. Do not proceed to tasks.
-                keepBrowserOpen = true
                 const reason = this.bot.compromisedReason || 'security-issue'
-                this.bot.log(false, 'DESKTOP-FLOW', `Account security check failed (${reason}). Browser kept open for manual review: ${account.email}`, 'warn', 'yellow')
-                
-                try {
-                    const { ConclusionWebhook } = await import('../util/ConclusionWebhook')
-                    await ConclusionWebhook(
-                        this.bot.config,
-                        '🔐 Security Check',
-                        `**Account:** ${account.email}\n**Status:** ${reason}\n**Action:** Browser kept open, activities paused`,
-                        undefined,
-                        0xFFAA00
-                    )
-                } catch (error) {
-                    const errorMsg = error instanceof Error ? error.message : String(error)
-                    this.bot.log(false, 'DESKTOP-FLOW', `Failed to send security webhook: ${errorMsg}`, 'warn')
-                }
-                
-                // Save session for convenience, but do not close the browser
-                try { 
-                    await saveSessionData(this.bot.config.sessionPath, this.bot.homePage.context(), account.email, false) 
-                } catch (e) {
-                    this.bot.log(false, 'DESKTOP-FLOW', `Failed to save session: ${e instanceof Error ? e.message : String(e)}`, 'warn')
-                }
-                
+                const result = await handleCompromisedMode(this.bot, account.email, reason, false)
+                keepBrowserOpen = result.keepBrowserOpen
                 return { initialPoints: 0, collectedPoints: 0 }
             }
 

@@ -14,8 +14,8 @@
 import type { MicrosoftRewardsBot } from '../index'
 import type { Account } from '../interface/Account'
 import { createBrowserInstance } from '../util/BrowserFactory'
-import { saveSessionData } from '../util/Load'
 import { MobileRetryTracker } from '../util/MobileRetryTracker'
+import { handleCompromisedMode } from './FlowUtils'
 
 export interface MobileFlowResult {
     initialPoints: number
@@ -73,30 +73,9 @@ export class MobileFlow {
             await this.bot.login.login(this.bot.homePage, account.email, account.password, account.totp)
             
             if (this.bot.compromisedModeActive) {
-                keepBrowserOpen = true
                 const reason = this.bot.compromisedReason || 'security-issue'
-                this.bot.log(true, 'MOBILE-FLOW', `Mobile security check failed (${reason}). Browser kept open for manual review: ${account.email}`, 'warn', 'yellow')
-                
-                try {
-                    const { ConclusionWebhook } = await import('../util/ConclusionWebhook')
-                    await ConclusionWebhook(
-                        this.bot.config,
-                        '🔐 Security Check (Mobile)',
-                        `**Account:** ${account.email}\n**Status:** ${reason}\n**Action:** Browser kept open, mobile activities paused`,
-                        undefined,
-                        0xFFAA00
-                    )
-                } catch (error) {
-                    const errorMsg = error instanceof Error ? error.message : String(error)
-                    this.bot.log(true, 'MOBILE-FLOW', `Failed to send security webhook: ${errorMsg}`, 'warn')
-                }
-                
-                try {
-                    await saveSessionData(this.bot.config.sessionPath, this.bot.homePage.context(), account.email, true)
-                } catch (e) {
-                    this.bot.log(true, 'MOBILE-FLOW', `Failed to save session: ${e instanceof Error ? e.message : String(e)}`, 'warn')
-                }
-                
+                const result = await handleCompromisedMode(this.bot, account.email, reason, true)
+                keepBrowserOpen = result.keepBrowserOpen
                 return { initialPoints: 0, collectedPoints: 0 }
             }
             

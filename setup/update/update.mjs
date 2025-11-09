@@ -18,11 +18,10 @@
  *   node setup/update/update.mjs --docker      # Update Docker containers
  */
 
-import { spawn, execSync } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, cpSync, rmSync } from 'node:fs'
-import { join, dirname } from 'node:path'
-import { createWriteStream } from 'node:fs'
+import { execSync, spawn } from 'node:child_process'
+import { cpSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { get as httpsGet } from 'node:https'
+import { dirname, join } from 'node:path'
 
 function stripJsonComments(input) {
   let result = ""
@@ -286,10 +285,15 @@ async function updateGit() {
   
   if (!behindCount || behindCount === '0') {
     console.log('✓ Already up to date!')
+    // FIXED: Return 0 but DON'T create update marker (no restart needed)
     return 0
   }
   
   console.log(`ℹ️  ${behindCount} commits behind remote`)
+  
+  // MARK: Update is happening - create marker file for bot to detect
+  const updateMarkerPath = join(process.cwd(), '.update-happened')
+  writeFileSync(updateMarkerPath, `Updated from ${currentCommit} to latest at ${new Date().toISOString()}`)
   
   // Use merge with strategy to accept remote changes for all files
   // We'll restore user files afterwards
@@ -540,6 +544,11 @@ async function updateGitFree() {
   rmSync(archivePath, { force: true })
   rmSync(extractDir, { recursive: true, force: true })
   console.log('✓ Cleanup complete')
+  
+  // MARK: Update happened - create marker file for bot to detect restart
+  const updateMarkerPath = join(process.cwd(), '.update-happened')
+  writeFileSync(updateMarkerPath, `Git-free update completed at ${new Date().toISOString()}`)
+  console.log('✓ Created update marker for bot restart detection')
   
   // Step 9: Install & build
   const hasNpm = await which('npm')

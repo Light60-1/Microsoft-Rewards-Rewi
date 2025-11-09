@@ -237,26 +237,21 @@ export class Workers {
         await page.click(selector, { timeout: 10000 })
         page = await this.bot.browser.utils.getLatestTab(page)
 
-        // FIXED: Use AbortController for proper cancellation instead of race condition
+        // Execute activity with timeout protection using Promise.race
         const timeoutMs = this.bot.utils.stringToMs(this.bot.config?.globalTimeout ?? '30s') * 2
-        const controller = new AbortController()
-        const timeoutHandle = setTimeout(() => {
-            controller.abort()
-        }, timeoutMs)
         
-        const runWithTimeout = async (p: Promise<void>) => {
-            try {
-                await p
-                clearTimeout(timeoutHandle)
-            } catch (error) {
-                clearTimeout(timeoutHandle)
-                throw error
-            }
-        }
-
         await retry.run(async () => {
+            const activityPromise = this.bot.activities.run(page, activity)
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                const timer = setTimeout(() => {
+                    reject(new Error(`Activity execution timeout after ${timeoutMs}ms`))
+                }, timeoutMs)
+                // Clean up timer if activity completes first
+                activityPromise.finally(() => clearTimeout(timer))
+            })
+            
             try {
-                await runWithTimeout(this.bot.activities.run(page, activity))
+                await Promise.race([activityPromise, timeoutPromise])
                 throttle.record(true)
             } catch (e) {
                 throttle.record(false)
