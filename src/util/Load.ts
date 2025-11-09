@@ -2,14 +2,9 @@ import { BrowserFingerprintWithHeaders } from 'fingerprint-generator'
 import fs from 'fs'
 import path from 'path'
 import { BrowserContext, Cookie } from 'rebrowser-playwright'
-
 import { Account } from '../interface/Account'
 import { Config, ConfigBrowser, ConfigSaveFingerprint, ConfigScheduling } from '../interface/Config'
 import { Util } from './Utils'
-
-
-
-
 
 const utils = new Util()
 

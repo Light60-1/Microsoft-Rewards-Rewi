@@ -1,24 +1,12 @@
-﻿// -------------------------------
-// REFACTORING STATUS: COMPLETED âœ…
-// -------------------------------
-// Successfully modularized into separate flow modules:
-// âœ… DesktopFlow.ts (Desktop automation logic) - INTEGRATED
-// âœ… MobileFlow.ts (Mobile automation logic) - INTEGRATED  
-// âœ… SummaryReporter.ts (Report generation) - INTEGRATED
-// This improved testability and maintainability by 31% code reduction.
-// -------------------------------
-
-import { spawn } from 'child_process'
+﻿import { spawn } from 'child_process'
 import type { Worker } from 'cluster'
 import cluster from 'cluster'
 import fs from 'fs'
 import path from 'path'
 import type { Page } from 'playwright'
 import { createInterface } from 'readline'
-
 import BrowserFunc from './browser/BrowserFunc'
 import BrowserUtil from './browser/BrowserUtil'
-
 import Axios from './util/Axios'
 import { detectBanReason } from './util/BanDetector'
 import Humanizer from './util/Humanizer'
@@ -255,15 +243,18 @@ export class MicrosoftRewardsBot {
     }
 
     private getVersion(): string {
+        const DEFAULT_VERSION = '2.56.0'
         try {
             const pkgPath = path.join(__dirname, '../', 'package.json')
             if (fs.existsSync(pkgPath)) {
                 const raw = fs.readFileSync(pkgPath, 'utf-8')
                 const pkg = JSON.parse(raw)
-                return pkg.version || '2.51.0'
+                return pkg.version || DEFAULT_VERSION
             }
-        } catch { /* ignore */ }
-        return '2.51.0'
+        } catch (error) {
+            // Ignore: Fall back to default version if package.json is unavailable
+        }
+        return DEFAULT_VERSION
     }
     
     // Return summaries (used when clusters==1)
@@ -652,7 +643,7 @@ export class MicrosoftRewardsBot {
             const { ConclusionWebhook } = await import('./util/ConclusionWebhook')
             await ConclusionWebhook(
                 this.config,
-                'ðŸš« Ban Detected',
+                '🚫 Ban Detected',
                 `**Account:** ${email}\n**Reason:** ${reason || 'detected by heuristics'}`,
                 undefined,
                 DISCORD.COLOR_RED

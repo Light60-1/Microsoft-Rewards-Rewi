@@ -46,9 +46,11 @@ export class MobileFlow {
      * @throws {Error} If critical operation fails (login, OAuth)
      * 
      * @example
+     * ```typescript
      * const flow = new MobileFlow(bot)
      * const result = await flow.run(account)
-     * console.log(`Mobile: ${result.collectedPoints} points`)
+     * // result.collectedPoints contains mobile points earned
+     * ```
      */
     async run(
         account: Account,

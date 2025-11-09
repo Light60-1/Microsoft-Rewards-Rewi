@@ -43,9 +43,11 @@ export class DesktopFlow {
      * @throws {Error} If critical operation fails (login, browser init)
      * 
      * @example
+     * ```typescript
      * const flow = new DesktopFlow(bot)
      * const result = await flow.run(account)
-     * console.log(`Collected ${result.collectedPoints} points`)
+     * // result.collectedPoints contains points earned
+     * ```
      */
     async run(account: Account): Promise<DesktopFlowResult> {
         this.bot.log(false, 'DESKTOP-FLOW', 'Starting desktop automation flow')

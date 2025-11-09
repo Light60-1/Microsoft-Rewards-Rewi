@@ -1,10 +1,8 @@
 import axios from 'axios'
 import { BrowserFingerprintWithHeaders } from 'fingerprint-generator'
-
+import { Architecture, ChromeVersion, EdgeVersion, Platform } from '../interface/UserAgentUtil'
 import { log } from './Logger'
 import { Retry } from './Retry'
-
-import { Architecture, ChromeVersion, EdgeVersion, Platform } from '../interface/UserAgentUtil'
 
 interface UserAgentMetadata {
     mobile: boolean
