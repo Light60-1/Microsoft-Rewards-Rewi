@@ -970,44 +970,79 @@ async function main(): Promise<void> {
     const bootstrap = async () => {
         try {
             // Check for updates BEFORE initializing and running tasks
-            // CRITICAL: Only restart if update script explicitly indicates new version was installed
-            try {
-                const updateResult = await rewardsBot.runAutoUpdate().catch((e) => {
-                    log('main', 'UPDATE', `Auto-update check failed: ${e instanceof Error ? e.message : String(e)}`, 'warn')
-                    return -1
-                })
-                
-                // FIXED: Only restart on exit code 0 AND if update actually happened
-                // The update script returns 0 even when no update is needed, which causes infinite loop
-                // Solution: Check for marker file that update script creates when actual update happens
-                if (updateResult === 0) {
-                    const updateMarkerPath = path.join(process.cwd(), '.update-happened')
-                    const updateHappened = fs.existsSync(updateMarkerPath)
-                    
-                    if (updateHappened) {
-                        // Remove marker file
-                        try {
-                            fs.unlinkSync(updateMarkerPath)
-                        } catch {
-                            // Ignore cleanup errors
-                        }
-                        
-                        log('main', 'UPDATE', '✅ Update successful - restarting with new version...', 'log', 'green')
-                        
-                        // Restart the process with the same arguments
-                        const { spawn } = await import('child_process')
-                        const child = spawn(process.execPath, process.argv.slice(1), {
-                            detached: true,
-                            stdio: 'inherit'
-                        })
-                        child.unref()
-                        process.exit(0)
-                    } else {
-                        log('main', 'UPDATE', 'Already up to date, continuing with bot execution')
-                    }
+            // Anti-loop protection: Track restart attempts
+            const restartCounterPath = path.join(process.cwd(), '.update-restart-count')
+            let restartCount = 0
+            if (fs.existsSync(restartCounterPath)) {
+                try {
+                    const content = fs.readFileSync(restartCounterPath, 'utf8')
+                    restartCount = parseInt(content, 10) || 0
+                } catch {
+                    restartCount = 0
                 }
-            } catch (updateError) {
-                log('main', 'UPDATE', `Update check failed (continuing): ${updateError instanceof Error ? updateError.message : String(updateError)}`, 'warn')
+            }
+            
+            // If we've restarted too many times (3+), something is wrong - skip update
+            if (restartCount >= 3) {
+                log('main', 'UPDATE', '⚠️  Too many restart attempts detected - skipping update to prevent loop', 'warn')
+                // Clean up counter file
+                try {
+                    fs.unlinkSync(restartCounterPath)
+                } catch {
+                    // Ignore
+                }
+            } else {
+                try {
+                    const updateResult = await rewardsBot.runAutoUpdate().catch((e) => {
+                        log('main', 'UPDATE', `Auto-update check failed: ${e instanceof Error ? e.message : String(e)}`, 'warn')
+                        return -1
+                    })
+                    
+                    if (updateResult === 0) {
+                        const updateMarkerPath = path.join(process.cwd(), '.update-happened')
+                        const updateHappened = fs.existsSync(updateMarkerPath)
+                        
+                        if (updateHappened) {
+                            // Remove marker file
+                            try {
+                                fs.unlinkSync(updateMarkerPath)
+                            } catch {
+                                // Ignore cleanup errors
+                            }
+                            
+                            // Increment restart counter
+                            restartCount++
+                            try {
+                                fs.writeFileSync(restartCounterPath, String(restartCount))
+                            } catch {
+                                // Ignore
+                            }
+                            
+                            log('main', 'UPDATE', `✅ Update successful - restarting with new version (attempt ${restartCount}/3)...`, 'log', 'green')
+                            
+                            // Restart the process with the same arguments
+                            const { spawn } = await import('child_process')
+                            const child = spawn(process.execPath, process.argv.slice(1), {
+                                detached: true,
+                                stdio: 'inherit'
+                            })
+                            child.unref()
+                            process.exit(0)
+                        } else {
+                            log('main', 'UPDATE', 'Already up to date, continuing with bot execution')
+                            // Clean restart counter on successful non-update run
+                            try {
+                                if (fs.existsSync(restartCounterPath)) {
+                                    fs.unlinkSync(restartCounterPath)
+                                }
+                            } catch {
+                                // Ignore
+                            }
+                        }
+                    }
+                } catch (updateError) {
+                    log('main', 'UPDATE', `Update check failed (continuing): ${updateError instanceof Error ? updateError.message : String(updateError)}`, 'warn')
+                }
             }
             
             await rewardsBot.initialize()

@@ -1,31 +1,25 @@
 #!/usr/bin/env node
 /**
- * Unified cross-platform setup script for Microsoft Rewards Script V2.
+ * Microsoft Rewards Bot - First-Time Setup Script
  * 
- * Features:
- *  - Renames accounts.example.jsonc -> accounts.json (idempotent)
- *  - Guides user through account configuration (email, password, TOTP, proxy)
- *  - Explains config.jsonc structure and key settings
- *  - Installs dependencies (npm install)
- *  - Builds TypeScript project (npm run build)
- *  - Installs Playwright Chromium browser (idempotent with marker)
- *  - Optional immediate start or manual start instructions
+ * This script handles initial project setup:
+ *  1. Creates accounts.jsonc from template
+ *  2. Guides user through account configuration
+ *  3. Installs dependencies (npm install)
+ *  4. Builds TypeScript project (npm run build)
+ *  5. Installs Playwright Chromium browser
  * 
- * V2 Updates:
- *  - Enhanced prompts for new config.jsonc structure
- *  - Explains humanization, scheduling, notifications
- *  - References updated documentation (docs/config.md, docs/accounts.md)
- *  - Improved user guidance for first-time setup
+ * IMPORTANT: This script does NOT launch the bot automatically.
+ * After setup, run: npm start
  */
 
+import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { spawn } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-// Project root = two levels up from setup/update directory
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 const SRC_DIR = path.join(PROJECT_ROOT, 'src');
 
@@ -33,18 +27,23 @@ function log(msg) { console.log(msg); }
 function warn(msg) { console.warn(msg); }
 function error(msg) { console.error(msg); }
 
-function renameAccountsIfNeeded() {
-  const accounts = path.join(SRC_DIR, 'accounts.json');
+function createAccountsFile() {
+  const accounts = path.join(SRC_DIR, 'accounts.jsonc');
   const example = path.join(SRC_DIR, 'accounts.example.jsonc');
+  
   if (fs.existsSync(accounts)) {
-    log('accounts.json already exists - skipping rename.');
-    return;
+    log('✓ accounts.jsonc already exists - skipping creation');
+    return true;
   }
+  
   if (fs.existsSync(example)) {
-    log('Renaming accounts.example.jsonc to accounts.json...');
-    fs.renameSync(example, accounts);
+    log('📝 Creating accounts.jsonc from template...');
+    fs.copyFileSync(example, accounts);
+    log('✓ Created accounts.jsonc');
+    return false;
   } else {
-    warn('Neither accounts.json nor accounts.example.jsonc found.');
+    error('❌ Template file accounts.example.jsonc not found!');
+    return true;
   }
 }
 
@@ -60,20 +59,25 @@ async function prompt(question) {
   });
 }
 
-async function loopForAccountsConfirmation() {
-  log('\n📝 Please configure your Microsoft accounts:');
-  log('   - Open: src/accounts.json');
-  log('   - Add your email and password for each account');
-  log('   - Optional: Add TOTP secret for 2FA (see docs/accounts.md)');
-  log('   - Optional: Configure proxy settings per account');
-  log('   - Save the file (Ctrl+S or Cmd+S)\n');
+async function guideAccountConfiguration() {
+  log('\n� ACCOUNT CONFIGURATION');
+  log('════════════════════════════════════════════════════════════');
+  log('1. Open file: src/accounts.jsonc');
+  log('2. Add your Microsoft account credentials:');
+  log('   - email: Your Microsoft account email');
+  log('   - password: Your account password');
+  log('   - totp: (Optional) 2FA secret for automatic authentication');
+  log('3. Enable accounts by setting "enabled": true');
+  log('4. Save the file');
+  log('');
+  log('📚 Full guide: docs/accounts.md');
+  log('════════════════════════════════════════════════════════════\n');
   
-  // Keep asking until user says yes
   for (;;) {
-    const ans = (await prompt('Have you configured your accounts in accounts.json? (yes/no): ')).toLowerCase();
+    const ans = (await prompt('Have you configured your accounts? (yes/no): ')).toLowerCase();
     if (['yes', 'y'].includes(ans)) break;
     if (['no', 'n'].includes(ans)) {
-      log('Please configure accounts.json and save the file, then answer yes.');
+      log('\n⏸️  Please configure src/accounts.jsonc and save it, then answer yes.\n');
       continue;
     }
     log('Please answer yes or no.');
@@ -99,64 +103,72 @@ async function ensureNpmAvailable() {
   }
 }
 
-async function startOnly() {
-  log('Starting program (npm run start)...');
-  await ensureNpmAvailable();
-  // Assume user already installed & built; if dist missing inform user.
-  const distIndex = path.join(PROJECT_ROOT, 'dist', 'index.js');
-  if (!fs.existsSync(distIndex)) {
-    warn('Build output not found. Running build first.');
-    await runCommand(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build']);
-    await installPlaywrightBrowsers();
+async function performSetup() {
+  log('\n🚀 MICROSOFT REWARDS BOT - FIRST-TIME SETUP');
+  log('════════════════════════════════════════════════════════════\n');
+  
+  // Step 1: Create accounts file
+  const accountsExisted = createAccountsFile();
+  
+  // Step 2: Guide user through account configuration
+  if (!accountsExisted) {
+    await guideAccountConfiguration();
   } else {
-    // Even if build exists, ensure browsers are installed once.
-    await installPlaywrightBrowsers();
+    log('✓ Using existing accounts.jsonc\n');
   }
-  await runCommand(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'start']);
-}
-
-async function fullSetup() {
-  renameAccountsIfNeeded();
-  await loopForAccountsConfirmation();
   
-  log('\n⚙️  Configuration Options (src/config.jsonc):');
-  log('   - browser.headless: Set to true for background operation');
-  log('   - execution.clusters: Number of parallel account processes');
-  log('   - workers: Enable/disable specific tasks (dailySet, searches, etc.)');
-  log('   - humanization: Add natural delays and behavior (recommended: enabled)');
-  log('   - schedule: Configure automated daily runs');
-  log('   - notifications: Discord webhooks, NTFY push alerts');
-  log('   📚 Full guide: docs/config.md\n');
+  // Step 3: Configuration guidance
+  log('\n⚙️  CONFIGURATION (src/config.jsonc)');
+  log('════════════════════════════════════════════════════════════');
+  log('Key settings you may want to adjust:');
+  log('  • browser.headless: false = visible browser, true = background');
+  log('  • execution.clusters: Number of parallel accounts (default: 1)');
+  log('  • workers: Enable/disable specific tasks');
+  log('  • humanization.enabled: Add natural delays (recommended: true)');
+  log('  • scheduling.enabled: Automate with OS scheduler');
+  log('');
+  log('📚 Full configuration guide: docs/getting-started.md');
+  log('════════════════════════════════════════════════════════════\n');
   
-  const reviewConfig = (await prompt('Do you want to review config.jsonc now? (yes/no): ')).toLowerCase();
+  const reviewConfig = (await prompt('Review config.jsonc before continuing? (yes/no): ')).toLowerCase();
   if (['yes', 'y'].includes(reviewConfig)) {
-    log('⏸️  Setup paused. Please review src/config.jsonc, then re-run this setup.');
-    log('   Common settings to check:');
-    log('   - browser.headless (false = visible browser, true = background)');
-    log('   - execution.runOnZeroPoints (false = skip when no points available)');
-    log('   - humanization.enabled (true = natural behavior, recommended)');
-    log('   - schedule.enabled (false = manual runs, true = automated scheduling)');
-    log('\n   After editing config.jsonc, run: npm run setup');
+    log('\n⏸️  Setup paused.');
+    log('Please review and edit src/config.jsonc, then run: npm run setup\n');
     process.exit(0);
   }
   
+  // Step 4: Install dependencies
+  log('\n📦 Installing dependencies...');
   await ensureNpmAvailable();
   await runCommand(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['install']);
+  
+  // Step 5: Build TypeScript
+  log('\n🔨 Building TypeScript project...');
   await runCommand(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build']);
+  
+  // Step 6: Install Playwright browsers
   await installPlaywrightBrowsers();
   
-  log('\n✅ Setup complete!');
-  log('   - Accounts configured: src/accounts.json');
-  log('   - Configuration: src/config.jsonc');
-  log('   - Documentation: docs/index.md\n');
-  
-  const start = (await prompt('Do you want to start the automation now? (yes/no): ')).toLowerCase();
-  if (['yes', 'y'].includes(start)) {
-    await runCommand(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'start']);
-  } else {
-  log('\nFinished setup. To start later, run: npm start');
-  log('For automated scheduling, use your OS scheduler (see docs/schedule.md).');
-  }
+  // Final message
+  log('\n');
+  log('═══════════════════════════════════════════════════════════');
+  log('✅ SETUP COMPLETE!');
+  log('═══════════════════════════════════════════════════════════');
+  log('');
+  log('📁 Configuration files:');
+  log('   • Accounts: src/accounts.jsonc');
+  log('   • Config: src/config.jsonc');
+  log('');
+  log('📚 Documentation:');
+  log('   • Getting started: docs/getting-started.md');
+  log('   • Full docs: docs/index.md');
+  log('');
+  log('🚀 TO START THE BOT:');
+  log('   npm start');
+  log('');
+  log('⏰ FOR AUTOMATED SCHEDULING:');
+  log('   See: docs/getting-started.md (Scheduling section)');
+  log('═══════════════════════════════════════════════════════════\n');
 }
 
 async function installPlaywrightBrowsers() {
@@ -178,30 +190,36 @@ async function installPlaywrightBrowsers() {
 
 async function main() {
   if (!fs.existsSync(SRC_DIR)) {
-    error('[ERROR] Cannot find src directory at ' + SRC_DIR);
+    error('❌ Cannot find src directory at ' + SRC_DIR);
     process.exit(1);
   }
   process.chdir(PROJECT_ROOT);
 
-  for (;;) {
-    log('============================');
-    log(' Microsoft Rewards Setup ');
-    log('============================');
-    log('Select an option:');
-    log('  1) Start program now (skip setup)');
-    log('  2) Full first-time setup');
-    log('  3) Exit');
-    const choice = (await prompt('Enter choice (1/2/3): ')).trim();
-    if (choice === '1') { await startOnly(); break; }
-    if (choice === '2') { await fullSetup(); break; }
-    if (choice === '3') { log('Exiting.'); process.exit(0); }
-    log('\nInvalid choice. Please select 1, 2 or 3.\n');
+  // Check if already setup (dist exists and accounts configured)
+  const distExists = fs.existsSync(path.join(PROJECT_ROOT, 'dist', 'index.js'));
+  const accountsExists = fs.existsSync(path.join(SRC_DIR, 'accounts.jsonc'));
+  
+  if (distExists && accountsExists) {
+    log('\n⚠️  Setup appears to be already complete.');
+    log('   • Build output: dist/index.js exists');
+    log('   • Accounts: src/accounts.jsonc exists\n');
+    
+    const rerun = (await prompt('Run setup anyway? (yes/no): ')).toLowerCase();
+    if (!['yes', 'y'].includes(rerun)) {
+      log('\n💡 To start the bot: npm start');
+      log('💡 To rebuild: npm run build\n');
+      process.exit(0);
+    }
   }
-  // After completing action, optionally pause if launched by double click on Windows (no TTY detection simple heuristic)
+
+  await performSetup();
+  
+  // Pause if launched by double-click on Windows
   if (process.platform === 'win32' && process.stdin.isTTY) {
-    log('\nDone. Press Enter to close.');
+    log('Press Enter to close...');
     await prompt('');
   }
+  
   process.exit(0);
 }
 

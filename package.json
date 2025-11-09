@@ -17,9 +17,10 @@
   "homepage": "https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot#readme",
   "scripts": {
     "clean": "rimraf dist",
-    "pre-build": "npm i && npm run clean && node -e \"process.exit(process.env.SKIP_PLAYWRIGHT_INSTALL?0:1)\" || npx playwright install chromium",
+    "install-deps": "npm install && npx playwright install chromium",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
+    "postbuild": "node -e \"console.log('\\n✅ Build complete! Run \\\"npm start\\\" to launch the bot.\\n')\"",
     "test": "node --test --loader ts-node/esm tests/**/*.test.ts",
     "start": "node --enable-source-maps ./dist/index.js",
     "ts-start": "node --loader ts-node/esm ./src/index.ts",
@@ -28,7 +29,6 @@
     "dashboard": "node --enable-source-maps ./dist/index.js -dashboard",
     "dashboard-dev": "ts-node ./src/index.ts -dashboard",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
-    "prepare": "npm run build",
     "setup": "node ./setup/update/setup.mjs",
     "kill-chrome-win": "powershell -Command \"Get-Process | Where-Object { $_.MainModule.FileVersionInfo.FileDescription -eq 'Google Chrome for Testing' } | ForEach-Object { Stop-Process -Id $_.Id -Force }\"",
     "create-docker": "docker build -t microsoft-rewards-bot ."

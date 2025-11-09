@@ -17,3 +17,7 @@ accounts.main.jsonc
 .playwright-chromium-installed
 *.log
 .update-backup/
+.update-download.zip
+.update-extract/
+.update-happened
+.update-restart-count
