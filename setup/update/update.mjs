@@ -197,6 +197,69 @@ async function extractZip(zipPath, destDir) {
 }
 
 // =============================================================================
+// ENVIRONMENT DETECTION
+// =============================================================================
+
+/**
+ * Detect if running inside a Docker container
+ * Checks multiple indicators for accuracy
+ */
+function isDocker() {
+  try {
+    // Method 1: Check for /.dockerenv file (most reliable)
+    if (existsSync('/.dockerenv')) {
+      return true
+    }
+    
+    // Method 2: Check /proc/1/cgroup for docker
+    if (existsSync('/proc/1/cgroup')) {
+      const cgroupContent = readFileSync('/proc/1/cgroup', 'utf8')
+      if (cgroupContent.includes('docker') || cgroupContent.includes('/kubepods/')) {
+        return true
+      }
+    }
+    
+    // Method 3: Check environment variables
+    if (process.env.DOCKER === 'true' || 
+        process.env.CONTAINER === 'docker' ||
+        process.env.KUBERNETES_SERVICE_HOST) {
+      return true
+    }
+    
+    // Method 4: Check /proc/self/mountinfo for overlay filesystem
+    if (existsSync('/proc/self/mountinfo')) {
+      const mountinfo = readFileSync('/proc/self/mountinfo', 'utf8')
+      if (mountinfo.includes('docker') || mountinfo.includes('overlay')) {
+        return true
+      }
+    }
+    
+    return false
+  } catch {
+    // If any error occurs (e.g., on Windows), assume not Docker
+    return false
+  }
+}
+
+/**
+ * Determine update mode based on config and environment
+ */
+function getUpdateMode(configData) {
+  const dockerMode = configData?.update?.dockerMode || 'auto'
+  
+  if (dockerMode === 'force-docker') {
+    return 'docker'
+  }
+  
+  if (dockerMode === 'force-host') {
+    return 'host'
+  }
+  
+  // Auto-detect
+  return isDocker() ? 'docker' : 'host'
+}
+
+// =============================================================================
 // MAIN UPDATE LOGIC
 // =============================================================================
 
@@ -281,17 +344,22 @@ async function performUpdate() {
     return 0 // Exit without creating update marker
   }
   
-  console.log(`\n📦 Update available: ${versionCheck.localVersion} → ${versionCheck.remoteVersion}`)
-  console.log('⏳ Updating... (this may take a moment)\n')
-  
-  // Step 1: Read user preferences (silent)
+  // Step 0.5: Detect environment and determine update mode
   const configData = readJsonConfig([
     'src/config.jsonc',
     'config.jsonc',
     'src/config.json',
     'config.json'
   ])
-
+  
+  const updateMode = getUpdateMode(configData)
+  const envIcon = updateMode === 'docker' ? '🐳' : '💻'
+  
+  console.log(`\n📦 Update available: ${versionCheck.localVersion} → ${versionCheck.remoteVersion}`)
+  console.log(`${envIcon} Environment: ${updateMode === 'docker' ? 'Docker container' : 'Host system'}`)
+  console.log('⏳ Updating... (this may take a moment)\n')
+  
+  // Step 1: Read user preferences (silent)
   const userConfig = {
     autoUpdateConfig: configData?.update?.autoUpdateConfig ?? false,
     autoUpdateAccounts: configData?.update?.autoUpdateAccounts ?? false
@@ -570,9 +638,19 @@ async function performUpdate() {
   rmSync(rollbackDir, { recursive: true, force: true })
 
   console.log(`\n✅ Updated successfully! (${versionCheck.localVersion} → ${versionCheck.remoteVersion})`)
-  console.log('🔄 Restarting...\n')
-
-  return 0
+  
+  // Different behavior for Docker vs Host
+  if (updateMode === 'docker') {
+    console.log('� Docker mode: Update complete')
+    console.log('   Container will restart automatically if configured\n')
+    // In Docker, don't restart - let orchestrator handle it
+    // Just exit cleanly so Docker can restart the container
+    return 0
+  } else {
+    console.log('�🔄 Restarting in same process...\n')
+    // In host mode, signal restart needed
+    return 0
+  }
 }
 
 // =============================================================================

@@ -170,7 +170,7 @@
     "update": {
         "enabled": true,
         "method": "github-api",
-        "docker": false,
+        "dockerMode": "auto", // "auto" = detect automatically, "force-docker" = always use Docker mode, "force-host" = never use Docker mode
         "scriptPath": "setup/update/update.mjs",
         "autoUpdateConfig": true,
         "autoUpdateAccounts": false

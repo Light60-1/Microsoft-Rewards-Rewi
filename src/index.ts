@@ -943,10 +943,38 @@ async function main(): Promise<void> {
         process.exit(code)
     }
 
+    /**
+     * Detect if running in Docker container
+     */
+    const isDockerEnvironment = (): boolean => {
+        try {
+            // Check /.dockerenv file
+            if (fs.existsSync('/.dockerenv')) return true
+            
+            // Check /proc/1/cgroup
+            if (fs.existsSync('/proc/1/cgroup')) {
+                const content = fs.readFileSync('/proc/1/cgroup', 'utf8')
+                if (content.includes('docker') || content.includes('/kubepods/')) return true
+            }
+            
+            // Check environment variables
+            if (process.env.DOCKER === 'true' || 
+                process.env.CONTAINER === 'docker' ||
+                process.env.KUBERNETES_SERVICE_HOST) {
+                return true
+            }
+            
+            return false
+        } catch {
+            return false
+        }
+    }
+
     const bootstrap = async () => {
         try {
             // Check for updates BEFORE initializing and running tasks
             const updateMarkerPath = path.join(process.cwd(), '.update-happened')
+            const isDocker = isDockerEnvironment()
             
             try {
                 const updateResult = await rewardsBot.runAutoUpdate().catch((e) => {
@@ -966,23 +994,30 @@ async function main(): Promise<void> {
                             // Ignore cleanup errors
                         }
                         
-                        // Clear Node's require cache to reload updated modules
-                        Object.keys(require.cache).forEach(key => {
-                            // Only clear cache for project files, not node_modules
-                            if (key.includes('dist') || key.includes('src')) {
-                                delete require.cache[key]
-                            }
-                        })
-                        
-                        // Recursive restart in same process
-                        log('main', 'UPDATE', 'Reloading with new version...')
-                        setTimeout(() => {
-                            bootstrap().catch(e => {
-                                log('main', 'MAIN-ERROR', 'Fatal after update: ' + (e instanceof Error ? e.message : e), 'error')
-                                process.exit(1)
+                        if (isDocker) {
+                            // Docker mode: exit cleanly to let container restart
+                            log('main', 'UPDATE', 'Update complete - exiting for container restart', 'log', 'green')
+                            process.exit(0)
+                        } else {
+                            // Host mode: reload in same process
+                            // Clear Node's require cache to reload updated modules
+                            Object.keys(require.cache).forEach(key => {
+                                // Only clear cache for project files, not node_modules
+                                if (key.includes('dist') || key.includes('src')) {
+                                    delete require.cache[key]
+                                }
                             })
-                        }, 500)
-                        return
+                            
+                            // Recursive restart in same process
+                            log('main', 'UPDATE', 'Reloading with new version...')
+                            setTimeout(() => {
+                                bootstrap().catch(e => {
+                                    log('main', 'MAIN-ERROR', 'Fatal after update: ' + (e instanceof Error ? e.message : e), 'error')
+                                    process.exit(1)
+                                })
+                            }, 500)
+                            return
+                        }
                     }
                 }
             } catch (updateError) {
