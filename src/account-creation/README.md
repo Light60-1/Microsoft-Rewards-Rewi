@@ -26,11 +26,48 @@ Already integrated - no additional setup needed!
 ### Command Line
 
 ```bash
-# Without referral (standalone account)
+# Basic usage (standalone account)
 npm run creator
 
 # With referral link (earns you referral credit)
 npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE&ref=rafsrchae
+
+# With recovery email
+npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -r recovery@gmail.com
+
+# With auto-accept mode (skip all prompts)
+npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y
+
+# Enable 2FA automatically
+npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE --2fa
+
+# Complete example with all options
+npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -r backup@gmail.com -y --2fa
+```
+
+### 🎛️ Command Line Arguments
+
+| Argument | Description | Example |
+|----------|-------------|---------|
+| `<url>` | Referral URL (optional) | `https://rewards.bing.com/welcome?rh=CODE` |
+| `-r <email>` | Recovery email address | `-r mybackup@gmail.com` |
+| `-y` | Auto-accept mode (skip prompts) | `-y` |
+| `--2fa` | Enable 2FA automatically | `--2fa` |
+
+**Examples:**
+
+```bash
+# Minimal (no options)
+npm run creator
+
+# With referral only
+npm run creator https://rewards.bing.com/welcome?rh=B395E9D7
+
+# With recovery email (will be asked for code)
+npm run creator -r mybackup@gmail.com
+
+# Full automation with 2FA
+npm run creator https://rewards.bing.com/welcome?rh=B395E9D7 -r backup@gmail.com -y --2fa
 ```
 
 ### Interactive Flow
@@ -171,31 +208,55 @@ Saved Account: john.smith247@outlook.com  ← Correct!
    - Up to 10 minutes timeout
    - Logs progress every 30 seconds
 
-10. **Save Account**
-    - Saves to `accounts-created/created_accounts_YYYY-MM-DD.jsonc`
-    - Daily files for organization
-    - All details preserved
+10. **Post-Creation Setup** (Optional)
+    - **Recovery Email**: Adds backup email for account recovery
+    - **2FA Setup**: Enables two-factor authentication with TOTP
+    - **Interactive**: Waits for user to enter verification codes
+    - **TOTP Secret**: Extracts and saves secret key for authenticator apps
+    - **Recovery Code**: Saves 5x5 backup code for emergency access
+
+11. **Save Account**
+    - Saves to `accounts-created/account_USERNAME_TIMESTAMP.jsonc`
+    - Individual files per account for better organization
+    - All details preserved (including recovery email, TOTP secret, recovery code)
 
 ## 📄 Output Format
 
 ```jsonc
-// accounts-created/created_accounts_2025-01-09.jsonc
-[
-  {
-    "email": "james.wilson1995@outlook.com",
-    "password": "Xyz789!@#AbcDef",
-    "birthdate": {
-      "day": 17,
-      "month": 5,
-      "year": 1995
-    },
-    "firstName": "James",
-    "lastName": "Wilson",
-    "createdAt": "2025-01-09T10:30:00.000Z",
-    "referralUrl": "https://rewards.bing.com/welcome?rh=YOUR_CODE&ref=rafsrchae"
-  }
-]
+// accounts-created/account_james19951995_2025-11-09T10-30-00-000Z.jsonc
+{
+  "email": "james.wilson1995@outlook.com",
+  "password": "Xyz789!@#AbcDef",
+  "birthdate": {
+    "day": 17,
+    "month": 5,
+    "year": 1995
+  },
+  "firstName": "James",
+  "lastName": "Wilson",
+  "createdAt": "2025-11-09T10:30:00.000Z",
+  "referralUrl": "https://rewards.bing.com/welcome?rh=YOUR_CODE&ref=rafsrchae",
+  "recoveryEmail": "mybackup@gmail.com",        // Optional: If -r used
+  "totpSecret": "JBSWY3DPEHPK3PXP",             // Optional: If --2fa used
+  "recoveryCode": "MWGR3-9MJC9-STK76-SZCE5-X77PR" // Optional: If --2fa used
+}
 ```
+
+### 🔐 Security Information
+
+**Recovery Email**: Used to recover account if you forget password
+- Microsoft sends verification code to this email
+- Required if you want account recovery option
+
+**TOTP Secret**: Secret key for authenticator apps (Google Authenticator, Authy, etc.)
+- Format: Base32 string (e.g., `JBSWY3DPEHPK3PXP`)
+- Use this to generate 6-digit codes for login
+- **SAVE THIS SAFELY** - Cannot be recovered later
+
+**Recovery Code**: 5-part code for emergency account access
+- Format: `XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`
+- Use this if you lose access to authenticator app
+- **SAVE THIS SAFELY** - Only shown once
 
 ## 📂 File Structure
 
@@ -261,9 +322,91 @@ src/account-creation/
 2. **Use manual mode** if you have specific email format requirements
 3. **Let the script handle suggestions** - don't worry about "email taken" errors
 4. **Solve CAPTCHA within 10 minutes** when prompted
-5. **Check accounts-created/ folder** for all saved accounts
+5. **Use `-y` flag** to skip all prompts for automation
+6. **Save TOTP secrets** - they're in the JSONC files for later use
+7. **Keep recovery codes safe** - they're shown only once
+8. **Use Google Authenticator** with cloud backup for 2FA
+9. **Check accounts-created/ folder** for all saved accounts
+10. **Test 2FA immediately** after setup to ensure it works
 
-## 🐛 Troubleshooting
+## � Recovery Email & 2FA Setup
+
+### Recovery Email Flow
+
+When you use `-r <email>` argument:
+
+1. **Navigate to Security Page**
+   - Goes to `https://account.live.com/proofs/manage/`
+   
+2. **Add Recovery Email**
+   - Fills your recovery email
+   - Clicks "Next"
+   
+3. **Verification Code**
+   - Microsoft sends code to recovery email
+   - Script logs: "⏳ Please enter the code you received and click Next"
+   - **YOU** open recovery email, get code, enter it, click Next
+   - Script waits for URL change (up to 5 minutes)
+   
+4. **Confirmation**
+   - Clicks "OK" on info page
+   - Saves recovery email to JSONC file
+
+### 2FA Setup Flow
+
+When you use `--2fa` argument OR answer 'y' to "Enable 2FA?" prompt:
+
+1. **Navigate to 2FA Page**
+   - Goes to `https://account.live.com/proofs/EnableTfa`
+   
+2. **Setup Different App**
+   - Clicks "Next"
+   - Clicks "set up a different Authenticator app"
+   
+3. **Extract TOTP Secret**
+   - Clicks "I can't scan the bar code"
+   - **Extracts and displays secret key** (e.g., `JBSWY3DPEHPK3PXP`)
+   - Logs: "🔑 TOTP Secret: XXXXXXX"
+   - Logs: "⚠️ SAVE THIS SECRET!"
+   
+4. **Scan QR Code**
+   - Clicks "I'll scan a bar code instead"
+   - Shows QR code
+   - Logs: "📱 Please scan QR code with Google Authenticator"
+   
+5. **Enter Verification Code**
+   - **YOU** scan QR code with authenticator app
+   - **YOU** enter 6-digit code from app
+   - **YOU** click Next
+   - Script waits (up to 5 minutes)
+   
+6. **Recovery Code**
+   - **Extracts and displays recovery code** (e.g., `MWGR3-9MJC9-STK76-SZCE5-X77PR`)
+   - Logs: "🔐 Recovery Code: XXXXX-XXXXX-..."
+   - Logs: "⚠️ SAVE THIS CODE!"
+   
+7. **Complete Setup**
+   - Clicks "Next" → "Next" → "Finish"
+   - Saves TOTP secret and recovery code to JSONC file
+
+### 📱 Recommended Authenticator Apps
+
+1. **Google Authenticator** (Recommended ✅)
+   - Cloud backup available
+   - Easy QR code scanning
+   - Available: iOS, Android
+
+2. **Microsoft Authenticator**
+   - Native Microsoft integration
+   - Cloud backup
+
+3. **Authy**
+   - Multi-device sync
+   - Desktop apps available
+
+**Important**: The TOTP secret in the JSONC file can be used to set up the account in any authenticator app later.
+
+## �🐛 Troubleshooting
 
 **Q: Email generation too fast?**
 A: System uses 0.8-2s delays after each input - looks human.
@@ -278,7 +421,22 @@ A: Press 'n' when asked "Generate automatically?" and type your email.
 A: You have 10 minutes to solve it. If timeout, run script again.
 
 **Q: Where are accounts saved?**
-A: `accounts-created/created_accounts_YYYY-MM-DD.jsonc` (auto-created folder).
+A: `accounts-created/account_USERNAME_TIMESTAMP.jsonc` (individual files per account).
+
+**Q: Recovery email code not received?**
+A: Check spam folder. Script waits 5 minutes for you to enter code.
+
+**Q: Lost TOTP secret?**
+A: Check the saved JSONC file - it contains the secret key.
+
+**Q: 2FA app not working?**
+A: Use the recovery code from JSONC file to access account.
+
+**Q: Can I skip recovery email?**
+A: Yes, don't use `-r` argument and press Enter when asked.
+
+**Q: Can I skip 2FA?**
+A: Yes, don't use `--2fa` and answer 'n' when asked (or use `-y` to skip prompt).
 
 ---
 

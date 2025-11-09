@@ -10,11 +10,17 @@ export class AccountCreator {
   private page!: Page
   private dataGenerator: DataGenerator
   private referralUrl?: string
+  private recoveryEmail?: string
+  private autoAccept: boolean
+  private enable2FA: boolean
   private rl: readline.Interface
   private rlClosed = false
 
-  constructor(referralUrl?: string) {
+  constructor(referralUrl?: string, recoveryEmail?: string, autoAccept = false, enable2FA = false) {
     this.referralUrl = referralUrl
+    this.recoveryEmail = recoveryEmail
+    this.autoAccept = autoAccept
+    this.enable2FA = enable2FA
     this.dataGenerator = new DataGenerator()
     this.rl = readline.createInterface({
       input: process.stdin,
@@ -619,6 +625,28 @@ export class AccountCreator {
       // Navigate to Bing Rewards and verify connection
       await this.verifyAccountActive()
 
+      // Post-setup: Recovery email & 2FA
+      let recoveryEmailUsed: string | undefined
+      let totpSecret: string | undefined
+      let recoveryCode: string | undefined
+      
+      try {
+        // Setup recovery email if requested
+        const emailResult = await this.setupRecoveryEmail(confirmedEmail)
+        if (emailResult) recoveryEmailUsed = emailResult
+        
+        // Setup 2FA if requested
+        if (this.enable2FA || (!this.autoAccept && await this.ask2FASetup())) {
+          const tfaResult = await this.setup2FA()
+          if (tfaResult) {
+            totpSecret = tfaResult.totpSecret
+            recoveryCode = tfaResult.recoveryCode
+          }
+        }
+      } catch (error) {
+        log(false, 'CREATOR', `Post-setup error: ${error}`, 'warn', 'yellow')
+      }
+
       // Create account object
       const createdAccount: CreatedAccount = {
         email: confirmedEmail,
@@ -631,7 +659,10 @@ export class AccountCreator {
         firstName: names.firstName,
         lastName: names.lastName,
         createdAt: new Date().toISOString(),
-        referralUrl: this.referralUrl
+        referralUrl: this.referralUrl,
+        recoveryEmail: recoveryEmailUsed,
+        totpSecret: totpSecret,
+        recoveryCode: recoveryCode
       }
 
       // Save to file
@@ -2171,6 +2202,218 @@ ${JSON.stringify(accountData, null, 2)}`
     }
     if (this.page && !this.page.isClosed()) {
       await this.page.close()
+    }
+  }
+
+  /**
+   * Setup recovery email for the account
+   */
+  private async setupRecoveryEmail(currentEmail: string): Promise<string | undefined> {
+    try {
+      log(false, 'CREATOR', '📧 Setting up recovery email...', 'log', 'cyan')
+      
+      // Navigate to proofs manage page
+      await this.page.goto('https://account.live.com/proofs/manage/', { 
+        waitUntil: 'networkidle',
+        timeout: 30000
+      })
+      
+      await this.humanDelay(2000, 3000)
+      
+      // Check if we're on the "Add security info" page
+      const addProofTitle = await this.page.locator('#iPageTitle').textContent().catch(() => '')
+      
+      if (!addProofTitle || !addProofTitle.includes('protect your account')) {
+        log(false, 'CREATOR', 'Already on security dashboard', 'log', 'gray')
+        return undefined
+      }
+      
+      log(false, 'CREATOR', '🔒 Security setup page detected', 'log', 'yellow')
+      
+      // Get recovery email
+      let recoveryEmailToUse = this.recoveryEmail
+      
+      if (!recoveryEmailToUse && !this.autoAccept) {
+        recoveryEmailToUse = await this.askRecoveryEmail()
+      }
+      
+      if (!recoveryEmailToUse) {
+        log(false, 'CREATOR', 'Skipping recovery email setup', 'log', 'gray')
+        return undefined
+      }
+      
+      log(false, 'CREATOR', `Using recovery email: ${recoveryEmailToUse}`, 'log', 'cyan')
+      
+      // Fill email input
+      const emailInput = this.page.locator('#EmailAddress').first()
+      await emailInput.fill(recoveryEmailToUse)
+      await this.humanDelay(500, 1000)
+      
+      // Click Next
+      const nextButton = this.page.locator('#iNext').first()
+      await nextButton.click()
+      
+      log(false, 'CREATOR', '📨 Code sent to recovery email', 'log', 'green')
+      log(false, 'CREATOR', '⏳ Please enter the code you received and click Next', 'log', 'yellow')
+      log(false, 'CREATOR', 'Waiting for you to complete verification...', 'log', 'cyan')
+      
+      // Wait for URL change (user completes verification)
+      await this.page.waitForURL((url) => !url.href.includes('/proofs/Verify'), { timeout: 300000 })
+      
+      log(false, 'CREATOR', '✅ Recovery email verified!', 'log', 'green')
+      
+      // Click OK on "Quick note" page if present
+      await this.humanDelay(2000, 3000)
+      const okButton = this.page.locator('button:has-text("OK")').first()
+      const okVisible = await okButton.isVisible({ timeout: 5000 }).catch(() => false)
+      
+      if (okVisible) {
+        await okButton.click()
+        await this.humanDelay(1000, 2000)
+        log(false, 'CREATOR', '✅ Clicked OK on info page', 'log', 'green')
+      }
+      
+      return recoveryEmailToUse
+      
+    } catch (error) {
+      log(false, 'CREATOR', `Recovery email setup error: ${error}`, 'warn', 'yellow')
+      return undefined
+    }
+  }
+
+  /**
+   * Ask user for recovery email (interactive)
+   */
+  private async askRecoveryEmail(): Promise<string | undefined> {
+    return new Promise((resolve) => {
+      this.rl.question('📧 Enter recovery email (or press Enter to skip): ', (answer) => {
+        const email = answer.trim()
+        if (email && email.includes('@')) {
+          resolve(email)
+        } else {
+          resolve(undefined)
+        }
+      })
+    })
+  }
+
+  /**
+   * Ask user if they want 2FA setup
+   */
+  private async ask2FASetup(): Promise<boolean> {
+    return new Promise((resolve) => {
+      this.rl.question('🔐 Enable two-factor authentication? (y/n): ', (answer) => {
+        resolve(answer.trim().toLowerCase() === 'y')
+      })
+    })
+  }
+
+  /**
+   * Setup 2FA with TOTP
+   */
+  private async setup2FA(): Promise<{ totpSecret: string; recoveryCode: string | undefined } | undefined> {
+    try {
+      log(false, 'CREATOR', '🔐 Setting up 2FA...', 'log', 'cyan')
+      
+      // Navigate to 2FA setup page
+      await this.page.goto('https://account.live.com/proofs/EnableTfa', { 
+        waitUntil: 'networkidle',
+        timeout: 30000
+      })
+      
+      await this.humanDelay(2000, 3000)
+      
+      // Click Next
+      const submitButton = this.page.locator('#EnableTfaSubmit').first()
+      await submitButton.click()
+      await this.humanDelay(2000, 3000)
+      
+      // Click "set up a different Authenticator app"
+      const altAppLink = this.page.locator('#iSelectProofTypeAlternate').first()
+      const altAppVisible = await altAppLink.isVisible({ timeout: 5000 }).catch(() => false)
+      
+      if (altAppVisible) {
+        await altAppLink.click()
+        await this.humanDelay(2000, 3000)
+      }
+      
+      // Click "I can't scan the bar code"
+      const cantScanLink = this.page.locator('#iShowPlainLink').first()
+      await cantScanLink.click()
+      await this.humanDelay(1000, 2000)
+      
+      // Extract TOTP secret
+      const secretElement = this.page.locator('#iTOTP_Secret, #totpSecret, [id*="secret"]').first()
+      const totpSecret = await secretElement.textContent().catch(() => '')
+      
+      if (!totpSecret) {
+        log(false, 'CREATOR', '❌ Could not find TOTP secret', 'error')
+        return undefined
+      }
+      
+      log(false, 'CREATOR', `🔑 TOTP Secret: ${totpSecret}`, 'log', 'green')
+      log(false, 'CREATOR', '⚠️  SAVE THIS SECRET - You will need it to generate codes!', 'warn', 'yellow')
+      
+      // Click "I'll scan a bar code instead" to go back
+      await cantScanLink.click()
+      await this.humanDelay(1000, 2000)
+      
+      log(false, 'CREATOR', '📱 Please scan the QR code with Google Authenticator or similar app', 'log', 'yellow')
+      log(false, 'CREATOR', '⏳ Then enter the 6-digit code and click Next', 'log', 'cyan')
+      log(false, 'CREATOR', 'Waiting for you to complete setup...', 'log', 'cyan')
+      
+      // Wait for "Two-step verification is turned on" page
+      await this.page.waitForSelector('#RecoveryCode', { timeout: 300000 })
+      
+      log(false, 'CREATOR', '✅ 2FA enabled!', 'log', 'green')
+      
+      // Extract recovery code
+      const recoveryElement = this.page.locator('#NewRecoveryCode').first()
+      const recoveryText = await recoveryElement.textContent().catch(() => '') || ''
+      const recoveryMatch = recoveryText.match(/([A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5})/)
+      const recoveryCode = recoveryMatch ? recoveryMatch[1] : ''
+      
+      if (recoveryCode) {
+        log(false, 'CREATOR', `🔐 Recovery Code: ${recoveryCode}`, 'log', 'green')
+        log(false, 'CREATOR', '⚠️  SAVE THIS CODE - You can use it to recover your account!', 'warn', 'yellow')
+      } else {
+        log(false, 'CREATOR', '⚠️ Could not extract recovery code', 'warn', 'yellow')
+      }
+      
+      // Click Next
+      await this.humanDelay(2000, 3000)
+      const recoveryNextButton = this.page.locator('#iOptTfaEnabledRecoveryCodeNext').first()
+      await recoveryNextButton.click()
+      
+      // Click Next again
+      await this.humanDelay(2000, 3000)
+      const nextButton2 = this.page.locator('#iOptTfaEnabledNext').first()
+      const next2Visible = await nextButton2.isVisible({ timeout: 3000 }).catch(() => false)
+      if (next2Visible) {
+        await nextButton2.click()
+        await this.humanDelay(2000, 3000)
+      }
+      
+      // Click Finish
+      const finishButton = this.page.locator('#EnableTfaFinish').first()
+      const finishVisible = await finishButton.isVisible({ timeout: 3000 }).catch(() => false)
+      if (finishVisible) {
+        await finishButton.click()
+        await this.humanDelay(1000, 2000)
+      }
+      
+      log(false, 'CREATOR', '✅ 2FA setup complete!', 'log', 'green')
+      
+      if (!totpSecret) {
+        log(false, 'CREATOR', '❌ TOTP secret missing - 2FA may not work', 'error')
+        return undefined
+      }
+      
+      return { totpSecret, recoveryCode }
+      
+    } catch (error) {
+      log(false, 'CREATOR', `2FA setup error: ${error}`, 'warn', 'yellow')
+      return undefined
     }
   }
 }

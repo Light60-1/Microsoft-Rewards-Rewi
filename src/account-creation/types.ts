@@ -10,5 +10,8 @@ export interface CreatedAccount {
   lastName: string
   createdAt: string
   referralUrl?: string
+  recoveryEmail?: string
+  totpSecret?: string
+  recoveryCode?: string
   notes?: string
 }

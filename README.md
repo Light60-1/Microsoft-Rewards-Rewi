@@ -128,29 +128,58 @@ Access at `http://localhost:3000` to:
 
 ## 🆕 Account Creator (BETA)
 
-Automatically create new Microsoft accounts with referral link support:
+Automatically create new Microsoft accounts with advanced security features:
 
 ```bash
-# Create account without referral
+# Basic account creation
 npm run creator
 
-# Create account with your referral link
+# With referral link (earn rewards credit)
 npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE&ref=rafsrchae
+
+# With recovery email for account security
+npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -r backup@gmail.com
+
+# With 2FA enabled automatically
+npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE --2fa
+
+# Full automation mode (skip all prompts)
+npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -r backup@gmail.com -y --2fa
 ```
 
-**Features:**
-- 🎯 Language-independent (works in any language)
-- 🔐 Generates strong passwords automatically
-- 📧 Creates unique email addresses
-- 🎂 Realistic birthdates (18-50 years old)
-- 🤖 CAPTCHA support (manual solving required)
-- 💾 Saves all account details to `accounts-created/` directory
+**✨ Features:**
+- 🎯 **Language-independent** — Works in any language
+- 🔐 **Strong passwords** — Automatically generated (12-16 chars)
+- 📧 **Realistic emails** — 200+ name database for natural-looking addresses
+- 🎂 **Natural birthdates** — Random age 18-50 years old
+- 🛡️ **Recovery email** — Optional backup email for account recovery
+- 🔒 **2FA support** — TOTP authentication with Google Authenticator
+- 🔑 **TOTP secrets** — Extracts and saves secret keys
+- 💾 **Complete backups** — Saves all details including recovery codes
+- 🤖 **CAPTCHA support** — Manual solving (human verification)
+- � **Organized storage** — Individual files per account
 
-**What happens:**
-1. Opens browser to Microsoft signup page
-2. Automatically fills email, password, birthdate, and name
-3. Waits for you to solve CAPTCHA
-4. Saves complete account info to file
+**🎛️ Command Arguments:**
+- `<url>` — Referral URL (optional)
+- `-r <email>` — Recovery email address
+- `-y` — Auto-accept mode (skip prompts)
+- `--2fa` — Enable 2FA automatically
+
+**📋 What happens:**
+1. Creates Microsoft account (email, password, birthdate, names)
+2. Enrolls in Microsoft Rewards (if referral URL provided)
+3. **[Optional]** Adds recovery email with verification
+4. **[Optional]** Sets up 2FA with TOTP (Google Authenticator compatible)
+5. Extracts and saves TOTP secret key and recovery code
+6. Saves complete account info to `accounts-created/` directory
+
+**🔐 Saved Information:**
+- Email and password
+- Full name and birthdate
+- Referral URL (if used)
+- Recovery email (if added)
+- TOTP secret key (for authenticator apps)
+- 5-part recovery code (emergency access)
 
 **[📖 Full Account Creator Guide](src/account-creation/README.md)**
 

@@ -4,15 +4,32 @@ import { log } from '../util/Logger'
 import { AccountCreator } from './AccountCreator'
 
 async function main(): Promise<void> {
-  // Get referral URL from command line args
+  // Parse command line args
   const args = process.argv.slice(2)
-  const referralUrl = args[0] // Optional referral URL
+  let referralUrl: string | undefined
+  let recoveryEmail: string | undefined
+  let autoAccept = false
+  let enable2FA = false
   
-  // Validate URL format if provided
-  if (referralUrl && !referralUrl.startsWith('http')) {
-    log(false, 'CREATOR-CLI', '❌ Invalid URL format', 'error')
-    log(false, 'CREATOR-CLI', 'Usage: npm run creator [referralUrl]', 'log')
-    log(false, 'CREATOR-CLI', 'Example: npm run creator https://rewards.bing.com/welcome?rh=E3DCB441&ref=rafsrchae', 'log', 'cyan')
+  // Parse arguments
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+    if (!arg) continue
+    
+    if (arg === '-r' && i + 1 < args.length) {
+      recoveryEmail = args[++i]
+    } else if (arg === '-y') {
+      autoAccept = true
+    } else if (arg === '--2fa') {
+      enable2FA = true
+    } else if (arg.startsWith('http')) {
+      referralUrl = arg
+    }
+  }
+  
+  // Validate recovery email if provided
+  if (recoveryEmail && !recoveryEmail.includes('@')) {
+    log(false, 'CREATOR-CLI', '❌ Invalid recovery email format', 'error')
     process.exit(1)
   }
   
@@ -49,7 +66,7 @@ async function main(): Promise<void> {
     log(false, 'CREATOR-CLI', '✅ Browser opened successfully', 'log', 'green')
     
     // Create account
-    const creator = new AccountCreator(referralUrl)
+    const creator = new AccountCreator(referralUrl, recoveryEmail, autoAccept, enable2FA)
     const result = await creator.create(browserContext)
     
     if (result) {
@@ -107,3 +124,4 @@ if (require.main === module) {
 }
 
 export { main as createAccountCLI }
+
