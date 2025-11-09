@@ -1546,19 +1546,19 @@ export class AccountCreator {
 
   private async waitForCaptcha(): Promise<boolean> {
     try {
-      // Wait a bit to let the page load
+      log(false, 'CREATOR', '🔍 Checking for CAPTCHA...', 'log', 'cyan')
       await this.humanDelay(1500, 2500)
       
-      // Check for CAPTCHA iframe (most reliable indicator)
+      // Check for CAPTCHA iframe (most reliable)
       const captchaIframe = this.page.locator('iframe[data-testid="humanCaptchaIframe"]').first()
       const iframeVisible = await captchaIframe.isVisible().catch(() => false)
       
       if (iframeVisible) {
-        log(false, 'CREATOR', 'CAPTCHA detected via iframe', 'warn', 'yellow')
+        log(false, 'CREATOR', '🤖 CAPTCHA DETECTED via iframe - WAITING FOR HUMAN', 'warn', 'yellow')
         return true
       }
       
-      // Check multiple indicators for CAPTCHA
+      // Check multiple CAPTCHA indicators
       const captchaIndicators = [
         'h1[data-testid="title"]',
         'div[id*="captcha"]',
@@ -1573,8 +1573,8 @@ export class AccountCreator {
         
         if (visible) {
           const text = await element.textContent().catch(() => '')
+          log(false, 'CREATOR', `Found element: ${selector} = "${text?.substring(0, 50)}"`, 'log', 'gray')
           
-          // Check for CAPTCHA-related keywords
           if (text && (
             text.toLowerCase().includes('vérif') || 
             text.toLowerCase().includes('verify') || 
@@ -1584,63 +1584,54 @@ export class AccountCreator {
             text.toLowerCase().includes('captcha') ||
             text.toLowerCase().includes('prove you')
           )) {
-            log(false, 'CREATOR', `CAPTCHA detected with text: ${text.substring(0, 50)}`, 'warn', 'yellow')
+            log(false, 'CREATOR', `🤖 CAPTCHA DETECTED: "${text.substring(0, 50)}" - WAITING FOR HUMAN`, 'warn', 'yellow')
             return true
           }
         }
       }
       
+      log(false, 'CREATOR', '✅ No CAPTCHA detected', 'log', 'green')
       return false
-    } catch {
+    } catch (error) {
+      log(false, 'CREATOR', `Error checking CAPTCHA: ${error}`, 'warn', 'yellow')
       return false
     }
   }
 
   private async waitForCaptchaSolved(): Promise<void> {
-    const maxWaitTime = 10 * 60 * 1000 // 10 minutes
+    const maxWaitTime = 10 * 60 * 1000
     const startTime = Date.now()
     let lastLogTime = startTime
     
     while (Date.now() - startTime < maxWaitTime) {
       try {
-        // Log progress every 30 seconds
         if (Date.now() - lastLogTime > 30000) {
           const elapsed = Math.floor((Date.now() - startTime) / 1000)
-          log(false, 'CREATOR', `Still waiting for CAPTCHA... (${elapsed}s elapsed)`, 'log', 'yellow')
+          log(false, 'CREATOR', `⏳ Still waiting for CAPTCHA solution... (${elapsed}s)`, 'log', 'yellow')
           lastLogTime = Date.now()
         }
         
-        // Check if CAPTCHA is still present
         const captchaStillPresent = await this.waitForCaptcha()
         
         if (!captchaStillPresent) {
-          // CAPTCHA solved! But account creation may still be in progress
-          log(false, 'CREATOR', '✅ CAPTCHA solved! Waiting for account creation...', 'log', 'green')
+          log(false, 'CREATOR', '✅ CAPTCHA SOLVED! Processing account creation...', 'log', 'green')
           
-          // CRITICAL: Wait MUCH longer for Microsoft to process
-          log(false, 'CREATOR', 'Giving Microsoft extra time to process (15-20s)...', 'log', 'cyan')
-          await this.humanDelay(15000, 20000) // INCREASED from 3-5s
-          
-          // CRITICAL: Wait for Microsoft to finish creating the account
+          await this.humanDelay(3000, 5000)
           await this.waitForAccountCreation()
-          
-          // CRITICAL: Extra delay after account creation
-          log(false, 'CREATOR', 'Account creation complete, stabilizing (10-15s)...', 'log', 'cyan')
-          await this.humanDelay(10000, 15000)
+          await this.humanDelay(2000, 3000)
           
           return
         }
         
-        // Wait before checking again
         await this.page.waitForTimeout(2000)
         
-      } catch {
-        // Error checking, assume CAPTCHA is solved
+      } catch (error) {
+        log(false, 'CREATOR', `Error in CAPTCHA wait: ${error}`, 'warn', 'yellow')
         return
       }
     }
     
-    throw new Error('CAPTCHA solving timeout - waited 10 minutes')
+    throw new Error('CAPTCHA timeout - 10 minutes exceeded')
   }
 
   private async handlePostCreationQuestions(): Promise<void> {
@@ -1806,97 +1797,20 @@ export class AccountCreator {
       
       await this.page.goto('https://rewards.bing.com/', { 
         waitUntil: 'networkidle',
-        timeout: 60000
+        timeout: 30000
       })
       
-      // Wait for page to stabilize after navigation (REDUCED)
-      await this.waitForPageStable('REWARDS_PAGE', 15000)
-      await this.humanDelay(3000, 5000)
-      
-      const currentUrl = this.page.url()
-      log(false, 'CREATOR', `Current URL: ${currentUrl}`, 'log', 'cyan')
-      
-      // CRITICAL: Verify we're actually on rewards page and logged in
-      if (!currentUrl.includes('rewards.bing.com')) {
-        if (currentUrl.includes('login.live.com')) {
-          log(false, 'CREATOR', '⚠️ Still on login page - account may not be fully activated', 'warn', 'yellow')
-          
-          // Wait before retry (REDUCED)
-          await this.humanDelay(5000, 8000)
-          
-          await this.page.goto('https://rewards.bing.com/', { 
-            waitUntil: 'networkidle',
-            timeout: 30000
-          })
-          await this.waitForPageStable('REWARDS_RETRY', 15000)
-          await this.humanDelay(3000, 5000)
-        } else {
-          log(false, 'CREATOR', `⚠️ Unexpected URL: ${currentUrl}`, 'warn', 'yellow')
-        }
-      }
-      
-      log(false, 'CREATOR', '✅ Successfully navigated to rewards.bing.com', 'log', 'green')
-      
-      // CRITICAL: Wait LONGER for user identity to load before declaring success
-      log(false, 'CREATOR', 'Final wait for complete page load (8-12s)...', 'log', 'cyan')
-      await this.humanDelay(8000, 12000) // INCREASED from 5-7s
-        
-      // CRITICAL: Verify user identity is loaded
-      log(false, 'CREATOR', 'Verifying user identity...', 'log', 'cyan')
-      
-      const identitySelectors = [
-        '[data-bi-id="userIdentity"]',
-        '[id*="user"]',
-        'button[aria-label*="Account"]',
-        '#id_n', // User dropdown
-        '.mee_header_profile' // Profile area
-      ]
-      
-      let identityVerified = false
-      for (const selector of identitySelectors) {
-        const element = this.page.locator(selector).first()
-        const visible = await element.isVisible().catch(() => false)
-        
-        if (visible) {
-          const text = await element.textContent().catch(() => '')
-          if (text && text.trim().length > 0) {
-            log(false, 'CREATOR', `✅ Verified identity: ${text.substring(0, 50)}`, 'log', 'green')
-            identityVerified = true
-            break
-          }
-        }
-      }
-      
-      if (!identityVerified) {
-        log(false, 'CREATOR', '⚠️ Could not verify user identity on page', 'warn', 'yellow')
-        
-        // Wait and check again (REDUCED)
-        await this.humanDelay(3000, 5000)
-        
-        for (const selector of identitySelectors) {
-          const element = this.page.locator(selector).first()
-          const visible = await element.isVisible().catch(() => false)
-          
-          if (visible) {
-            log(false, 'CREATOR', '✅ Identity verified on retry', 'log', 'green')
-            identityVerified = true
-            break
-          }
-        }
-      }
-      
-      if (identityVerified) {
-        log(false, 'CREATOR', '✅ Account is active and logged in!', 'log', 'green')
-      } else {
-        log(false, 'CREATOR', '⚠️ Account state uncertain - proceeding anyway', 'warn', 'yellow')
-      }
-      
-      // Handle popups and tour (REDUCED delays)
+      await this.waitForPageStable('REWARDS_PAGE', 7000)
       await this.humanDelay(2000, 3000)
-      await this.handleRewardsWelcomeTour()
       
+      log(false, 'CREATOR', '✅ On rewards.bing.com', 'log', 'green')
+      
+      // Clear cookies on rewards page
+      await this.dismissCookieBanner()
+      
+      // Handle "Get started" popup (ReferAndEarn)
       await this.humanDelay(2000, 3000)
-      await this.handleRewardsPopups()
+      await this.handleGetStartedPopup()
       
       // Referral enrollment if needed
       if (this.referralUrl) {
@@ -1910,12 +1824,76 @@ export class AccountCreator {
     }
   }
   
+  private async dismissCookieBanner(): Promise<void> {
+    try {
+      log(false, 'CREATOR', '🍪 Checking for cookie banner...', 'log', 'cyan')
+      
+      const rejectButtonSelectors = [
+        'button#bnp_btn_reject',
+        'button[id*="reject"]',
+        'button:has-text("Reject")',
+        'button:has-text("Refuser")',
+        'a:has-text("Reject")',
+        'a:has-text("Refuser")'
+      ]
+      
+      for (const selector of rejectButtonSelectors) {
+        const button = this.page.locator(selector).first()
+        const visible = await button.isVisible({ timeout: 2000 }).catch(() => false)
+        
+        if (visible) {
+          log(false, 'CREATOR', '✅ Rejecting cookies', 'log', 'green')
+          await button.click()
+          await this.humanDelay(1000, 1500)
+          return
+        }
+      }
+      
+      log(false, 'CREATOR', 'No cookie banner found', 'log', 'gray')
+    } catch (error) {
+      log(false, 'CREATOR', `Cookie banner error: ${error}`, 'log', 'gray')
+    }
+  }
+
+  private async handleGetStartedPopup(): Promise<void> {
+    try {
+      log(false, 'CREATOR', '🎯 Checking for "Get started" popup...', 'log', 'cyan')
+      await this.humanDelay(2000, 3000)
+      
+      // Check for ReferAndEarn popup
+      const popupIndicator = this.page.locator('img[src*="ReferAndEarnPopUpImgUpdated"]').first()
+      const popupVisible = await popupIndicator.isVisible({ timeout: 3000 }).catch(() => false)
+      
+      if (!popupVisible) {
+        log(false, 'CREATOR', 'No "Get started" popup found', 'log', 'gray')
+        return
+      }
+      
+      log(false, 'CREATOR', '✅ Found "Get started" popup', 'log', 'green')
+      await this.humanDelay(1000, 2000)
+      
+      // Click "Get started" button
+      const getStartedButton = this.page.locator('a#reward_pivot_earn, a.dashboardPopUpPopUpSelectButton').first()
+      const buttonVisible = await getStartedButton.isVisible({ timeout: 2000 }).catch(() => false)
+      
+      if (buttonVisible) {
+        log(false, 'CREATOR', '🎯 Clicking "Get started"', 'log', 'cyan')
+        await getStartedButton.click()
+        await this.humanDelay(2000, 3000)
+        await this.waitForPageStable('AFTER_GET_STARTED', 5000)
+        log(false, 'CREATOR', '✅ Clicked "Get started"', 'log', 'green')
+      }
+    } catch (error) {
+      log(false, 'CREATOR', `Get started popup error: ${error}`, 'log', 'gray')
+    }
+  }
+
+  // Unused - kept for future use if needed
+  /*
   private async handleRewardsWelcomeTour(): Promise<void> {
-    // Page loads fast, reduced delays
-    await this.waitForPageStable('WELCOME_TOUR', 10000)
+    await this.waitForPageStable('WELCOME_TOUR', 7000)
     await this.humanDelay(2000, 3000)
     
-    // Try to handle the welcome tour (multiple Next buttons)
     const maxClicks = 5
     for (let i = 0; i < maxClicks; i++) {
       // Check for welcome tour indicators
@@ -1997,7 +1975,9 @@ export class AccountCreator {
       await this.humanDelay(1000, 1500)
     }
   }
+  */
   
+  /*
   private async handleRewardsPopups(): Promise<void> {
     await this.waitForPageStable('REWARDS_POPUPS', 10000)
     await this.humanDelay(2000, 3000)
@@ -2068,58 +2048,37 @@ export class AccountCreator {
       }
     }
   }
+  */
   
   private async ensureRewardsEnrollment(): Promise<void> {
     if (!this.referralUrl) return
     
     try {
+      log(false, 'CREATOR', '🔗 Reloading referral URL for enrollment...', 'log', 'cyan')
+      
       await this.page.goto(this.referralUrl, { 
         waitUntil: 'networkidle',
         timeout: 30000
       })
       
-      await this.waitForPageStable('REFERRAL_ENROLLMENT', 10000)
+      await this.waitForPageStable('REFERRAL_ENROLLMENT', 7000)
       await this.humanDelay(2000, 3000)
       
-      // Look for "Join Microsoft Rewards" button
-      const joinButtonSelectors = [
-        'a#start-earning-rewards-link',
-        'a.cta.learn-more-btn',
-        'a[href*="createNewUser"]',
-        'a:has-text("Join Microsoft Rewards")',
-        'a:has-text("Rejoindre Microsoft Rewards")',
-        'button:has-text("Join")',
-        'button:has-text("Rejoindre")'
-      ]
+      // Click "Join Microsoft Rewards" button
+      const joinButton = this.page.locator('a#start-earning-rewards-link').first()
+      const joinVisible = await joinButton.isVisible({ timeout: 3000 }).catch(() => false)
       
-      let joined = false
-      for (const selector of joinButtonSelectors) {
-        const button = this.page.locator(selector).first()
-        const visible = await button.isVisible().catch(() => false)
-        
-        if (visible) {
-          await button.click()
-          await this.humanDelay(2000, 3000)
-          await this.waitForPageStable('AFTER_JOIN', 10000)
-          joined = true
-          break
-        }
+      if (joinVisible) {
+        log(false, 'CREATOR', '🎯 Clicking "Join Microsoft Rewards"', 'log', 'cyan')
+        await joinButton.click()
+        await this.humanDelay(2000, 3000)
+        await this.waitForPageStable('AFTER_JOIN', 7000)
+        log(false, 'CREATOR', '✅ Successfully clicked Join button', 'log', 'green')
+      } else {
+        log(false, 'CREATOR', '✅ Already enrolled or Join button not found', 'log', 'gray')
       }
       
-      if (!joined) {
-        log(false, 'CREATOR', 'Join button not found - may already be enrolled', 'log', 'yellow')
-      }
-      
-      await this.waitForPageStable('POST_ENROLLMENT', 10000)
-      await this.humanDelay(2000, 3000)
-      
-      // Handle post-enrollment popups
-      await this.humanDelay(2000, 3000)
-      await this.handleRewardsWelcomeTour()
-      await this.humanDelay(2000, 3000)
-      await this.handleRewardsPopups()
-      
-      log(false, 'CREATOR', '✅ Rewards enrollment completed', 'log', 'green')
+      log(false, 'CREATOR', '✅ Enrollment process completed', 'log', 'green')
       
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
