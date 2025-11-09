@@ -9,28 +9,19 @@ async function main(): Promise<void> {
   let referralUrl: string | undefined
   let recoveryEmail: string | undefined
   let autoAccept = false
-  let enable2FA = false
   
-  // Parse arguments
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i]
+  // Parse arguments - ULTRA SIMPLE
+  for (const arg of args) {
     if (!arg) continue
     
-    if (arg === '-r' && i + 1 < args.length) {
-      recoveryEmail = args[++i]
-    } else if (arg === '-y') {
+    if (arg === '-y') {
       autoAccept = true
-    } else if (arg === '--2fa') {
-      enable2FA = true
     } else if (arg.startsWith('http')) {
       referralUrl = arg
+    } else if (arg.includes('@')) {
+      // Auto-detect email addresses
+      recoveryEmail = arg
     }
-  }
-  
-  // Validate recovery email if provided
-  if (recoveryEmail && !recoveryEmail.includes('@')) {
-    log(false, 'CREATOR-CLI', '❌ Invalid recovery email format', 'error')
-    process.exit(1)
   }
   
   // Banner
@@ -38,11 +29,24 @@ async function main(): Promise<void> {
   log(false, 'CREATOR-CLI', '🚀 Microsoft Account Creator', 'log', 'cyan')
   console.log('='.repeat(60) + '\n')
   
+  // Display detected arguments
   if (referralUrl) {
-    log(false, 'CREATOR-CLI', `✅ Using referral URL: ${referralUrl}`, 'log', 'green')
+    log(false, 'CREATOR-CLI', `✅ Referral URL: ${referralUrl}`, 'log', 'green')
   } else {
-    log(false, 'CREATOR-CLI', '⚠️  No referral URL provided - account will NOT be linked to rewards', 'warn', 'yellow')
+    log(false, 'CREATOR-CLI', '⚠️  No referral URL - account will NOT be linked to rewards', 'warn', 'yellow')
   }
+  
+  if (recoveryEmail) {
+    log(false, 'CREATOR-CLI', `✅ Recovery email: ${recoveryEmail}`, 'log', 'green')
+  }
+  
+  if (autoAccept) {
+    log(false, 'CREATOR-CLI', '⚡ Auto-accept mode: recovery + 2FA will be enabled', 'log', 'cyan')
+  } else {
+    log(false, 'CREATOR-CLI', '🤖 Interactive mode: you will be asked for options', 'log', 'cyan')
+  }
+  
+  console.log()
   
   // Create a temporary bot instance to access browser creation
   const bot = new MicrosoftRewardsBot(false)
@@ -66,7 +70,7 @@ async function main(): Promise<void> {
     log(false, 'CREATOR-CLI', '✅ Browser opened successfully', 'log', 'green')
     
     // Create account
-    const creator = new AccountCreator(referralUrl, recoveryEmail, autoAccept, enable2FA)
+    const creator = new AccountCreator(referralUrl, recoveryEmail, autoAccept)
     const result = await creator.create(browserContext)
     
     if (result) {

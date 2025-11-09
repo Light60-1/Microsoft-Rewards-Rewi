@@ -12,15 +12,13 @@ export class AccountCreator {
   private referralUrl?: string
   private recoveryEmail?: string
   private autoAccept: boolean
-  private enable2FA: boolean
   private rl: readline.Interface
   private rlClosed = false
 
-  constructor(referralUrl?: string, recoveryEmail?: string, autoAccept = false, enable2FA = false) {
+  constructor(referralUrl?: string, recoveryEmail?: string, autoAccept = false) {
     this.referralUrl = referralUrl
     this.recoveryEmail = recoveryEmail
     this.autoAccept = autoAccept
-    this.enable2FA = enable2FA
     this.dataGenerator = new DataGenerator()
     this.rl = readline.createInterface({
       input: process.stdin,
@@ -631,23 +629,45 @@ export class AccountCreator {
       let recoveryCode: string | undefined
       
       try {
-        // Setup recovery email (interactive if no -r flag and no -y flag)
-        if (this.recoveryEmail || !this.autoAccept) {
-          const emailResult = await this.setupRecoveryEmail(confirmedEmail)
+        // Setup recovery email
+        // Logic: If -r provided, use it. If -y (auto-accept), ask for it. Otherwise, interactive prompt.
+        if (this.recoveryEmail) {
+          // User provided -r flag with email
+          const emailResult = await this.setupRecoveryEmail()
+          if (emailResult) recoveryEmailUsed = emailResult
+        } else if (this.autoAccept) {
+          // User provided -y (auto-accept all) - prompt for recovery email
+          log(false, 'CREATOR', '📧 Auto-accept mode: prompting for recovery email...', 'log', 'cyan')
+          const emailResult = await this.setupRecoveryEmail()
           if (emailResult) recoveryEmailUsed = emailResult
         } else {
-          log(false, 'CREATOR', 'Skipping recovery email setup (-y without -r)', 'log', 'gray')
+          // Interactive mode - ask user
+          const emailResult = await this.setupRecoveryEmail()
+          if (emailResult) recoveryEmailUsed = emailResult
         }
         
-        // Setup 2FA (only if --2fa flag OR interactive prompt accepts)
-        if (this.enable2FA || (!this.autoAccept && await this.ask2FASetup())) {
+        // Setup 2FA
+        // Logic: If -y (auto-accept), enable it automatically. Otherwise, ask user.
+        if (this.autoAccept) {
+          // User provided -y (auto-accept all) - enable 2FA automatically
+          log(false, 'CREATOR', '🔐 Auto-accept mode: enabling 2FA...', 'log', 'cyan')
           const tfaResult = await this.setup2FA()
           if (tfaResult) {
             totpSecret = tfaResult.totpSecret
             recoveryCode = tfaResult.recoveryCode
           }
         } else {
-          log(false, 'CREATOR', 'Skipping 2FA setup', 'log', 'gray')
+          // Interactive mode - ask user
+          const wants2FA = await this.ask2FASetup()
+          if (wants2FA) {
+            const tfaResult = await this.setup2FA()
+            if (tfaResult) {
+              totpSecret = tfaResult.totpSecret
+              recoveryCode = tfaResult.recoveryCode
+            }
+          } else {
+            log(false, 'CREATOR', 'Skipping 2FA setup', 'log', 'gray')
+          }
         }
       } catch (error) {
         log(false, 'CREATOR', `Post-setup error: ${error}`, 'warn', 'yellow')
@@ -2214,7 +2234,7 @@ ${JSON.stringify(accountData, null, 2)}`
   /**
    * Setup recovery email for the account
    */
-  private async setupRecoveryEmail(_currentEmail: string): Promise<string | undefined> {
+  private async setupRecoveryEmail(): Promise<string | undefined> {
     try {
       log(false, 'CREATOR', '📧 Setting up recovery email...', 'log', 'cyan')
       

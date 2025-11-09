@@ -26,60 +26,69 @@ Already integrated - no additional setup needed!
 ### Command Line
 
 ```bash
-# Basic usage (standalone account)
+# Basic usage (interactive mode - asks everything)
 npm run creator
 
 # With referral link (earns you referral credit)
-npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE&ref=rafsrchae
+npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE
 
-# With recovery email
-npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -r recovery@gmail.com
-
-# With auto-accept mode (skip all prompts)
+# Auto-accept mode (enables recovery email + 2FA automatically)
 npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y
 
-# Enable 2FA automatically
-npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE --2fa
+# With specific recovery email (auto-detected)
+npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
 
-# Complete example with all options
-npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -r backup@gmail.com -y --2fa
+# Minimal - just recovery email without referral
+npm run creator -y myrecovery@gmail.com
 ```
 
 ### 🎛️ Command Line Arguments
 
 | Argument | Description | Example |
 |----------|-------------|---------|
-| `<url>` | Referral URL (optional) | `https://rewards.bing.com/welcome?rh=CODE` |
-| `-r <email>` | Recovery email address | `-r mybackup@gmail.com` |
-| `-y` | Auto-accept mode (skip prompts) | `-y` |
-| `--2fa` | Enable 2FA automatically | `--2fa` |
+| `<url>` | Referral URL (optional, auto-detected if starts with http) | `https://rewards.bing.com/welcome?rh=CODE` |
+| `<email>` | Recovery email (optional, auto-detected if contains @) | `recovery@gmail.com` |
+| `-y` | Auto-accept mode (enables recovery + 2FA automatically) | `-y` |
+
+**That's it! No more confusing flags.** 🎉
+
+### 📊 How It Works
+
+| Command | Recovery Email | 2FA | Behavior |
+|---------|---------------|-----|----------|
+| `npm run creator` | ❓ Ask user | ❓ Ask user | Fully interactive |
+| `npm run creator -y` | ✅ Prompt for email | ✅ Enabled | Auto-accept all |
+| `npm run creator -y backup@gmail.com` | ✅ Use provided email | ✅ Enabled | Full automation |
+| `npm run creator URL -y` | ✅ Prompt for email | ✅ Enabled | With referral |
+| `npm run creator URL -y backup@gmail.com` | ✅ Use provided email | ✅ Enabled | Complete setup |
 
 **⚠️ Important: How `-y` Works**
 
-The `-y` flag **skips interactive prompts**, but **respects the flags you provide**:
-
-- `npm run creator -y` → Skips recovery email AND 2FA (nothing setup)
-- `npm run creator -r email@example.com -y` → Uses recovery email, skips 2FA
-- `npm run creator --2fa -y` → Skips recovery email, forces 2FA
-- `npm run creator -r email@example.com --2fa -y` → Uses both (full automation)
+The `-y` flag **accepts ALL prompts automatically**:
+- ✅ Automatically enables 2FA
+- ✅ Prompts for recovery email (or uses provided one)
+- ✅ No other flags needed - it's that simple!
 
 **Examples:**
 
 ```bash
-# Minimal (no options, will prompt for everything)
+# Interactive mode (asks everything)
 npm run creator
 
-# With referral only (will prompt for recovery email & 2FA)
+# With referral link (will prompt for recovery email & 2FA)
 npm run creator https://rewards.bing.com/welcome?rh=B395E9D7
 
-# With recovery email (will be asked for code, then prompts for 2FA)
-npm run creator -r mybackup@gmail.com
+# Auto-accept mode (enables 2FA, prompts for recovery email)
+npm run creator -y
 
-# Full automation with 2FA (no prompts, but requires manual code entry)
-npm run creator https://rewards.bing.com/welcome?rh=B395E9D7 -r backup@gmail.com --2fa -y
-
-# Skip everything (fastest, no security features)
+# Auto with referral (enables 2FA, prompts for recovery)
 npm run creator https://rewards.bing.com/welcome?rh=B395E9D7 -y
+
+# Full automation with specific recovery email (no prompts)
+npm run creator https://rewards.bing.com/welcome?rh=B395E9D7 -y backup@gmail.com
+
+# Just with recovery email, no referral
+npm run creator -y myrecovery@example.com
 ```
 
 ### Interactive Flow
@@ -420,6 +429,12 @@ When you use `--2fa` argument OR answer 'y' to "Enable 2FA?" prompt:
 
 ## �🐛 Troubleshooting
 
+**Q: How do I provide a recovery email?**
+A: Just add it as an argument: `npm run creator -y myemail@gmail.com` - it's auto-detected!
+
+**Q: What does `-y` do exactly?**
+A: It enables EVERYTHING automatically (recovery email prompt + 2FA). One flag, full automation.
+
 **Q: Email generation too fast?**
 A: System uses 0.8-2s delays after each input - looks human.
 
@@ -445,10 +460,10 @@ A: Check the saved JSONC file - it contains the secret key.
 A: Use the recovery code from JSONC file to access account.
 
 **Q: Can I skip recovery email?**
-A: Yes, don't use `-r` argument and press Enter when asked.
+A: Yes, in interactive mode just press Enter when asked.
 
 **Q: Can I skip 2FA?**
-A: Yes, don't use `--2fa` and answer 'n' when asked (or use `-y` to skip prompt).
+A: Yes, in interactive mode answer 'n' when asked. With `-y`, 2FA is always enabled.
 
 ---
 

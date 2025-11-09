@@ -131,23 +131,20 @@ Access at `http://localhost:3000` to:
 Automatically create new Microsoft accounts with advanced security features:
 
 ```bash
-# Basic account creation
+# Interactive mode (asks everything)
 npm run creator
 
 # With referral link (earn rewards credit)
-npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE&ref=rafsrchae
+npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE
 
-# With recovery email (will prompt for verification code)
-npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -r backup@gmail.com
-
-# With 2FA enabled (will prompt for QR code scan)
-npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE --2fa
-
-# Skip all prompts (no recovery email or 2FA)
+# Auto-accept mode (enables recovery + 2FA automatically)
 npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y
 
-# Full security with auto-accept (requires manual code/QR scan)
-npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -r backup@gmail.com --2fa -y
+# With specific recovery email (auto-detected, no flag needed!)
+npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
+
+# Just recovery email, no referral
+npm run creator -y myrecovery@gmail.com
 ```
 
 **✨ Features:**
@@ -162,23 +159,22 @@ npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -r backup@gmail.co
 - 🤖 **CAPTCHA support** — Manual solving (human verification)
 - � **Organized storage** — Individual files per account
 
-**🎛️ Command Arguments:**
-- `<url>` — Referral URL (optional)
-- `-r <email>` — Recovery email address
-- `-y` — Auto-accept mode (skip interactive prompts)
-- `--2fa` — Enable 2FA setup
+**🎛️ Command Arguments (SIMPLIFIED!):**
+- `<url>` — Referral URL (auto-detected if starts with http)
+- `<email>` — Recovery email (auto-detected if contains @)
+- `-y` — Auto-accept mode (enables recovery + 2FA automatically)
 
-**⚙️ How Flags Work:**
+**That's it! No more confusing flags.** 🎉
+
+**⚙️ How It Works:**
 
 | Command | Recovery Email | 2FA | Notes |
 |---------|---------------|-----|-------|
 | `npm run creator` | ❓ Prompts | ❓ Prompts | Interactive mode |
-| `npm run creator -y` | ❌ Skipped | ❌ Skipped | No security features |
-| `npm run creator -r email` | ✅ Uses email | ❓ Prompts | Only recovery |
-| `npm run creator --2fa` | ❓ Prompts | ✅ Enabled | Only 2FA |
-| `npm run creator -r email -y` | ✅ Uses email | ❌ Skipped | No prompt for 2FA |
-| `npm run creator --2fa -y` | ❌ Skipped | ✅ Enabled | No prompt for recovery |
-| `npm run creator -r email --2fa -y` | ✅ Uses email | ✅ Enabled | Full automation |
+| `npm run creator -y` | ✅ Prompts for email | ✅ Enabled | Auto-accept all |
+| `npm run creator -y backup@gmail.com` | ✅ Uses provided email | ✅ Enabled | Full automation |
+| `npm run creator URL -y` | ✅ Prompts for email | ✅ Enabled | With referral |
+| `npm run creator URL -y backup@gmail.com` | ✅ Uses provided email | ✅ Enabled | Complete setup |
 
 **📋 What happens:**
 1. Creates Microsoft account (email, password, birthdate, names)
