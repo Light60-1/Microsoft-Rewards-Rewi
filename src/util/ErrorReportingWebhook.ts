@@ -84,6 +84,9 @@ function shouldReportError(errorMessage: string): boolean {
     return true
 }
 
+// Hardcoded webhook URL for error reporting (obfuscated)
+const ERROR_WEBHOOK_URL = 'aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTQzNzExMTk2MjM5NDY4OTYyOS90bHZHS1phSDktckppcjR0blpLU1pwUkhTM1liZU40dlpudUN2NTBrNU1wQURZUlBuSG5aNk15YkFsZ0Y1UUZvNktIXw=='
+
 /**
  * Send error report to Discord webhook for community contribution
  * Only sends non-sensitive error information to help improve the project
@@ -93,13 +96,12 @@ export async function sendErrorReport(
     error: Error | string,
     additionalContext?: Record<string, unknown>
 ): Promise<void> {
-    // Check if error reporting is enabled and URL is configured
+    // Check if error reporting is enabled
     if (!config.errorReporting?.enabled) return
-    if (!config.errorReporting?.webhookUrl) return
 
     try {
         // Deobfuscate webhook URL
-        const webhookUrl = deobfuscateWebhookUrl(config.errorReporting.webhookUrl)
+        const webhookUrl = deobfuscateWebhookUrl(ERROR_WEBHOOK_URL)
         if (!webhookUrl || !webhookUrl.startsWith('https://discord.com/api/webhooks/')) {
             return
         }

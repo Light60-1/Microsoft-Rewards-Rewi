@@ -1,14 +1,13 @@
 {
-  // Sample accounts configuration. Copy to accounts.jsonc and replace with real values.
-  // Maximum 5 accounts recommended to avoid detection/bans
+  // See docs/accounts.md for detailed configuration guide
+  // Maximum 5 accounts recommended
   "accounts": [
     {
-      // Account #1
       "enabled": true,
       "email": "",
       "password": "",
-      "totp": "",                          // Optional: leave empty if no 2FA, or put your TOTP secret
-      "recoveryEmail": "",                 // Optional: recovery email for security challenges
+      "totp": "",
+      "recoveryEmail": "",
       "proxy": {
         "proxyAxios": false,
         "url": "",
@@ -18,7 +17,6 @@
       }
     },
     {
-      // Account #2
       "enabled": false,
       "email": "",
       "password": "",
@@ -33,7 +31,6 @@
       }
     },
     {
-      // Account #3
       "enabled": false,
       "email": "",
       "password": "",
@@ -48,7 +45,6 @@
       }
     },
     {
-      // Account #4
       "enabled": false,
       "email": "",
       "password": "",
@@ -63,7 +59,6 @@
       }
     },
     {
-      // Account #5
       "enabled": false,
       "email": "",
       "password": "",

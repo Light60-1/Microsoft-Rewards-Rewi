@@ -5,16 +5,6 @@
 
 /**
  * Parse environment variable as number with validation
- * FIXED: Added strict validation for min/max boundaries with logging
- * @param key Environment variable name
- * @param defaultValue Default value if parsing fails or out of range
- * @param min Minimum allowed value
- * @param max Maximum allowed value
- * @returns Parsed number or default value
- */
-/**
- * Parse environment variable as number with validation
- * FIXED: Added strict validation for min/max boundaries with centralized logging
  * @param key Environment variable name
  * @param defaultValue Default value if parsing fails or out of range
  * @param min Minimum allowed value
@@ -26,15 +16,11 @@ function parseEnvNumber(key: string, defaultValue: number, min: number, max: num
     if (!raw) return defaultValue
     
     const parsed = Number(raw)
-    // Strict validation: must be finite, not NaN, and within bounds
     if (!Number.isFinite(parsed)) {
-        // Defer logging import to avoid circular dependency during module initialization
-        // Log only happens on actual misconfiguration (rare edge case)
         queueMicrotask(() => {
             import('./util/Logger').then(({ log }) => {
                 log('main', 'CONSTANTS', `Invalid ${key}="${raw}" (not a finite number), using default: ${defaultValue}`, 'warn')
             }).catch(() => {
-                // Fallback if logger unavailable during initialization
                 process.stderr.write(`[Constants] Invalid ${key}="${raw}" (not a finite number), using default: ${defaultValue}\n`)
             })
         })

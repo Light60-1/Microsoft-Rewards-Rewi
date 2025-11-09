@@ -1,35 +1,23 @@
 {
-    // General
+    // === GENERAL ===
     "baseURL": "https://rewards.bing.com",
     "sessionPath": "sessions",
     "dryRun": false,
 
-    // Browser
-    "browser": {
-        "headless": false,
-        "globalTimeout": "30s"
-    },
-    "fingerprinting": {
-        "saveFingerprint": {
-            "mobile": true,
-            "desktop": true
-        }
-    },
-
-    // Execution
+    // === EXECUTION ===
     "execution": {
         "parallel": false,
         "runOnZeroPoints": false,
         "clusters": 1,
-        "passesPerRun": 3 // Number of times to run through all accounts (set to 3 to run 3 times even if already completed)
+        "passesPerRun": 3
     },
     "jobState": {
         "enabled": true,
         "dir": "",
-        "autoResetOnComplete": true // Set to true to automatically rerun all accounts without prompting (for scheduled tasks)
+        "autoResetOnComplete": true
     },
 
-    // Tasks
+    // === TASKS ===
     "workers": {
         "doDailySet": true,
         "doMorePromotions": true,
@@ -41,7 +29,7 @@
         "bundleDailySetWithSearch": true
     },
 
-    // Search
+    // === SEARCH ===
     "search": {
         "useLocalQueries": false,
         "settings": {
@@ -49,8 +37,8 @@
             "scrollRandomResults": true,
             "clickRandomResults": true,
             "retryMobileSearchAmount": 2,
-            "semanticDedup": true, // Filter queries with high word similarity (Jaccard). Reduces repetitive patterns.
-            "semanticDedupThreshold": 0.65, // Similarity threshold (0-1). Lower = more strict filtering.
+            "semanticDedup": true,
+            "semanticDedupThreshold": 0.65,
             "delay": {
                 "min": "2min",
                 "max": "4min"
@@ -64,7 +52,7 @@
         "cacheMinutes": 30
     },
 
-    // Humanization
+    // === HUMANIZATION ===
     "humanization": {
         "enabled": true,
         "stopOnBan": true,
@@ -83,7 +71,7 @@
         "maxDays": 4
     },
 
-    // Risk & retries
+    // === RISK MANAGEMENT ===
     "riskManagement": {
         "enabled": true,
         "autoAdjustDelays": true,
@@ -99,13 +87,26 @@
         "jitter": 0.2
     },
 
-    // Networking
+    // === BROWSER ===
+    "browser": {
+        "headless": false,
+        "globalTimeout": "30s"
+    },
+    "fingerprinting": {
+        "saveFingerprint": {
+            "mobile": true,
+            "desktop": true
+        }
+    },
+
+    // === PROXY ===
     "proxy": {
         "proxyGoogleTrends": true,
         "proxyBingTerms": true
     },
 
-    // Notifications
+    // === NOTIFICATIONS ===
+    // See docs/notifications.md for details
     "webhook": {
         "enabled": false,
         "url": ""
@@ -121,7 +122,7 @@
         "authToken": ""
     },
 
-    // Logging
+    // === LOGGING ===
     "logging": {
         "excludeFunc": [
             "SEARCH-CLOSE-TABS",
@@ -136,65 +137,48 @@
         "redactEmails": true
     },
 
-    // Dashboard
+    // === DASHBOARD ===
     "dashboard": {
-        "enabled": false, // Auto-start dashboard with bot (default: false)
-        "port": 3000, // Dashboard port (default: 3000)
-        "host": "127.0.0.1" // Bind address (default: 127.0.0.1, localhost only for security)
+        "enabled": false,
+        "port": 3000,
+        "host": "127.0.0.1"
     },
 
-    // Updates
-    "update": {
-        "enabled": true, // Enable automatic updates (default: true) - DISABLED to preserve custom modifications
-        "method": "github-api", // Update method: "git" or "github-api" (recommended: "github-api")
-        // "git" = Uses Git commands (requires Git installed, can have conflicts)
-        // "github-api" = Downloads ZIP from GitHub (no Git needed, no conflicts, recommended)
-        "docker": false, // Update Docker containers if using Docker
-        "scriptPath": "setup/update/update.mjs",
-        "autoUpdateConfig": true, // Update config.jsonc from remote (keeps your settings if false)
-        "autoUpdateAccounts": false // Update accounts file from remote (NEVER recommended, keeps your accounts)
-    },
-
-    // Error Reporting (Community Contribution)
-    "errorReporting": {
-        "enabled": true, // Automatically report errors to help improve the project (no sensitive data sent)
-        "webhookUrl": "aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTQzNzExMTk2MjM5NDY4OTYyOS90bHZHS1phSDktckppcjR0blpLU1pwUkhTM1liZU40dlpudUN2NTBrNU1wQURZUlBuSG5aNk15YkFsZ0Y1UUZvNktIXw==" // Obfuscated webhook URL (base64 encoded)
-    },
-
-    // Scheduling (automatic task scheduling)
-    // When enabled=true, the bot will automatically configure your system scheduler on first run.
-    // This works on Windows (Task Scheduler), Linux/Raspberry Pi (cron), and macOS (cron).
+    // === SCHEDULING ===
+    // See docs/getting-started.md for setup instructions
     "scheduling": {
-        "enabled": false, // Set to true to enable automatic scheduling
-        
-        // Leave "type" as "auto" for automatic detection, or force "cron" (Linux/Raspberry Pi/macOS) or "task-scheduler" (Windows)
+        "enabled": false,
         "type": "auto",
-        
-        // Cron settings (for Linux, Raspberry Pi, macOS)
-        // Only used when type="auto" on Linux/macOS or type="cron"
         "cron": {
-            "schedule": "0 9 * * *", // When to run: 9 AM daily (see https://crontab.guru to customize)
-            // Examples:
-            // "0 9 * * *"     = Every day at 9:00 AM
-            // "30 14 * * *"   = Every day at 2:30 PM
-            // "0 9,21 * * *"  = Every day at 9:00 AM and 9:00 PM
-            // "0 9 * * 1-5"   = Weekdays at 9:00 AM (Monday-Friday)
-            
-            "workingDirectory": "", // Leave empty for auto-detection
-            "nodePath": "",         // Leave empty for auto-detection
-            "logFile": "",          // Optional: custom log file path (e.g., "/home/pi/rewards.log")
-            "user": ""              // Optional: run as specific user (leave empty for current user)
+            "schedule": "0 9 * * *",
+            "workingDirectory": "",
+            "nodePath": "",
+            "logFile": "",
+            "user": ""
         },
-        
-        // Windows Task Scheduler settings
-        // Only used when type="auto" on Windows or type="task-scheduler"
         "taskScheduler": {
-            "taskName": "Microsoft-Rewards-Bot", // Task name in Windows Task Scheduler
-            "schedule": "09:00",                 // Time in 24h format (e.g., "09:00", "14:30", "21:00")
-            "frequency": "daily",                // "daily", "weekly", or "once"
-            "workingDirectory": "",              // Leave empty for auto-detection
-            "runAsUser": true,                   // true = run as current user, false = run as SYSTEM
-            "highestPrivileges": false           // Set to true if you need admin privileges
+            "taskName": "Microsoft-Rewards-Bot",
+            "schedule": "09:00",
+            "frequency": "daily",
+            "workingDirectory": "",
+            "runAsUser": true,
+            "highestPrivileges": false
         }
+    },
+
+    // === UPDATES ===
+    "update": {
+        "enabled": true,
+        "method": "github-api",
+        "docker": false,
+        "scriptPath": "setup/update/update.mjs",
+        "autoUpdateConfig": true,
+        "autoUpdateAccounts": false
+    },
+
+    // === ERROR REPORTING ===
+    // Help improve the project by automatically reporting errors (no sensitive data sent)
+    "errorReporting": {
+        "enabled": true
     }
 }

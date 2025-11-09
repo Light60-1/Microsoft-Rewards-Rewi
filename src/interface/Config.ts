@@ -215,5 +215,4 @@ export interface ConfigScheduling {
 
 export interface ConfigErrorReporting {
     enabled?: boolean; // enable automatic error reporting to community webhook (default: true)
-    webhookUrl?: string; // obfuscated Discord webhook URL for error reports
 }
