@@ -35,43 +35,35 @@ This TypeScript-based automation bot helps you maximize your **Microsoft Rewards
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### ⚡ Prerequisites
 
-- **Node.js 20+** (version 22 recommended) — [Download here](https://nodejs.org/)
-- **Git** for cloning the repository
-- **Microsoft account(s)** with email and password
+- **Node.js 20+** (v22 recommended) — [Download here](https://nodejs.org/)
+- **Git** (optional) — [Download here](https://git-scm.com/) or download project as ZIP
 
-### Installation
+### 🎯 3-Step Setup
 
-**The automated setup script handles everything for you:**
-
-1. **Clone the repository:**
+1. **Get the project:**
    ```bash
    git clone https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot.git
    cd Microsoft-Rewards-Bot
    ```
+   Or download ZIP: [Code → Download ZIP](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/archive/refs/heads/main.zip)
 
-2. **Run the setup script:**
-   - **Windows:** Double-click `setup/setup.bat` or run in PowerShell:
-     ```powershell
-     .\setup\setup.bat
-     ```
-   - **Linux / macOS / WSL:**
-     ```bash
-     bash setup/setup.sh
-     ```
-   - **Or use npm:**
-     ```bash
-     npm run setup
-     ```
+2. **Install dependencies:**
+   ```bash
+   npm i
+   ```
 
-3. **The setup wizard will:**
-   - ✅ Create and configure `accounts.jsonc` with your credentials
-   - ✅ Install all dependencies automatically
-   - ✅ Build the TypeScript project
-   - ✅ Optionally start the script immediately
+3. **Create accounts & configure:**
+   ```bash
+   # Use our account creator (recommended - earn +7,500 points/month!)
+   npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
+   
+   # Or use setup wizard
+   npm run setup
+   ```
 
-**That's it! You're ready to start earning points.** 🎉
+**📖 Need detailed instructions? See [Getting Started Guide](docs/getting-started.md)**
 
 ---
 
