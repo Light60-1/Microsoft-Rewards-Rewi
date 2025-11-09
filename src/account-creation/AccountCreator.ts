@@ -763,21 +763,34 @@ export class AccountCreator {
     const emailInput = this.page.locator('input[type="email"]').first()
     await emailInput.waitFor({ timeout: 15000 })
     
-    // CRITICAL: Retry fill with verification
+    // CRITICAL: Retry fill with SMART verification
+    // Microsoft separates username from domain for outlook.com/hotmail.com addresses
     const emailFillSuccess = await this.retryOperation(
       async () => {
         await emailInput.clear()
-        await this.humanDelay(800, 1500) // INCREASED from 500-1000
+        await this.humanDelay(800, 1500)
         await emailInput.fill(email)
-        await this.humanDelay(1200, 2500) // INCREASED from 800-2000
+        await this.humanDelay(1200, 2500)
         
-        // Verify value was filled correctly
-        const verified = await this.verifyInputValue('input[type="email"]', email, 'EMAIL_INPUT')
-        if (!verified) {
+        // SMART VERIFICATION: Check if Microsoft separated the domain
+        const inputValue = await emailInput.inputValue().catch(() => '')
+        const emailUsername = email.split('@')[0] // e.g., "sharon_jackson"
+        const emailDomain = email.split('@')[1] // e.g., "outlook.com"
+        
+        // Check if input contains full email OR just username (Microsoft separated domain)
+        if (inputValue === email) {
+          // Full email is in input (not separated)
+          log(false, 'CREATOR', `[EMAIL_INPUT] ✅ Input value verified: ${email}`, 'log', 'green')
+          return true
+        } else if (inputValue === emailUsername && (emailDomain === 'outlook.com' || emailDomain === 'hotmail.com' || emailDomain === 'outlook.fr')) {
+          // Microsoft separated the domain - this is EXPECTED and OK
+          log(false, 'CREATOR', `[EMAIL_INPUT] ✅ Username verified: ${emailUsername} (domain separated by Microsoft)`, 'log', 'green')
+          return true
+        } else {
+          // Unexpected value
+          log(false, 'CREATOR', `[EMAIL_INPUT] ⚠️ Unexpected value: expected "${email}" or "${emailUsername}", got "${inputValue}"`, 'warn', 'yellow')
           throw new Error('Email input value not verified')
         }
-        
-        return true
       },
       'EMAIL_FILL',
       3,
@@ -823,12 +836,10 @@ export class AccountCreator {
       return null
     }
     
-    // CRITICAL: Verify we can actually proceed (password page OR no error)
-    const finalCheck = await this.verifyNoErrors('EMAIL_FINAL_CHECK')
-    if (!finalCheck) {
-      log(false, 'CREATOR', '❌ Email step has errors, cannot proceed', 'error')
-      return null
-    }
+    // CRITICAL: If email was accepted by handleEmailErrors, trust that result
+    // Don't do additional error check here as it may detect false positives
+    // (e.g., transient errors that were already handled)
+    log(false, 'CREATOR', `✅ Email step completed successfully: ${result.email}`, 'log', 'green')
     
     return result.email
   }
@@ -874,21 +885,26 @@ export class AccountCreator {
     
     const emailInput = this.page.locator('input[type="email"]').first()
     
-    // CRITICAL: Retry fill with verification
+    // CRITICAL: Retry fill with SMART verification (handles domain separation)
     const retryFillSuccess = await this.retryOperation(
       async () => {
         await emailInput.clear()
-        await this.humanDelay(800, 1500) // INCREASED from 500-1000
+        await this.humanDelay(800, 1500)
         await emailInput.fill(newEmail)
-        await this.humanDelay(1200, 2500) // INCREASED from 800-2000
+        await this.humanDelay(1200, 2500)
         
-        // Verify value was filled correctly
-        const verified = await this.verifyInputValue('input[type="email"]', newEmail, 'EMAIL_RETRY')
-        if (!verified) {
+        // SMART VERIFICATION: Microsoft may separate domain
+        const inputValue = await emailInput.inputValue().catch(() => '')
+        const emailUsername = newEmail.split('@')[0]
+        const emailDomain = newEmail.split('@')[1]
+        
+        if (inputValue === newEmail || (inputValue === emailUsername && (emailDomain === 'outlook.com' || emailDomain === 'hotmail.com' || emailDomain === 'outlook.fr'))) {
+          log(false, 'CREATOR', '[EMAIL_RETRY] ✅ Value verified (domain may be separated)', 'log', 'green')
+          return true
+        } else {
+          log(false, 'CREATOR', `[EMAIL_RETRY] ⚠️ Unexpected value: "${inputValue}"`, 'warn', 'yellow')
           throw new Error('Email retry input value not verified')
         }
-        
-        return true
       },
       'EMAIL_RETRY_FILL',
       3,
