@@ -12,6 +12,15 @@
  * @param max Maximum allowed value
  * @returns Parsed number or default value
  */
+/**
+ * Parse environment variable as number with validation
+ * FIXED: Added strict validation for min/max boundaries with centralized logging
+ * @param key Environment variable name
+ * @param defaultValue Default value if parsing fails or out of range
+ * @param min Minimum allowed value
+ * @param max Maximum allowed value
+ * @returns Parsed number or default value
+ */
 function parseEnvNumber(key: string, defaultValue: number, min: number, max: number): number {
     const raw = process.env[key]
     if (!raw) return defaultValue
@@ -19,12 +28,27 @@ function parseEnvNumber(key: string, defaultValue: number, min: number, max: num
     const parsed = Number(raw)
     // Strict validation: must be finite, not NaN, and within bounds
     if (!Number.isFinite(parsed)) {
-        console.warn(`[Constants] Invalid ${key}="${raw}" (not a finite number), using default: ${defaultValue}`)
+        // Defer logging import to avoid circular dependency during module initialization
+        // Log only happens on actual misconfiguration (rare edge case)
+        queueMicrotask(() => {
+            import('./util/Logger').then(({ log }) => {
+                log('main', 'CONSTANTS', `Invalid ${key}="${raw}" (not a finite number), using default: ${defaultValue}`, 'warn')
+            }).catch(() => {
+                // Fallback if logger unavailable during initialization
+                process.stderr.write(`[Constants] Invalid ${key}="${raw}" (not a finite number), using default: ${defaultValue}\n`)
+            })
+        })
         return defaultValue
     }
     
     if (parsed < min || parsed > max) {
-        console.warn(`[Constants] ${key}=${parsed} out of range [${min}, ${max}], using default: ${defaultValue}`)
+        queueMicrotask(() => {
+            import('./util/Logger').then(({ log }) => {
+                log('main', 'CONSTANTS', `${key}=${parsed} out of range [${min}, ${max}], using default: ${defaultValue}`, 'warn')
+            }).catch(() => {
+                process.stderr.write(`[Constants] ${key}=${parsed} out of range [${min}, ${max}], using default: ${defaultValue}\n`)
+            })
+        })
         return defaultValue
     }
     
@@ -47,6 +71,8 @@ export const TIMEOUTS = {
     LOGIN_MAX: parseEnvNumber('LOGIN_MAX_WAIT_MS', LOGIN_TIMEOUT_DEFAULT_MS, LOGIN_TIMEOUT_MIN_MS, LOGIN_TIMEOUT_MAX_MS),
     NETWORK_IDLE: 5000,
     ONE_MINUTE: 60000,
+    FIVE_MINUTES: 300000,
+    TEN_MINUTES: 600000,
     ONE_HOUR: 3600000,
     TWO_MINUTES: 120000
 } as const

@@ -3,6 +3,7 @@ import * as crypto from 'crypto'
 import type { Locator, Page } from 'playwright'
 import readline from 'readline'
 
+import { TIMEOUTS } from '../constants'
 import { MicrosoftRewardsBot } from '../index'
 import { OAuth } from '../interface/OAuth'
 import { saveSessionData } from '../util/Load'
@@ -399,6 +400,9 @@ export class Login {
         this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Token exchange failed (network error): ${errMsg}`, 'error')
       }
       throw error
+    } finally {
+      // Always cleanup compromised interval to prevent memory leaks
+      this.cleanupCompromisedInterval()
     }
   }
 
@@ -1696,6 +1700,7 @@ export class Login {
       clearInterval(this.compromisedInterval)
       this.compromisedInterval = undefined
     }
+    // IMPROVED: Using centralized constant instead of magic number (5*60*1000)
     this.compromisedInterval = setInterval(()=>{
       try { 
         this.bot.log(this.bot.isMobile,'SECURITY','Security standby active. Manual review required before proceeding.','warn') 
@@ -1703,7 +1708,7 @@ export class Login {
         // Intentionally silent: If logging fails in interval, don't crash the timer
         // The interval will try again in 5 minutes
       }
-    }, 5*60*1000)
+    }, TIMEOUTS.FIVE_MINUTES)
   }
 
   private cleanupCompromisedInterval() {

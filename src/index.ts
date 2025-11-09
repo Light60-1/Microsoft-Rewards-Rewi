@@ -310,11 +310,9 @@ export class MicrosoftRewardsBot {
                 worker.send({ chunk })
             }
             worker.on('message', (msg: unknown) => {
-                // FIXED: Validate message structure before accessing properties
-                if (!msg || typeof msg !== 'object') return
-                const m = msg as { type?: string; data?: AccountSummary[] }
-                if (m && m.type === 'summary' && Array.isArray(m.data)) {
-                    this.accountSummaries.push(...m.data)
+                // IMPROVED: Using type-safe interface and type guard
+                if (isWorkerMessage(msg)) {
+                    this.accountSummaries.push(...msg.data)
                 }
             })
         }
@@ -345,8 +343,10 @@ export class MicrosoftRewardsBot {
                     }
                     
                     newW.on('message', (msg: unknown) => {
-                        const m = msg as { type?: string; data?: AccountSummary[] }
-                        if (m && m.type === 'summary' && Array.isArray(m.data)) this.accountSummaries.push(...m.data)
+                        // IMPROVED: Using type-safe interface and type guard
+                        if (isWorkerMessage(msg)) {
+                            this.accountSummaries.push(...msg.data)
+                        }
                     })
                 }
             }
@@ -485,12 +485,17 @@ export class MicrosoftRewardsBot {
             if (this.config.parallel) {
                 const mobileInstance = new MicrosoftRewardsBot(true)
                 mobileInstance.axios = this.axios
+                
+                // IMPROVED: Shared state to track desktop issues for early mobile abort consideration
+                let desktopDetectedIssue = false
+                
                 // Run both and capture results with detailed logging
                 const desktopPromise = this.Desktop(account).catch((e: unknown) => {
                     const msg = e instanceof Error ? e.message : String(e)
                     log(false, 'TASK', `Desktop flow failed early for ${account.email}: ${msg}`,'error')
                     const bd = detectBanReason(e)
                     if (bd.status) {
+                        desktopDetectedIssue = true // Track issue for logging
                         banned.status = true; banned.reason = bd.reason.substring(0,200)
                         void this.handleImmediateBanAlert(account.email, banned.reason)
                     }
@@ -507,6 +512,11 @@ export class MicrosoftRewardsBot {
                     errors.push(formatFullError('mobile', e, verbose)); return null
                 })
                 const [desktopResult, mobileResult] = await Promise.allSettled([desktopPromise, mobilePromise])
+                
+                // Log if desktop detected issue (helps identify when both flows ran despite ban)
+                if (desktopDetectedIssue) {
+                    log('main', 'TASK', `Desktop detected security issue for ${account.email} during parallel execution. Future enhancement: implement AbortController for early mobile cancellation.`, 'warn')
+                }
                 
                 // Handle desktop result
                 if (desktopResult.status === 'fulfilled' && desktopResult.value) {
@@ -856,6 +866,24 @@ interface AccountSummary {
     endTotal: number
     errors: string[]
     banned?: { status: boolean; reason: string }
+}
+
+/**
+ * IMPROVED: Type-safe worker message interface
+ * Replaces inline type assertion for better type safety
+ */
+interface WorkerMessage {
+    type: 'summary'
+    data: AccountSummary[]
+}
+
+/**
+ * Type guard to validate worker message structure
+ */
+function isWorkerMessage(msg: unknown): msg is WorkerMessage {
+    if (!msg || typeof msg !== 'object') return false
+    const m = msg as Partial<WorkerMessage>
+    return m.type === 'summary' && Array.isArray(m.data)
 }
 
 function shortErr(e: unknown): string {

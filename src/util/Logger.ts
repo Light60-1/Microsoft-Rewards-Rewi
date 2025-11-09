@@ -1,7 +1,7 @@
 import axios from 'axios'
 import chalk from 'chalk'
 
-import { DISCORD } from '../constants'
+import { DISCORD, TIMEOUTS } from '../constants'
 import { sendErrorReport } from './ErrorReportingWebhook'
 import { loadConfig } from './Load'
 import { Ntfy } from './Ntfy'
@@ -27,8 +27,9 @@ type WebhookBuffer = {
 const webhookBuffers = new Map<string, WebhookBuffer>()
 
 // Periodic cleanup of old/idle webhook buffers to prevent memory leaks
-const BUFFER_MAX_AGE_MS = 3600000 // 1 hour
-const BUFFER_CLEANUP_INTERVAL_MS = 600000 // 10 minutes
+// IMPROVED: Using centralized constants instead of magic numbers
+const BUFFER_MAX_AGE_MS = TIMEOUTS.ONE_HOUR
+const BUFFER_CLEANUP_INTERVAL_MS = TIMEOUTS.TEN_MINUTES
 
 const cleanupInterval = setInterval(() => {
     const now = Date.now()
