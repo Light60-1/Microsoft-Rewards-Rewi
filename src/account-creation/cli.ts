@@ -28,11 +28,9 @@ async function main(): Promise<void> {
   console.log('\n' + '='.repeat(60))
   log(false, 'CREATOR-CLI', '🚀 Microsoft Account Creator', 'log', 'cyan')
   console.log('='.repeat(60))
-  
-  // WARNING MESSAGE
-  log(false, 'CREATOR-CLI', '⚠️  DO NOT INTERACT WITH THE BROWSER DURING AUTOMATION', 'warn', 'red')
-  log(false, 'CREATOR-CLI', '   Everything is fully automated. Any interaction may break the process.', 'log', 'yellow')
-  log(false, 'CREATOR-CLI', '   Only interact when explicitly asked (e.g., CAPTCHA solving).', 'log', 'yellow')
+  console.log('\x1b[33m⚠️  DO NOT INTERACT WITH THE BROWSER DURING AUTOMATION\x1b[0m')
+  console.log('\x1b[33m   Everything is fully automated. Any interaction may break the process.\x1b[0m')
+  console.log('\x1b[33m   Only interact when explicitly asked (e.g., CAPTCHA solving).\x1b[0m')
   console.log('='.repeat(60) + '\n')
   
   // Display detected arguments
