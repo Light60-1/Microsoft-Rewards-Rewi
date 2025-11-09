@@ -31,9 +31,24 @@ export class MobileFlow {
 
     /**
      * Execute the full mobile automation flow for an account
-     * @param account Account to process
-     * @param retryTracker Retry tracker for mobile search failures
-     * @returns Points collected during the flow
+     * 
+     * Performs the following tasks in sequence:
+     * 1. Mobile browser initialization with mobile user agent
+     * 2. Microsoft account login
+     * 3. OAuth token acquisition for mobile API access
+     * 4. Daily check-in via mobile API
+     * 5. Read to earn articles
+     * 6. Mobile searches with retry logic
+     * 
+     * @param account Account to process (email, password, totp, proxy)
+     * @param retryTracker Retry tracker for mobile search failures (auto-created if not provided)
+     * @returns Promise resolving to points collected during mobile flow
+     * @throws {Error} If critical operation fails (login, OAuth)
+     * 
+     * @example
+     * const flow = new MobileFlow(bot)
+     * const result = await flow.run(account)
+     * console.log(`Mobile: ${result.collectedPoints} points`)
      */
     async run(
         account: Account,
@@ -69,7 +84,10 @@ export class MobileFlow {
                         undefined,
                         0xFFAA00
                     )
-                } catch {/* ignore */}
+                } catch (error) {
+                    const errorMsg = error instanceof Error ? error.message : String(error)
+                    this.bot.log(true, 'MOBILE-FLOW', `Failed to send security webhook: ${errorMsg}`, 'warn')
+                }
                 
                 try {
                     await saveSessionData(this.bot.config.sessionPath, this.bot.homePage.context(), account.email, true)

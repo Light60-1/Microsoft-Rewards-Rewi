@@ -39,6 +39,24 @@ export class Activities {
     }
 
     // Centralized dispatcher for activities from dashboard/punchcards
+    /**
+     * Execute a promotional activity (quiz, poll, search-on-bing, etc.)
+     * 
+     * Automatically detects activity type and delegates to specialized handler:
+     * - quiz → Quiz handler
+     * - abc → ABC (drag-and-drop) handler
+     * - thisorthat → This or That handler
+     * - poll → Poll handler
+     * - urlreward → URL reward handler
+     * 
+     * @param page Playwright page for activity execution
+     * @param activity Activity metadata from dashboard data
+     * @returns Promise resolving when activity is complete
+     * @throws {Error} If activity type is unsupported or execution fails
+     * 
+     * @example
+     * await activities.run(page, dailySetActivity)
+     */
     async run(page: Page, activity: MorePromotion | PromotionalItem): Promise<void> {
         // First, try custom handlers (if any)
         for (const h of this.handlers) {

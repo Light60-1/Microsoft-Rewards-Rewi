@@ -123,6 +123,11 @@ export class Util {
             return []
         }
         
+        // Check for undefined/null elements which could cause issues downstream
+        if (arr.some(item => item === undefined || item === null)) {
+            throw new Error('Array contains undefined or null elements which are not allowed.')
+        }
+        
         if (!Number.isFinite(numChunks) || numChunks <= 0) {
             throw new Error(`Invalid numChunks: ${numChunks}. Must be a positive finite number.`)
         }

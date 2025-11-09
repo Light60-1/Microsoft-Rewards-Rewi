@@ -9,7 +9,6 @@ import { Counters, DashboardData, MorePromotion, PromotionalItem } from '../inte
 import { EarnablePoints } from '../interface/Points'
 import { QuizData } from '../interface/QuizData'
 import { saveSessionData } from '../util/Load'
-import { logError } from '../util/Logger'
 
 
 export default class BrowserFunc {
@@ -114,7 +113,7 @@ export default class BrowserFunc {
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)
-            this.bot.log(this.bot.isMobile, 'GO-HOME', 'An error occurred: ' + errorMessage, 'error')
+            this.bot.log(this.bot.isMobile, 'GO-HOME', `[goHome] Navigation failed: ${errorMessage}`, 'error')
             throw error
         }
     }
@@ -179,7 +178,7 @@ export default class BrowserFunc {
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)
-            this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Error fetching dashboard data: ${errorMessage}`, 'error')
+            this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `[getDashboardData] Failed to fetch dashboard data: ${errorMessage}`, 'error')
             throw error
         }
 
@@ -246,7 +245,7 @@ export default class BrowserFunc {
 
     /**
      * Parse dashboard object from script content
-     * FIXED: Added format validation before JSON.parse
+     * IMPROVED: Enhanced validation with structure checks
      */
     private async parseDashboardFromScript(page: Page, scriptContent: string): Promise<DashboardData | null> {
         return await page.evaluate((scriptContent: string) => {
@@ -262,16 +261,27 @@ export default class BrowserFunc {
                     try {
                         const jsonStr = match[1]
                         // Validate basic JSON structure before parsing
-                        if (!jsonStr.trim().startsWith('{') || !jsonStr.trim().endsWith('}')) {
+                        const trimmed = jsonStr.trim()
+                        if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
                             continue
                         }
+                        
                         const parsed = JSON.parse(jsonStr)
-                        // Validate it's actually an object
+                        
+                        // Enhanced validation: check structure and type
                         if (typeof parsed !== 'object' || parsed === null) {
                             continue
                         }
+                        
+                        // Validate essential dashboard properties exist
+                        if (!parsed.userStatus || typeof parsed.userStatus !== 'object') {
+                            continue
+                        }
+                        
+                        // Successfully validated dashboard structure
                         return parsed
                     } catch (e) {
+                        // JSON.parse failed or validation error - try next pattern
                         continue
                     }
                 }
@@ -339,7 +349,7 @@ export default class BrowserFunc {
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)
-            this.bot.log(this.bot.isMobile, 'GET-BROWSER-EARNABLE-POINTS', 'An error occurred: ' + errorMessage, 'error')
+            this.bot.log(this.bot.isMobile, 'GET-BROWSER-EARNABLE-POINTS', `[getBrowserEarnablePoints] Failed to calculate earnable points: ${errorMessage}`, 'error')
             throw error
         }
     }
@@ -404,7 +414,7 @@ export default class BrowserFunc {
             return points
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)
-            this.bot.log(this.bot.isMobile, 'GET-APP-EARNABLE-POINTS', 'An error occurred: ' + errorMessage, 'error')
+            this.bot.log(this.bot.isMobile, 'GET-APP-EARNABLE-POINTS', `[getAppEarnablePoints] Failed to fetch app earnable points: ${errorMessage}`, 'error')
             throw error
         }
     }
@@ -420,7 +430,7 @@ export default class BrowserFunc {
             return data.userStatus.availablePoints
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)
-            this.bot.log(this.bot.isMobile, 'GET-CURRENT-POINTS', 'An error occurred: ' + errorMessage, 'error')
+            this.bot.log(this.bot.isMobile, 'GET-CURRENT-POINTS', `[getCurrentPoints] Failed to fetch current points: ${errorMessage}`, 'error')
             throw error
         }
     }
@@ -493,7 +503,7 @@ export default class BrowserFunc {
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)
-            this.bot.log(this.bot.isMobile, 'GET-QUIZ-DATA', 'An error occurred: ' + errorMessage, 'error')
+            this.bot.log(this.bot.isMobile, 'GET-QUIZ-DATA', `[getQuizData] Failed to extract quiz data: ${errorMessage}`, 'error')
             throw error
         }
 
@@ -561,7 +571,7 @@ export default class BrowserFunc {
             this.bot.log(this.bot.isMobile, 'CLOSE-BROWSER', 'Browser closed cleanly!')
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)
-            this.bot.log(this.bot.isMobile, 'CLOSE-BROWSER', 'An error occurred: ' + errorMessage, 'error')
+            this.bot.log(this.bot.isMobile, 'CLOSE-BROWSER', `[closeBrowser] Failed to close browser cleanly: ${errorMessage}`, 'error')
             throw error
         }
     }

@@ -139,6 +139,17 @@ function determineColorFromContent(content: string): number {
     return DISCORD.COLOR_GRAY
 }
 
+/**
+ * Type guard to check if config has valid logging configuration
+ */
+function hasValidLogging(config: unknown): config is { logging: { excludeFunc?: string[]; webhookExcludeFunc?: string[] } } {
+    return typeof config === 'object' && 
+           config !== null && 
+           'logging' in config &&
+           typeof config.logging === 'object' &&
+           config.logging !== null
+}
+
 function enqueueWebhookLog(url: string, line: string) {
     const buf = getBuffer(url)
     buf.lines.push(line)
@@ -164,9 +175,8 @@ function enqueueWebhookLog(url: string, line: string) {
 export function log(isMobile: boolean | 'main', title: string, message: string, type: 'log' | 'warn' | 'error' = 'log', color?: keyof typeof chalk): Error | void {
     const configData = loadConfig()
 
-    // Access logging config with fallback for backward compatibility
-    const configAny = configData as unknown as Record<string, unknown>
-    const logging = configAny.logging as { excludeFunc?: string[]; logExcludeFunc?: string[] } | undefined
+    // Access logging config with type guard for safer access
+    const logging = hasValidLogging(configData) ? configData.logging : undefined
     const logExcludeFunc = logging?.excludeFunc ?? (configData as { logExcludeFunc?: string[] }).logExcludeFunc ?? []
 
     if (logExcludeFunc.some((x: string) => x.toLowerCase() === title.toLowerCase())) {
@@ -178,7 +188,7 @@ export function log(isMobile: boolean | 'main', title: string, message: string, 
     
     // Clean string for notifications (no chalk, structured)
     type LoggingCfg = { excludeFunc?: string[]; webhookExcludeFunc?: string[]; redactEmails?: boolean }
-    const loggingCfg: LoggingCfg = (configAny.logging || {}) as LoggingCfg
+    const loggingCfg: LoggingCfg = logging || {}
     const shouldRedact = !!loggingCfg.redactEmails
     const redact = (s: string) => shouldRedact ? s.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig, (m) => {
         const [u, d] = m.split('@'); return `${(u||'').slice(0,2)}***@${d||''}`
@@ -269,7 +279,7 @@ export function log(isMobile: boolean | 'main', title: string, message: string, 
 
     // Webhook streaming (live logs)
     try {
-        const loggingCfg: Record<string, unknown> = (configAny.logging || {}) as Record<string, unknown>
+        const loggingCfg: Record<string, unknown> = (logging || {}) as Record<string, unknown>
         const webhookCfg = configData.webhook
         const liveUrlRaw = typeof loggingCfg.liveWebhookUrl === 'string' ? loggingCfg.liveWebhookUrl.trim() : ''
         const liveUrl = liveUrlRaw || (webhookCfg?.enabled && webhookCfg.url ? webhookCfg.url : '')

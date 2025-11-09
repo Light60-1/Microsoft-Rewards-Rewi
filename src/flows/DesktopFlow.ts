@@ -29,8 +29,23 @@ export class DesktopFlow {
 
     /**
      * Execute the full desktop automation flow for an account
-     * @param account Account to process
-     * @returns Points collected during the flow
+     * 
+     * Performs the following tasks in sequence:
+     * 1. Browser initialization with fingerprinting
+     * 2. Microsoft account login with 2FA support
+     * 3. Daily set completion
+     * 4. More promotions (quizzes, polls, etc.)
+     * 5. Punch cards
+     * 6. Desktop searches
+     * 
+     * @param account Account to process (email, password, totp, proxy)
+     * @returns Promise resolving to points collected during the flow
+     * @throws {Error} If critical operation fails (login, browser init)
+     * 
+     * @example
+     * const flow = new DesktopFlow(bot)
+     * const result = await flow.run(account)
+     * console.log(`Collected ${result.collectedPoints} points`)
      */
     async run(account: Account): Promise<DesktopFlowResult> {
         this.bot.log(false, 'DESKTOP-FLOW', 'Starting desktop automation flow')
@@ -63,7 +78,10 @@ export class DesktopFlow {
                         undefined,
                         0xFFAA00
                     )
-                } catch {/* ignore */}
+                } catch (error) {
+                    const errorMsg = error instanceof Error ? error.message : String(error)
+                    this.bot.log(false, 'DESKTOP-FLOW', `Failed to send security webhook: ${errorMsg}`, 'warn')
+                }
                 
                 // Save session for convenience, but do not close the browser
                 try { 

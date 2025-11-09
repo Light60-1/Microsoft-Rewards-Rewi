@@ -5,7 +5,7 @@
 
 /**
  * Parse environment variable as number with validation
- * FIXED: Added strict validation for min/max boundaries
+ * FIXED: Added strict validation for min/max boundaries with logging
  * @param key Environment variable name
  * @param defaultValue Default value if parsing fails or out of range
  * @param min Minimum allowed value
@@ -18,12 +18,23 @@ function parseEnvNumber(key: string, defaultValue: number, min: number, max: num
     
     const parsed = Number(raw)
     // Strict validation: must be finite, not NaN, and within bounds
-    if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+    if (!Number.isFinite(parsed)) {
+        console.warn(`[Constants] Invalid ${key}="${raw}" (not a finite number), using default: ${defaultValue}`)
+        return defaultValue
+    }
+    
+    if (parsed < min || parsed > max) {
+        console.warn(`[Constants] ${key}=${parsed} out of range [${min}, ${max}], using default: ${defaultValue}`)
         return defaultValue
     }
     
     return parsed
 }
+
+// Login timeout boundaries (in milliseconds)
+const LOGIN_TIMEOUT_MIN_MS = 30000    // 30 seconds - minimum login wait
+const LOGIN_TIMEOUT_MAX_MS = 600000   // 10 minutes - maximum login wait
+const LOGIN_TIMEOUT_DEFAULT_MS = 180000 // 3 minutes - default login timeout
 
 export const TIMEOUTS = {
     SHORT: 500,
@@ -33,7 +44,7 @@ export const TIMEOUTS = {
     VERY_LONG: 5000,
     EXTRA_LONG: 10000,
     DASHBOARD_WAIT: 10000,
-    LOGIN_MAX: parseEnvNumber('LOGIN_MAX_WAIT_MS', 180000, 30000, 600000),
+    LOGIN_MAX: parseEnvNumber('LOGIN_MAX_WAIT_MS', LOGIN_TIMEOUT_DEFAULT_MS, LOGIN_TIMEOUT_MIN_MS, LOGIN_TIMEOUT_MAX_MS),
     NETWORK_IDLE: 5000,
     ONE_MINUTE: 60000,
     ONE_HOUR: 3600000,

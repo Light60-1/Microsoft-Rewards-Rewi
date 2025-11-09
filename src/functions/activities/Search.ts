@@ -1,11 +1,11 @@
-import { Page } from 'rebrowser-playwright'
 import { platform } from 'os'
+import { Page } from 'rebrowser-playwright'
 
 import { Workers } from '../Workers'
 
+import { AxiosRequestConfig } from 'axios'
 import { Counters, DashboardData } from '../../interface/DashboardData'
 import { GoogleSearch } from '../../interface/Search'
-import { AxiosRequestConfig } from 'axios'
 
 type GoogleTrendsResponse = [
     string,
@@ -15,6 +15,10 @@ type GoogleTrendsResponse = [
         [string, ...string[]]
     ][]
 ];
+
+// Search stagnation thresholds (magic numbers extracted as constants)
+const MOBILE_STAGNATION_LIMIT = 5   // Mobile searches: abort after 5 queries without points
+const DESKTOP_STAGNATION_LIMIT = 10 // Desktop searches: abort after 10 queries without points
 
 export class Search extends Workers {
     private bingHome = 'https://bing.com'
@@ -119,15 +123,15 @@ export class Search extends Workers {
 
             if (missingPoints === 0) break
 
-            // Only for mobile searches
-            if (stagnation > 5 && this.bot.isMobile) {
-                this.bot.log(this.bot.isMobile, 'SEARCH-BING', 'Search didn\'t gain point for 5 iterations, likely bad User-Agent', 'warn')
+            // Only for mobile searches - abort early if User-Agent is likely incorrect
+            if (stagnation > MOBILE_STAGNATION_LIMIT && this.bot.isMobile) {
+                this.bot.log(this.bot.isMobile, 'SEARCH-BING', `Search didn't gain points for ${MOBILE_STAGNATION_LIMIT} iterations, likely bad User-Agent`, 'warn')
                 break
             }
 
-            // If we didn't gain points for 10 iterations, assume it's stuck
-            if (stagnation > 10) {
-                this.bot.log(this.bot.isMobile, 'SEARCH-BING', 'Search didn\'t gain point for 10 iterations aborting searches', 'warn')
+            // If we didn't gain points for many iterations, assume it's stuck
+            if (stagnation > DESKTOP_STAGNATION_LIMIT) {
+                this.bot.log(this.bot.isMobile, 'SEARCH-BING', `Search didn't gain points for ${DESKTOP_STAGNATION_LIMIT} iterations, aborting searches`, 'warn')
                 stagnation = 0 // allow fallback loop below
                 break
             }
