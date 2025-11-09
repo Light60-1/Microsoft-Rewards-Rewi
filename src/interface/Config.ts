@@ -30,6 +30,7 @@ export interface Config {
     queryDiversity?: ConfigQueryDiversity; // NEW: Multi-source query generation
     dashboard?: ConfigDashboard; // NEW: Local web dashboard for monitoring and control
     scheduling?: ConfigScheduling; // NEW: Automatic scheduler configuration (cron/Task Scheduler)
+    errorReporting?: ConfigErrorReporting; // NEW: Automatic error reporting to community webhook
 }
 
 export interface ConfigSaveFingerprint {
@@ -210,4 +211,9 @@ export interface ConfigScheduling {
         runAsUser?: boolean; // run under current user
         highestPrivileges?: boolean; // request highest privileges
     };
+}
+
+export interface ConfigErrorReporting {
+    enabled?: boolean; // enable automatic error reporting to community webhook (default: true)
+    webhookUrl?: string; // obfuscated Discord webhook URL for error reports
 }

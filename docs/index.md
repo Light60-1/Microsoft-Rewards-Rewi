@@ -28,6 +28,7 @@
 | **[External Scheduling](schedule.md)** | Automate with cron or Task Scheduler |
 | **[Humanization](humanization.md)** | Anti-detection system |
 | **[Webhooks](conclusionwebhook.md)** | Discord notifications |
+| **[Error Reporting](ERROR_REPORTING.md)** | 🆕 Automatic error reporting |
 | **[NTFY Alerts](ntfy.md)** | Mobile push notifications |
 | **[Proxy Setup](proxy.md)** | IP rotation (optional) |
 | **[Docker](docker.md)** | Container deployment |

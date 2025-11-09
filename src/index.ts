@@ -353,20 +353,12 @@ export class MicrosoftRewardsBot {
 
             // Check if all workers have exited
             if (this.activeWorkers === 0) {
-                // All workers done -> send conclusion (if enabled), run optional auto-update, then exit
+                // All workers done -> send conclusion and exit (update check moved to startup)
                 (async () => {
                     try {
                         await this.sendConclusion(this.accountSummaries)
                     } catch (e) {
                         log('main', 'CONCLUSION', `Failed to send conclusion: ${e instanceof Error ? e.message : String(e)}`, 'warn')
-                    }
-                    try {
-                        const updateCode = await this.runAutoUpdate()
-                        if (updateCode === 0) {
-                            log('main', 'UPDATE', 'âœ… Update successful - next run will use new version', 'log', 'green')
-                        }
-                    } catch (e) {
-                        log('main', 'UPDATE', `Auto-update failed: ${e instanceof Error ? e.message : String(e)}`, 'warn')
                     }
                     log('main', 'MAIN-WORKER', 'All workers destroyed. Exiting main process!', 'warn')
                     process.exit(0)
@@ -636,22 +628,8 @@ export class MicrosoftRewardsBot {
                 process.send({ type: 'summary', data: this.accountSummaries })
             }
         } else {
-            // Single process mode -> build and send conclusion directly
+            // Single process mode -> build and send conclusion directly (update check moved to startup)
             await this.sendConclusion(this.accountSummaries)
-            // After conclusion, run optional auto-update
-            const updateResult = await this.runAutoUpdate().catch((e) => {
-                log('main', 'UPDATE', `Auto-update failed: ${e instanceof Error ? e.message : String(e)}`, 'warn')
-                return 1 // Error code
-            })
-            
-            // If update was successful (code 0), restart the script to use the new version
-            // This is critical for cron jobs - they need to apply updates immediately
-            if (updateResult === 0) {
-                log('main', 'UPDATE', 'âœ… Update successful - restarting with new version...', 'log', 'green')
-                // On Raspberry Pi/Linux with cron, just exit - cron will handle next run
-                // No need to restart immediately, next scheduled run will use new code
-                log('main', 'UPDATE', 'Next scheduled run will use the updated code', 'log')
-            }
         }
         process.exit()
     }
@@ -773,7 +751,7 @@ export class MicrosoftRewardsBot {
      * 
      * @returns Exit code (0 = success, non-zero = error)
      */
-    private async runAutoUpdate(): Promise<number> {
+    async runAutoUpdate(): Promise<number> {
         const upd = this.config.update
         if (!upd) return 0
         
@@ -983,6 +961,29 @@ async function main(): Promise<void> {
 
     const bootstrap = async () => {
         try {
+            // Check for updates BEFORE initializing and running tasks
+            try {
+                const updateResult = await rewardsBot.runAutoUpdate().catch((e) => {
+                    log('main', 'UPDATE', `Auto-update check failed: ${e instanceof Error ? e.message : String(e)}`, 'warn')
+                    return -1
+                })
+                
+                if (updateResult === 0) {
+                    log('main', 'UPDATE', '✅ Update successful - restarting with new version...', 'log', 'green')
+                    
+                    // Restart the process with the same arguments
+                    const { spawn } = await import('child_process')
+                    const child = spawn(process.execPath, process.argv.slice(1), {
+                        detached: true,
+                        stdio: 'inherit'
+                    })
+                    child.unref()
+                    process.exit(0)
+                }
+            } catch (updateError) {
+                log('main', 'UPDATE', `Update check failed (continuing): ${updateError instanceof Error ? updateError.message : String(updateError)}`, 'warn')
+            }
+            
             await rewardsBot.initialize()
             await rewardsBot.run()
         } catch (e) {

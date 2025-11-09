@@ -85,6 +85,7 @@ For detailed configuration, advanced features, and troubleshooting, visit our co
 | **[Docker Deployment](docs/docker.md)** | Running in containers |
 | **[Humanization](docs/humanization.md)** | Anti-detection and natural behavior |
 | **[Notifications](docs/conclusionwebhook.md)** | Discord webhooks and NTFY setup |
+| **[Error Reporting](docs/ERROR_REPORTING.md)** | 🆕 Automatic error reporting to help improve the project |
 | **[Proxy Setup](docs/proxy.md)** | Configuring proxies for privacy |
 | **[Troubleshooting](docs/diagnostics.md)** | Debug common issues and capture logs |
 

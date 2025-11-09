@@ -2,6 +2,7 @@ import axios from 'axios'
 import chalk from 'chalk'
 
 import { DISCORD } from '../constants'
+import { sendErrorReport } from './ErrorReportingWebhook'
 import { loadConfig } from './Load'
 import { Ntfy } from './Ntfy'
 
@@ -282,8 +283,24 @@ export function log(isMobile: boolean | 'main', title: string, message: string, 
         process.stderr.write(`[Logger] Failed to enqueue webhook log: ${error}\n`)
     }
 
-    // Return an Error when logging an error so callers can `throw log(...)`
+    // Automatic error reporting to community webhook (fire and forget)
     if (type === 'error') {
-        return new Error(cleanStr)
+        const errorObj = new Error(cleanStr)
+        
+        // Send error report asynchronously without blocking
+        Promise.resolve().then(async () => {
+            try {
+                await sendErrorReport(configData, errorObj, {
+                    title,
+                    platform: platformText
+                })
+            } catch {
+                // Silent fail - error reporting should never break the application
+            }
+        }).catch(() => {
+            // Catch any promise rejection silently
+        })
+        
+        return errorObj
     }
 }
