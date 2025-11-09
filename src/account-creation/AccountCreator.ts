@@ -905,6 +905,13 @@ export class AccountCreator {
     }
     
     const errorText = await errorLocator.textContent().catch(() => '') || ''
+    
+    // IGNORE password requirements messages (not actual errors)
+    if (errorText && (errorText.toLowerCase().includes('password') && errorText.toLowerCase().includes('characters'))) {
+      // This is just password requirements info, not an error
+      return { success: true, email: originalEmail }
+    }
+    
     log(false, 'CREATOR', `Email error: ${errorText} (attempt ${retryCount + 1}/${MAX_EMAIL_RETRIES})`, 'warn', 'yellow')
     
     // Check for reserved domain error
