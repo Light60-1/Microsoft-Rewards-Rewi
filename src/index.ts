@@ -959,15 +959,6 @@ async function main(): Promise<void> {
                     const updateHappened = fs.existsSync(updateMarkerPath)
                     
                     if (updateHappened) {
-                        // Read marker for logging
-                        try {
-                            const markerContent = fs.readFileSync(updateMarkerPath, 'utf8')
-                            const markerData = JSON.parse(markerContent)
-                            log('main', 'UPDATE', `✅ Updated ${markerData.fromVersion} → ${markerData.toVersion} - restarting...`, 'log', 'green')
-                        } catch {
-                            log('main', 'UPDATE', '✅ Update successful - restarting...', 'log', 'green')
-                        }
-                        
                         // Remove marker file
                         try {
                             fs.unlinkSync(updateMarkerPath)
@@ -975,16 +966,23 @@ async function main(): Promise<void> {
                             // Ignore cleanup errors
                         }
                         
-                        // Restart the process with the same arguments
-                        const { spawn } = await import('child_process')
-                        const child = spawn(process.execPath, process.argv.slice(1), {
-                            detached: true,
-                            stdio: 'inherit'
+                        // Clear Node's require cache to reload updated modules
+                        Object.keys(require.cache).forEach(key => {
+                            // Only clear cache for project files, not node_modules
+                            if (key.includes('dist') || key.includes('src')) {
+                                delete require.cache[key]
+                            }
                         })
-                        child.unref()
-                        process.exit(0)
-                    } else {
-                        log('main', 'UPDATE', 'Already up to date, continuing with bot execution')
+                        
+                        // Recursive restart in same process
+                        log('main', 'UPDATE', 'Reloading with new version...')
+                        setTimeout(() => {
+                            bootstrap().catch(e => {
+                                log('main', 'MAIN-ERROR', 'Fatal after update: ' + (e instanceof Error ? e.message : e), 'error')
+                                process.exit(1)
+                            })
+                        }, 500)
+                        return
                     }
                 }
             } catch (updateError) {

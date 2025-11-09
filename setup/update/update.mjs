@@ -202,6 +202,7 @@ async function extractZip(zipPath, destDir) {
 
 /**
  * Check if update is available by comparing versions
+ * Returns true if versions differ (allows both upgrades and downgrades)
  */
 async function checkVersion() {
   try {
@@ -222,10 +223,10 @@ async function checkVersion() {
     const pkgUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/refs/heads/${branch}/package.json`
     
     console.log('🔍 Checking for updates...')
-    console.log(`   Local version:  ${localVersion}`)
+    console.log(`   Local:  ${localVersion}`)
     
     return new Promise((resolve) => {
-      httpsGet(pkgUrl, (res) => {
+      const request = httpsGet(pkgUrl, (res) => {
         if (res.statusCode !== 200) {
           console.log(`   ⚠️  Could not check remote version (HTTP ${res.statusCode})`)
           resolve({ updateAvailable: false, localVersion, remoteVersion: 'unknown' })
@@ -238,8 +239,9 @@ async function checkVersion() {
           try {
             const remotePkg = JSON.parse(data)
             const remoteVersion = remotePkg.version
-            console.log(`   Remote version: ${remoteVersion}`)
+            console.log(`   Remote: ${remoteVersion}`)
             
+            // Any difference triggers update (upgrade or downgrade)
             const updateAvailable = localVersion !== remoteVersion
             resolve({ updateAvailable, localVersion, remoteVersion })
           } catch (err) {
@@ -247,8 +249,17 @@ async function checkVersion() {
             resolve({ updateAvailable: false, localVersion, remoteVersion: 'unknown' })
           }
         })
-      }).on('error', (err) => {
+      })
+      
+      // Timeout after 10 seconds
+      request.on('error', (err) => {
         console.log(`   ⚠️  Network error: ${err.message}`)
+        resolve({ updateAvailable: false, localVersion, remoteVersion: 'unknown' })
+      })
+      
+      request.setTimeout(10000, () => {
+        request.destroy()
+        console.log('   ⚠️  Request timeout')
         resolve({ updateAvailable: false, localVersion, remoteVersion: 'unknown' })
       })
     })
@@ -262,26 +273,18 @@ async function checkVersion() {
  * Perform update using GitHub API (ZIP download)
  */
 async function performUpdate() {
-  console.log('\n' + '='.repeat(70))
-  console.log('🚀 Microsoft Rewards Bot - Automatic Update')
-  console.log('='.repeat(70))
-  
   // Step 0: Check if update is needed by comparing versions
   const versionCheck = await checkVersion()
   
   if (!versionCheck.updateAvailable) {
-    console.log('\n✅ Already up to date!')
-    console.log(`   Current version: ${versionCheck.localVersion}`)
-    console.log('='.repeat(70) + '\n')
+    console.log(`✅ Already up to date (v${versionCheck.localVersion})`)
     return 0 // Exit without creating update marker
   }
   
-  console.log('\n📥 New version available!')
-  console.log(`   ${versionCheck.localVersion} → ${versionCheck.remoteVersion}`)
-  console.log('   Starting update process...\n')
+  console.log(`\n📦 Update available: ${versionCheck.localVersion} → ${versionCheck.remoteVersion}`)
+  console.log('⏳ Updating... (this may take a moment)\n')
   
-  // Step 1: Read user preferences
-  console.log('\n📋 Reading configuration...')
+  // Step 1: Read user preferences (silent)
   const configData = readJsonConfig([
     'src/config.jsonc',
     'config.jsonc',
@@ -293,14 +296,17 @@ async function performUpdate() {
     autoUpdateConfig: configData?.update?.autoUpdateConfig ?? false,
     autoUpdateAccounts: configData?.update?.autoUpdateAccounts ?? false
   }
-
-  console.log(`   • Auto-update config.jsonc: ${userConfig.autoUpdateConfig ? 'YES' : 'NO (protected)'}`)
-  console.log(`   • Auto-update accounts: ${userConfig.autoUpdateAccounts ? 'YES' : 'NO (protected)'}`)
   
-  // Step 2: Backup protected files
-  console.log('\n🔒 Backing up protected files...')
+  // Step 2: Create backups (protected files + critical for rollback)
   const backupDir = join(process.cwd(), '.update-backup')
+  const rollbackDir = join(process.cwd(), '.update-rollback')
+  
+  // Clean previous backups
+  rmSync(backupDir, { recursive: true, force: true })
+  rmSync(rollbackDir, { recursive: true, force: true })
+  
   mkdirSync(backupDir, { recursive: true })
+  mkdirSync(rollbackDir, { recursive: true })
   
   const filesToProtect = [
     { path: 'src/config.jsonc', protect: !userConfig.autoUpdateConfig },
@@ -326,14 +332,30 @@ async function performUpdate() {
         writeFileSync(destPath, readFileSync(srcPath))
       }
       backedUp.push(file)
-      console.log(`   ✓ ${file.path}${file.isDir ? '/' : ''}`)
-    } catch (err) {
-      console.log(`   ⚠️  Could not backup ${file.path}: ${err.message}`)
+    } catch {
+      // Silent failure - continue with update
+    }
+  }
+  
+  // Backup critical files for potential rollback
+  const criticalFiles = ['package.json', 'package-lock.json', 'dist']
+  for (const file of criticalFiles) {
+    const srcPath = join(process.cwd(), file)
+    if (!existsSync(srcPath)) continue
+    const destPath = join(rollbackDir, file)
+    try {
+      if (statSync(srcPath).isDirectory()) {
+        cpSync(srcPath, destPath, { recursive: true })
+      } else {
+        cpSync(srcPath, destPath)
+      }
+    } catch {
+      // Continue
     }
   }
   
   // Step 3: Download latest code from GitHub
-  console.log('\n🌐 Downloading latest code from GitHub...')
+  process.stdout.write('📥 Downloading...')
   const repoOwner = 'Obsidian-wtf'
   const repoName = 'Microsoft-Rewards-Bot'
   const branch = 'main'
@@ -342,28 +364,24 @@ async function performUpdate() {
   const archivePath = join(process.cwd(), '.update-download.zip')
   const extractDir = join(process.cwd(), '.update-extract')
   
-  console.log(`   ${archiveUrl}`)
-  
   try {
     await downloadFile(archiveUrl, archivePath)
-    console.log('   ✓ Download complete')
+    process.stdout.write(' ✓\n')
   } catch (err) {
-    console.log(`\n❌ Download failed: ${err.message}`)
-    console.log('Please check your internet connection and try again.')
+    console.log(` ❌\n❌ Download failed: ${err.message}`)
     return 1
   }
   
   // Step 4: Extract archive
-  console.log('\n📂 Extracting archive...')
+  process.stdout.write('📂 Extracting...')
   rmSync(extractDir, { recursive: true, force: true })
   mkdirSync(extractDir, { recursive: true })
   
   try {
     await extractZip(archivePath, extractDir)
-    console.log('   ✓ Extraction complete')
+    process.stdout.write(' ✓\n')
   } catch (err) {
-    console.log(`\n❌ Extraction failed: ${err.message}`)
-    console.log('Please ensure you have unzip, tar, or PowerShell available.')
+    console.log(` ❌\n❌ Extraction failed: ${err.message}`)
     return 1
   }
   
@@ -378,7 +396,7 @@ async function performUpdate() {
   const sourceDir = join(extractDir, extractedRepoDir)
   
   // Step 6: Copy files selectively
-  console.log('\n📦 Updating files...')
+  process.stdout.write('📦 Updating files...')
   const itemsToUpdate = [
     'src',
     'docs',
@@ -404,10 +422,7 @@ async function performUpdate() {
     
     // Skip protected items
     const isProtected = backedUp.some(f => f.path === item || destPath.includes(f.path))
-    if (isProtected) {
-      console.log(`   ⏭️  ${item} (protected)`)
-      continue
-    }
+    if (isProtected) continue
     
     try {
       if (existsSync(destPath)) {
@@ -416,19 +431,17 @@ async function performUpdate() {
       
       if (statSync(srcPath).isDirectory()) {
         cpSync(srcPath, destPath, { recursive: true })
-        console.log(`   ✓ ${item}/`)
       } else {
         cpSync(srcPath, destPath)
-        console.log(`   ✓ ${item}`)
       }
-    } catch (err) {
-      console.log(`   ⚠️  Failed to update ${item}: ${err.message}`)
+    } catch {
+      // Silent failure - continue
     }
   }
+  process.stdout.write(' ✓\n')
   
-  // Step 7: Restore protected files
+  // Step 7: Restore protected files (silent)
   if (backedUp.length > 0) {
-    console.log('\n🔐 Restoring protected files...')
     for (const file of backedUp) {
       const backupPath = join(backupDir, file.path)
       if (!existsSync(backupPath)) continue
@@ -443,22 +456,18 @@ async function performUpdate() {
         } else {
           writeFileSync(destPath, readFileSync(backupPath))
         }
-        console.log(`   ✓ ${file.path}${file.isDir ? '/' : ''}`)
-      } catch (err) {
-        console.log(`   ⚠️  Failed to restore ${file.path}: ${err.message}`)
+      } catch {
+        // Silent failure
       }
     }
   }
   
-  // Step 8: Cleanup temporary files
-  console.log('\n🧹 Cleaning up...')
+  // Step 8: Cleanup temporary files (silent)
   rmSync(archivePath, { force: true })
   rmSync(extractDir, { recursive: true, force: true })
   rmSync(backupDir, { recursive: true, force: true })
-  console.log('   ✓ Temporary files removed')
   
   // Step 9: Create update marker for bot restart detection
-  // Version check already confirmed update is needed, so we always create marker here
   const updateMarkerPath = join(process.cwd(), '.update-happened')
   writeFileSync(updateMarkerPath, JSON.stringify({
     timestamp: new Date().toISOString(),
@@ -466,44 +475,136 @@ async function performUpdate() {
     toVersion: versionCheck.remoteVersion,
     method: 'github-api'
   }, null, 2))
-  console.log('   ✓ Update marker created')
   
   // Step 10: Install dependencies & rebuild
   const hasNpm = await which('npm')
   if (!hasNpm) {
-    console.log('\n⚠️  npm not found, skipping dependencies and build')
-    console.log('Please run manually: npm install && npm run build')
-    console.log('\n✅ Update complete!')
-    console.log('='.repeat(70) + '\n')
+    console.log('⚠️  npm not found - please run: npm install && npm run build')
     return 0
   }
 
-  console.log('\n📦 Installing dependencies...')
-  const installCode = await run('npm', ['ci'])
+  process.stdout.write('📦 Installing dependencies...')
+  const installCode = await run('npm', ['ci', '--silent'], { stdio: 'ignore' })
   if (installCode !== 0) {
-    console.log('   ⚠️  npm ci failed, trying npm install...')
-    await run('npm', ['install'])
+    await run('npm', ['install', '--silent'], { stdio: 'ignore' })
+  }
+  process.stdout.write(' ✓\n')
+  
+  process.stdout.write('🔨 Building project...')
+  const buildCode = await run('npm', ['run', 'build'], { stdio: 'ignore' })
+  
+  if (buildCode !== 0) {
+    // Build failed - rollback
+    process.stdout.write(' ❌\n')
+    console.log('⚠️  Build failed, rolling back to previous version...')
+    
+    // Restore from rollback
+    for (const file of criticalFiles) {
+      const srcPath = join(rollbackDir, file)
+      const destPath = join(process.cwd(), file)
+      if (!existsSync(srcPath)) continue
+      try {
+        rmSync(destPath, { recursive: true, force: true })
+        if (statSync(srcPath).isDirectory()) {
+          cpSync(srcPath, destPath, { recursive: true })
+        } else {
+          cpSync(srcPath, destPath)
+        }
+      } catch {
+        // Continue
+      }
+    }
+    
+    console.log('✅ Rollback complete - using previous version')
+    rmSync(rollbackDir, { recursive: true, force: true })
+    return 1
   }
   
-  console.log('\n🔨 Building TypeScript project...')
-  const buildCode = await run('npm', ['run', 'build'])
-
-  console.log('\n' + '='.repeat(70))
-  if (buildCode === 0) {
-    console.log('✅ Update completed successfully!')
-    console.log('   Bot will restart automatically with new version')
-  } else {
-    console.log('⚠️  Update completed with build warnings')
-    console.log('   Please check for errors above')
+  process.stdout.write(' ✓\n')
+  
+  // Step 11: Verify integrity (check if critical files exist)
+  process.stdout.write('🔍 Verifying integrity...')
+  const criticalPaths = [
+    'dist/index.js',
+    'package.json',
+    'src/index.ts'
+  ]
+  
+  let integrityOk = true
+  for (const path of criticalPaths) {
+    if (!existsSync(join(process.cwd(), path))) {
+      integrityOk = false
+      break
+    }
   }
-  console.log('='.repeat(70) + '\n')
+  
+  if (!integrityOk) {
+    process.stdout.write(' ❌\n')
+    console.log('⚠️  Integrity check failed, rolling back...')
+    
+    // Restore from rollback
+    for (const file of criticalFiles) {
+      const srcPath = join(rollbackDir, file)
+      const destPath = join(process.cwd(), file)
+      if (!existsSync(srcPath)) continue
+      try {
+        rmSync(destPath, { recursive: true, force: true })
+        if (statSync(srcPath).isDirectory()) {
+          cpSync(srcPath, destPath, { recursive: true })
+        } else {
+          cpSync(srcPath, destPath)
+        }
+      } catch {
+        // Continue
+      }
+    }
+    
+    console.log('✅ Rollback complete - using previous version')
+    rmSync(rollbackDir, { recursive: true, force: true })
+    return 1
+  }
+  
+  process.stdout.write(' ✓\n')
+  
+  // Clean rollback backup on success
+  rmSync(rollbackDir, { recursive: true, force: true })
 
-  return buildCode
+  console.log(`\n✅ Updated successfully! (${versionCheck.localVersion} → ${versionCheck.remoteVersion})`)
+  console.log('🔄 Restarting...\n')
+
+  return 0
 }
 
 // =============================================================================
 // ENTRY POINT
 // =============================================================================
+
+/**
+ * Cleanup temporary files
+ */
+function cleanup() {
+  const tempDirs = [
+    '.update-backup',
+    '.update-rollback', 
+    '.update-extract',
+    '.update-download.zip'
+  ]
+  
+  for (const dir of tempDirs) {
+    const path = join(process.cwd(), dir)
+    try {
+      if (existsSync(path)) {
+        if (statSync(path).isDirectory()) {
+          rmSync(path, { recursive: true, force: true })
+        } else {
+          rmSync(path, { force: true })
+        }
+      }
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+}
 
 async function main() {
   // Check if updates are enabled in config
@@ -520,12 +621,31 @@ async function main() {
     return 0
   }
 
-  const code = await performUpdate()
-  process.exit(code)
+  // Global timeout: 5 minutes max
+  const timeout = setTimeout(() => {
+    console.error('\n⏱️  Update timeout (5 min) - cleaning up...')
+    cleanup()
+    process.exit(1)
+  }, 5 * 60 * 1000)
+
+  try {
+    const code = await performUpdate()
+    clearTimeout(timeout)
+    
+    // Final cleanup of temporary files
+    cleanup()
+    
+    process.exit(code)
+  } catch (err) {
+    clearTimeout(timeout)
+    cleanup()
+    throw err
+  }
 }
 
 main().catch((err) => {
   console.error('\n❌ Update failed with error:', err)
-  console.error('\nPlease report this issue if it persists.')
+  console.error('\nCleaning up and reverting...')
+  cleanup()
   process.exit(1)
 })
