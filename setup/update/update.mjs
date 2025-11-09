@@ -201,12 +201,84 @@ async function extractZip(zipPath, destDir) {
 // =============================================================================
 
 /**
+ * Check if update is available by comparing versions
+ */
+async function checkVersion() {
+  try {
+    // Read local version
+    const localPkgPath = join(process.cwd(), 'package.json')
+    if (!existsSync(localPkgPath)) {
+      console.log('⚠️  Could not find local package.json')
+      return { updateAvailable: false, localVersion: 'unknown', remoteVersion: 'unknown' }
+    }
+    
+    const localPkg = JSON.parse(readFileSync(localPkgPath, 'utf8'))
+    const localVersion = localPkg.version
+    
+    // Fetch remote version from GitHub
+    const repoOwner = 'Obsidian-wtf'
+    const repoName = 'Microsoft-Rewards-Bot'
+    const branch = 'main'
+    const pkgUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/refs/heads/${branch}/package.json`
+    
+    console.log('🔍 Checking for updates...')
+    console.log(`   Local version:  ${localVersion}`)
+    
+    return new Promise((resolve) => {
+      httpsGet(pkgUrl, (res) => {
+        if (res.statusCode !== 200) {
+          console.log(`   ⚠️  Could not check remote version (HTTP ${res.statusCode})`)
+          resolve({ updateAvailable: false, localVersion, remoteVersion: 'unknown' })
+          return
+        }
+        
+        let data = ''
+        res.on('data', chunk => data += chunk)
+        res.on('end', () => {
+          try {
+            const remotePkg = JSON.parse(data)
+            const remoteVersion = remotePkg.version
+            console.log(`   Remote version: ${remoteVersion}`)
+            
+            const updateAvailable = localVersion !== remoteVersion
+            resolve({ updateAvailable, localVersion, remoteVersion })
+          } catch (err) {
+            console.log(`   ⚠️  Could not parse remote package.json: ${err.message}`)
+            resolve({ updateAvailable: false, localVersion, remoteVersion: 'unknown' })
+          }
+        })
+      }).on('error', (err) => {
+        console.log(`   ⚠️  Network error: ${err.message}`)
+        resolve({ updateAvailable: false, localVersion, remoteVersion: 'unknown' })
+      })
+    })
+  } catch (err) {
+    console.log(`⚠️  Version check failed: ${err.message}`)
+    return { updateAvailable: false, localVersion: 'unknown', remoteVersion: 'unknown' }
+  }
+}
+
+/**
  * Perform update using GitHub API (ZIP download)
  */
 async function performUpdate() {
   console.log('\n' + '='.repeat(70))
   console.log('🚀 Microsoft Rewards Bot - Automatic Update')
   console.log('='.repeat(70))
+  
+  // Step 0: Check if update is needed by comparing versions
+  const versionCheck = await checkVersion()
+  
+  if (!versionCheck.updateAvailable) {
+    console.log('\n✅ Already up to date!')
+    console.log(`   Current version: ${versionCheck.localVersion}`)
+    console.log('='.repeat(70) + '\n')
+    return 0 // Exit without creating update marker
+  }
+  
+  console.log('\n📥 New version available!')
+  console.log(`   ${versionCheck.localVersion} → ${versionCheck.remoteVersion}`)
+  console.log('   Starting update process...\n')
   
   // Step 1: Read user preferences
   console.log('\n📋 Reading configuration...')
@@ -324,7 +396,6 @@ async function performUpdate() {
     'LICENSE'
   ]
   
-  let updatedCount = 0
   for (const item of itemsToUpdate) {
     const srcPath = join(sourceDir, item)
     const destPath = join(process.cwd(), item)
@@ -350,7 +421,6 @@ async function performUpdate() {
         cpSync(srcPath, destPath)
         console.log(`   ✓ ${item}`)
       }
-      updatedCount++
     } catch (err) {
       console.log(`   ⚠️  Failed to update ${item}: ${err.message}`)
     }
@@ -387,24 +457,18 @@ async function performUpdate() {
   rmSync(backupDir, { recursive: true, force: true })
   console.log('   ✓ Temporary files removed')
   
-  // Step 9: Check if anything was actually updated
-  if (updatedCount === 0) {
-    console.log('\n✅ Already up to date!')
-    console.log('='.repeat(70) + '\n')
-    // No update marker - bot won't restart
-    return 0
-  }
-  
-  // Step 10: Create update marker for bot restart detection
+  // Step 9: Create update marker for bot restart detection
+  // Version check already confirmed update is needed, so we always create marker here
   const updateMarkerPath = join(process.cwd(), '.update-happened')
   writeFileSync(updateMarkerPath, JSON.stringify({
     timestamp: new Date().toISOString(),
-    filesUpdated: updatedCount,
+    fromVersion: versionCheck.localVersion,
+    toVersion: versionCheck.remoteVersion,
     method: 'github-api'
   }, null, 2))
   console.log('   ✓ Update marker created')
   
-  // Step 11: Install dependencies & rebuild
+  // Step 10: Install dependencies & rebuild
   const hasNpm = await which('npm')
   if (!hasNpm) {
     console.log('\n⚠️  npm not found, skipping dependencies and build')
