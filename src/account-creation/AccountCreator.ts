@@ -2435,25 +2435,163 @@ ${JSON.stringify(accountData, null, 2)}`
         await this.humanDelay(2000, 3000)
       }
       
-      // Click "I can't scan the bar code"
-      const cantScanLink = this.page.locator('#iShowPlainLink').first()
-      await cantScanLink.click()
-      await this.humanDelay(1000, 2000)
+      // IMPROVED: Click "I can't scan the bar code" with fallback selectors
+      log(false, 'CREATOR', '🔍 Looking for "I can\'t scan" link...', 'log', 'cyan')
       
-      // Extract TOTP secret
-      const secretElement = this.page.locator('#iTOTP_Secret, #totpSecret, [id*="secret"]').first()
-      const totpSecret = await secretElement.textContent().catch(() => '')
+      const cantScanSelectors = [
+        '#iShowPlainLink',                               // Primary
+        'a[href*="ShowPlain"]',                          // Link with ShowPlain in href
+        'button:has-text("can\'t scan")',                // Button with text
+        'a:has-text("can\'t scan")',                     // Link with text
+        'a:has-text("Can\'t scan")',                     // Capitalized
+        'button:has-text("I can\'t scan the bar code")', // Full text
+        'a:has-text("I can\'t scan the bar code")'       // Full text link
+      ]
+      
+      let cantScanClicked = false
+      for (const selector of cantScanSelectors) {
+        try {
+          const element = this.page.locator(selector).first()
+          const isVisible = await element.isVisible({ timeout: 2000 }).catch(() => false)
+          
+          if (isVisible) {
+            log(false, 'CREATOR', `✅ Found "I can't scan" using: ${selector}`, 'log', 'green')
+            await element.click()
+            cantScanClicked = true
+            break
+          }
+        } catch {
+          continue
+        }
+      }
+      
+      if (!cantScanClicked) {
+        log(false, 'CREATOR', '⚠️ Could not find "I can\'t scan" link - trying to continue anyway', 'warn', 'yellow')
+      }
+      
+      await this.humanDelay(2000, 3000) // Wait for UI to update and secret to appear
+      
+      // IMPROVED: Extract TOTP secret with multiple strategies
+      log(false, 'CREATOR', '🔍 Searching for TOTP secret on page...', 'log', 'cyan')
+      
+      // Strategy 1: Wait for common TOTP secret selectors
+      const secretSelectors = [
+        '#iTOTP_Secret',           // Most common
+        '#totpSecret',              // Alternative
+        'input[name="secret"]',     // Input field
+        'input[id*="secret"]',      // Partial ID match
+        'input[id*="TOTP"]',        // TOTP-related input
+        '[data-bind*="secret"]',    // Data binding
+        'div.text-block-body',      // Text block (new UI)
+        'pre',                      // Pre-formatted text
+        'code'                      // Code block
+      ]
+      
+      let totpSecret = ''
+      let foundSelector = ''
+      
+      // Try each selector with explicit wait
+      for (const selector of secretSelectors) {
+        try {
+          const element = this.page.locator(selector).first()
+          const isVisible = await element.isVisible({ timeout: 2000 }).catch(() => false)
+          
+          if (isVisible) {
+            // Try multiple extraction methods
+            const methods = [
+              () => element.inputValue().catch(() => ''),        // For input fields
+              () => element.textContent().catch(() => ''),       // For text elements
+              () => element.innerText().catch(() => ''),         // Alternative text
+              () => element.getAttribute('value').catch(() => '') // Value attribute
+            ]
+            
+            for (const method of methods) {
+              const value = await method()
+              const cleaned = value?.trim() || ''
+              
+              // TOTP secrets are typically 16-32 characters, base32 encoded (A-Z, 2-7)
+              if (cleaned && cleaned.length >= 16 && cleaned.length <= 64 && /^[A-Z2-7]+$/i.test(cleaned)) {
+                totpSecret = cleaned.toUpperCase()
+                foundSelector = selector
+                log(false, 'CREATOR', `✅ Found TOTP secret using selector: ${selector}`, 'log', 'green')
+                break
+              }
+            }
+            
+            if (totpSecret) break
+          }
+        } catch {
+          continue
+        }
+      }
+      
+      // Strategy 2: If not found, scan entire page content
+      if (!totpSecret) {
+        log(false, 'CREATOR', '🔍 Scanning entire page for TOTP pattern...', 'log', 'yellow')
+        
+        const pageContent = await this.page.content().catch(() => '')
+        // Look for base32 patterns (16-32 chars, only A-Z and 2-7)
+        const secretPattern = /\b([A-Z2-7]{16,64})\b/g
+        const matches = pageContent.match(secretPattern)
+        
+        if (matches && matches.length > 0) {
+          // Filter out common false positives (IDs, tokens that are too long)
+          const candidates = matches.filter(m => m.length >= 16 && m.length <= 32)
+          if (candidates.length > 0) {
+            totpSecret = candidates[0]!
+            foundSelector = 'page-scan'
+            log(false, 'CREATOR', `✅ Found TOTP secret via page scan: ${totpSecret.substring(0, 4)}...`, 'log', 'green')
+          }
+        }
+      }
       
       if (!totpSecret) {
         log(false, 'CREATOR', '❌ Could not find TOTP secret', 'error')
+        
+        // Take screenshot for debugging
+        try {
+          const screenshotPath = path.join(process.cwd(), 'totp-secret-not-found.png')
+          await this.page.screenshot({ path: screenshotPath, fullPage: true })
+          log(false, 'CREATOR', `📸 Screenshot saved to: ${screenshotPath}`, 'log', 'cyan')
+        } catch {
+          log(false, 'CREATOR', '⚠️ Could not save debug screenshot', 'warn')
+        }
+        
+        // Log page URL for manual check
+        log(false, 'CREATOR', `📍 Current URL: ${this.page.url()}`, 'log', 'cyan')
+        
         return undefined
       }
       
-      log(false, 'CREATOR', `🔑 TOTP Secret: ${totpSecret}`, 'log', 'green')
+      log(false, 'CREATOR', `🔑 TOTP Secret: ${totpSecret} (found via: ${foundSelector})`, 'log', 'green')
       log(false, 'CREATOR', '⚠️  SAVE THIS SECRET - You will need it to generate codes!', 'warn', 'yellow')
       
-      // Click "I'll scan a bar code instead" to go back
-      await cantScanLink.click()
+      // Click "I'll scan a bar code instead" to go back to QR code view
+      // (Same link, but now says "I'll scan a bar code instead")
+      log(false, 'CREATOR', '🔄 Returning to QR code view...', 'log', 'cyan')
+      
+      const backToQRSelectors = [
+        '#iShowPlainLink',                          // Same element, different text now
+        'a:has-text("I\'ll scan")',                 // Text-based
+        'a:has-text("scan a bar code instead")',    // Full text
+        'button:has-text("bar code instead")'       // Button variant
+      ]
+      
+      for (const selector of backToQRSelectors) {
+        try {
+          const element = this.page.locator(selector).first()
+          const isVisible = await element.isVisible({ timeout: 2000 }).catch(() => false)
+          
+          if (isVisible) {
+            await element.click()
+            log(false, 'CREATOR', '✅ Returned to QR code view', 'log', 'green')
+            break
+          }
+        } catch {
+          continue
+        }
+      }
+      
       await this.humanDelay(1000, 2000)
       
       log(false, 'CREATOR', '📱 Please scan the QR code with Google Authenticator or similar app', 'log', 'yellow')
