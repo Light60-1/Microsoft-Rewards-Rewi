@@ -32,8 +32,12 @@ export class AccountCreator {
   /**
    * UTILITY: Find first visible element from list of selectors
    * Reserved for future use - simplifies selector fallback logic
+   * 
+   * Usage example:
+   * const element = await this.findFirstVisible(['selector1', 'selector2'], 'CONTEXT')
+   * if (element) await element.click()
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  /*
   private async findFirstVisible(selectors: string[], context: string): Promise<ReturnType<Page['locator']> | null> {
     for (const selector of selectors) {
       try {
@@ -52,6 +56,7 @@ export class AccountCreator {
     log(false, 'CREATOR', `[${context}] No visible element found`, 'warn', 'yellow')
     return null
   }
+  */
 
   /**
    * UTILITY: Retry an async operation with exponential backoff
@@ -190,7 +195,17 @@ export class AccountCreator {
   /**
    * CRITICAL: Verify page transition was successful
    * Checks that new elements appeared AND old elements disappeared
+   * Reserved for future use - can be called for complex page transitions
+   * 
+   * Usage example:
+   * const success = await this.verifyPageTransition(
+   *   'EMAIL_TO_PASSWORD',
+   *   ['input[type="password"]'],
+   *   ['input[type="email"]']
+   * )
+   * if (!success) return null
    */
+  /*
   private async verifyPageTransition(
     context: string,
     expectedNewSelectors: string[],
@@ -263,11 +278,19 @@ export class AccountCreator {
       return false
     }
   }
+  */
 
   /**
    * CRITICAL: Verify that a click action was successful
    * Checks that something changed after the click (URL, visible elements, etc.)
+   * Reserved for future use - can be called for complex click verifications
+   * 
+   * Usage example:
+   * await button.click()
+   * const success = await this.verifyClickSuccess('BUTTON_CLICK', true, ['div.new-content'])
+   * if (!success) return null
    */
+  /*
   private async verifyClickSuccess(
     context: string,
     urlShouldChange: boolean = false,
@@ -320,6 +343,7 @@ export class AccountCreator {
     log(false, 'CREATOR', `[${context}] ✅ Click appears successful`, 'log', 'green')
     return true
   }
+  */
 
   private async askQuestion(question: string): Promise<string> {
     return new Promise((resolve) => {
