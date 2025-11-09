@@ -283,13 +283,26 @@ async function checkVersion() {
     const repoOwner = 'Obsidian-wtf'
     const repoName = 'Microsoft-Rewards-Bot'
     const branch = 'main'
-    const pkgUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/refs/heads/${branch}/package.json`
+    
+    // Add cache-buster to prevent GitHub from serving stale cached version
+    const cacheBuster = Date.now()
+    const pkgUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/refs/heads/${branch}/package.json?cb=${cacheBuster}`
     
     console.log('🔍 Checking for updates...')
     console.log(`   Local:  ${localVersion}`)
     
     return new Promise((resolve) => {
-      const request = httpsGet(pkgUrl, (res) => {
+      // Request with cache-busting headers
+      const options = {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'User-Agent': 'Microsoft-Rewards-Bot-Updater'
+        }
+      }
+      
+      const request = httpsGet(pkgUrl, options, (res) => {
         if (res.statusCode !== 200) {
           console.log(`   ⚠️  Could not check remote version (HTTP ${res.statusCode})`)
           resolve({ updateAvailable: false, localVersion, remoteVersion: 'unknown' })
