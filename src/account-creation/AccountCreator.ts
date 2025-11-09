@@ -29,6 +29,298 @@ export class AccountCreator {
     await this.page.waitForTimeout(Math.floor(delay))
   }
 
+  /**
+   * UTILITY: Find first visible element from list of selectors
+   * Reserved for future use - simplifies selector fallback logic
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private async findFirstVisible(selectors: string[], context: string): Promise<ReturnType<Page['locator']> | null> {
+    for (const selector of selectors) {
+      try {
+        const element = this.page.locator(selector).first()
+        const visible = await element.isVisible().catch(() => false)
+        
+        if (visible) {
+          log(false, 'CREATOR', `[${context}] Found element: ${selector}`, 'log', 'green')
+          return element
+        }
+      } catch {
+        continue
+      }
+    }
+    
+    log(false, 'CREATOR', `[${context}] No visible element found`, 'warn', 'yellow')
+    return null
+  }
+
+  /**
+   * UTILITY: Retry an async operation with exponential backoff
+   */
+  private async retryOperation<T>(
+    operation: () => Promise<T>,
+    context: string,
+    maxRetries: number = 3,
+    initialDelayMs: number = 1000
+  ): Promise<T | null> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        log(false, 'CREATOR', `[${context}] Attempt ${attempt}/${maxRetries}`, 'log', 'cyan')
+        const result = await operation()
+        log(false, 'CREATOR', `[${context}] ✅ Success on attempt ${attempt}`, 'log', 'green')
+        return result
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error)
+        log(false, 'CREATOR', `[${context}] Attempt ${attempt} failed: ${msg}`, 'warn', 'yellow')
+        
+        if (attempt < maxRetries) {
+          const delayMs = initialDelayMs * Math.pow(2, attempt - 1)
+          log(false, 'CREATOR', `[${context}] Retrying in ${delayMs}ms...`, 'log', 'yellow')
+          await this.page.waitForTimeout(delayMs)
+        } else {
+          log(false, 'CREATOR', `[${context}] ❌ All attempts failed`, 'error')
+          return null
+        }
+      }
+    }
+    
+    return null
+  }
+
+  /**
+   * CRITICAL: Wait for dropdown to be fully closed before continuing
+   */
+  private async waitForDropdownClosed(context: string, maxWaitMs: number = 5000): Promise<boolean> {
+    log(false, 'CREATOR', `[${context}] Waiting for dropdown to close...`, 'log', 'cyan')
+    
+    const startTime = Date.now()
+    
+    while (Date.now() - startTime < maxWaitMs) {
+      // Check if any dropdown menu is visible
+      const dropdownSelectors = [
+        'div[role="listbox"]',
+        'ul[role="listbox"]',
+        'div[role="menu"]',
+        'ul[role="menu"]',
+        '[class*="dropdown"][class*="open"]'
+      ]
+      
+      let anyVisible = false
+      for (const selector of dropdownSelectors) {
+        const visible = await this.page.locator(selector).first().isVisible().catch(() => false)
+        if (visible) {
+          anyVisible = true
+          break
+        }
+      }
+      
+      if (!anyVisible) {
+        log(false, 'CREATOR', `[${context}] ✅ Dropdown closed`, 'log', 'green')
+        return true
+      }
+      
+      await this.page.waitForTimeout(500)
+    }
+    
+    log(false, 'CREATOR', `[${context}] ⚠️ Dropdown may still be open`, 'warn', 'yellow')
+    return false
+  }
+
+  /**
+   * CRITICAL: Verify input value after filling
+   */
+  private async verifyInputValue(
+    selector: string,
+    expectedValue: string,
+    context: string
+  ): Promise<boolean> {
+    try {
+      const input = this.page.locator(selector).first()
+      const actualValue = await input.inputValue().catch(() => '')
+      
+      if (actualValue === expectedValue) {
+        log(false, 'CREATOR', `[${context}] ✅ Input value verified: ${expectedValue}`, 'log', 'green')
+        return true
+      } else {
+        log(false, 'CREATOR', `[${context}] ⚠️ Value mismatch: expected "${expectedValue}", got "${actualValue}"`, 'warn', 'yellow')
+        return false
+      }
+    } catch (error) {
+      log(false, 'CREATOR', `[${context}] ⚠️ Could not verify input value`, 'warn', 'yellow')
+      return false
+    }
+  }
+
+  /**
+   * CRITICAL: Verify no errors are displayed on the page
+   * Returns true if no errors found, false if errors present
+   */
+  private async verifyNoErrors(context: string): Promise<boolean> {
+    log(false, 'CREATOR', `[${context}] Checking for error messages...`, 'log', 'cyan')
+    
+    const errorSelectors = [
+      'div[id*="Error"]',
+      'div[id*="error"]',
+      'div[class*="error"]',
+      'div[role="alert"]',
+      '[aria-invalid="true"]',
+      'span[class*="error"]',
+      '.error-message',
+      '[data-bind*="errorMessage"]'
+    ]
+    
+    for (const selector of errorSelectors) {
+      try {
+        const errorElement = this.page.locator(selector).first()
+        const isVisible = await errorElement.isVisible().catch(() => false)
+        
+        if (isVisible) {
+          const errorText = await errorElement.textContent().catch(() => 'Unknown error')
+          log(false, 'CREATOR', `[${context}] ❌ Error detected: ${errorText}`, 'error')
+          return false
+        }
+      } catch {
+        continue
+      }
+    }
+    
+    log(false, 'CREATOR', `[${context}] ✅ No errors detected`, 'log', 'green')
+    return true
+  }
+
+  /**
+   * CRITICAL: Verify page transition was successful
+   * Checks that new elements appeared AND old elements disappeared
+   */
+  private async verifyPageTransition(
+    context: string,
+    expectedNewSelectors: string[],
+    expectedGoneSelectors: string[],
+    timeoutMs: number = 15000
+  ): Promise<boolean> {
+    log(false, 'CREATOR', `[${context}] Verifying page transition...`, 'log', 'cyan')
+    
+    const startTime = Date.now()
+    
+    try {
+      // STEP 1: Wait for at least ONE new element to appear
+      log(false, 'CREATOR', `[${context}] Waiting for new page elements...`, 'log', 'cyan')
+      
+      let newElementFound = false
+      for (const selector of expectedNewSelectors) {
+        try {
+          const element = this.page.locator(selector).first()
+          await element.waitFor({ timeout: Math.min(5000, timeoutMs), state: 'visible' })
+          log(false, 'CREATOR', `[${context}] ✅ New element appeared: ${selector}`, 'log', 'green')
+          newElementFound = true
+          break
+        } catch {
+          continue
+        }
+      }
+      
+      if (!newElementFound) {
+        log(false, 'CREATOR', `[${context}] ❌ No new elements appeared - transition likely failed`, 'error')
+        return false
+      }
+      
+      // STEP 2: Verify old elements are gone
+      log(false, 'CREATOR', `[${context}] Verifying old elements disappeared...`, 'log', 'cyan')
+      
+      await this.humanDelay(1000, 2000) // Give time for old elements to disappear
+      
+      for (const selector of expectedGoneSelectors) {
+        try {
+          const element = this.page.locator(selector).first()
+          const stillVisible = await element.isVisible().catch(() => false)
+          
+          if (stillVisible) {
+            log(false, 'CREATOR', `[${context}] ⚠️ Old element still visible: ${selector}`, 'warn', 'yellow')
+            // Don't fail immediately - element might be animating out
+          } else {
+            log(false, 'CREATOR', `[${context}] ✅ Old element gone: ${selector}`, 'log', 'green')
+          }
+        } catch {
+          // Element not found = good, it's gone
+          log(false, 'CREATOR', `[${context}] ✅ Old element not found: ${selector}`, 'log', 'green')
+        }
+      }
+      
+      // STEP 3: Verify no errors on new page
+      const noErrors = await this.verifyNoErrors(`${context}_TRANSITION`)
+      if (!noErrors) {
+        log(false, 'CREATOR', `[${context}] ❌ Errors found after transition`, 'error')
+        return false
+      }
+      
+      const elapsed = Date.now() - startTime
+      log(false, 'CREATOR', `[${context}] ✅ Page transition verified (${elapsed}ms)`, 'log', 'green')
+      
+      return true
+      
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      log(false, 'CREATOR', `[${context}] ❌ Page transition verification failed: ${msg}`, 'error')
+      return false
+    }
+  }
+
+  /**
+   * CRITICAL: Verify that a click action was successful
+   * Checks that something changed after the click (URL, visible elements, etc.)
+   */
+  private async verifyClickSuccess(
+    context: string,
+    urlShouldChange: boolean = false,
+    expectedNewSelectors: string[] = []
+  ): Promise<boolean> {
+    log(false, 'CREATOR', `[${context}] Verifying click was successful...`, 'log', 'cyan')
+    
+    const startUrl = this.page.url()
+    
+    // Wait a bit for changes to occur
+    await this.humanDelay(2000, 3000)
+    
+    // Check 1: URL change (if expected)
+    if (urlShouldChange) {
+      const newUrl = this.page.url()
+      if (newUrl === startUrl) {
+        log(false, 'CREATOR', `[${context}] ⚠️ URL did not change (might be intentional)`, 'warn', 'yellow')
+      } else {
+        log(false, 'CREATOR', `[${context}] ✅ URL changed: ${startUrl} → ${newUrl}`, 'log', 'green')
+        return true
+      }
+    }
+    
+    // Check 2: New elements appeared (if expected)
+    if (expectedNewSelectors.length > 0) {
+      for (const selector of expectedNewSelectors) {
+        try {
+          const element = this.page.locator(selector).first()
+          const visible = await element.isVisible().catch(() => false)
+          
+          if (visible) {
+            log(false, 'CREATOR', `[${context}] ✅ New element appeared: ${selector}`, 'log', 'green')
+            return true
+          }
+        } catch {
+          continue
+        }
+      }
+      
+      log(false, 'CREATOR', `[${context}] ⚠️ No expected elements appeared`, 'warn', 'yellow')
+    }
+    
+    // Check 3: No errors appeared
+    const noErrors = await this.verifyNoErrors(`${context}_CLICK`)
+    if (!noErrors) {
+      log(false, 'CREATOR', `[${context}] ❌ Errors appeared after click`, 'error')
+      return false
+    }
+    
+    log(false, 'CREATOR', `[${context}] ✅ Click appears successful`, 'log', 'green')
+    return true
+  }
+
   private async askQuestion(question: string): Promise<string> {
     return new Promise((resolve) => {
       this.rl.question(question, (answer) => {
@@ -39,7 +331,7 @@ export class AccountCreator {
 
   /**
    * CRITICAL: Wait for page to be completely stable before continuing
-   * Checks for loading spinners, network activity, and URL stability
+   * Checks for loading spinners, network activity, URL stability, and JS execution
    */
   private async waitForPageStable(context: string, maxWaitMs: number = 30000): Promise<boolean> {
     log(false, 'CREATOR', `[${context}] Waiting for page to be stable...`, 'log', 'cyan')
@@ -48,12 +340,19 @@ export class AccountCreator {
     const startUrl = this.page.url()
     
     try {
-      // Wait for network to be idle
+      // STEP 1: Wait for network to be idle
       await this.page.waitForLoadState('networkidle', { timeout: maxWaitMs })
       log(false, 'CREATOR', `[${context}] ✅ Network idle`, 'log', 'green')
       
-      // Additional delay to ensure everything is rendered
-      await this.humanDelay(2000, 3000)
+      // STEP 2: Wait for DOM to be fully loaded
+      await this.page.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => {})
+      
+      // STEP 3: Check document.readyState
+      const readyState = await this.page.evaluate(() => document.readyState).catch(() => 'unknown')
+      log(false, 'CREATOR', `[${context}] Document readyState: ${readyState}`, 'log', 'cyan')
+      
+      // STEP 4: Additional delay to ensure everything is rendered and JS executed
+      await this.humanDelay(3000, 5000)
       
       // Check for loading indicators
       const loadingSelectors = [
@@ -249,7 +548,11 @@ export class AccountCreator {
       }
 
       // Click Next button
-      await this.clickNext('password')
+      const passwordNextSuccess = await this.clickNext('password')
+      if (!passwordNextSuccess) {
+        log(false, 'CREATOR', '❌ Failed to proceed after password step', 'error')
+        return null
+      }
 
       // Extract final email from identity badge to confirm
       const finalEmail = await this.extractEmail()
@@ -265,7 +568,11 @@ export class AccountCreator {
       }
 
       // Click Next button
-      await this.clickNext('birthdate')
+      const birthdateNextSuccess = await this.clickNext('birthdate')
+      if (!birthdateNextSuccess) {
+        log(false, 'CREATOR', '❌ Failed to proceed after birthdate step', 'error')
+        return null
+      }
 
       // Fill name fields
       const names = await this.fillNames(confirmedEmail)
@@ -275,7 +582,11 @@ export class AccountCreator {
       }
 
       // Click Next button
-      await this.clickNext('names')
+      const namesNextSuccess = await this.clickNext('names')
+      if (!namesNextSuccess) {
+        log(false, 'CREATOR', '❌ Failed to proceed after names step', 'error')
+        return null
+      }
 
       // Wait for CAPTCHA page
       const captchaDetected = await this.waitForCaptcha()
@@ -427,20 +738,71 @@ export class AccountCreator {
 
     const emailInput = this.page.locator('input[type="email"]').first()
     await emailInput.waitFor({ timeout: 15000 })
-    await emailInput.clear()
-    await this.humanDelay(500, 1000)
-    await emailInput.fill(email)
-    await this.humanDelay(800, 2000)
+    
+    // CRITICAL: Retry fill with verification
+    const emailFillSuccess = await this.retryOperation(
+      async () => {
+        await emailInput.clear()
+        await this.humanDelay(800, 1500) // INCREASED from 500-1000
+        await emailInput.fill(email)
+        await this.humanDelay(1200, 2500) // INCREASED from 800-2000
+        
+        // Verify value was filled correctly
+        const verified = await this.verifyInputValue('input[type="email"]', email, 'EMAIL_INPUT')
+        if (!verified) {
+          throw new Error('Email input value not verified')
+        }
+        
+        return true
+      },
+      'EMAIL_FILL',
+      3,
+      1000
+    )
+    
+    if (!emailFillSuccess) {
+      log(false, 'CREATOR', 'Failed to fill email after retries', 'error')
+      return null
+    }
     
     log(false, 'CREATOR', 'Clicking Next button...', 'log')
     const nextBtn = this.page.locator('button[data-testid="primaryButton"], button[type="submit"]').first()
     await nextBtn.waitFor({ timeout: 15000 })
+    
+    // CRITICAL: Get current URL before clicking
+    const urlBeforeClick = this.page.url()
+    
     await nextBtn.click()
     await this.humanDelay(2000, 3000)
     await this.waitForPageStable('AFTER_EMAIL_SUBMIT', 20000)
     
+    // CRITICAL: Verify the click had an effect
+    log(false, 'CREATOR', 'Verifying email submission was processed...', 'log', 'cyan')
+    const urlAfterClick = this.page.url()
+    
+    if (urlBeforeClick === urlAfterClick) {
+      // URL didn't change - check if there's an error or if we're on password page
+      const onPasswordPage = await this.page.locator('input[type="password"]').first().isVisible().catch(() => false)
+      const hasError = await this.page.locator('div[id*="Error"], div[role="alert"]').first().isVisible().catch(() => false)
+      
+      if (!onPasswordPage && !hasError) {
+        log(false, 'CREATOR', '⚠️ Email submission may have failed - no password field, no error', 'warn', 'yellow')
+        log(false, 'CREATOR', 'Waiting longer for response...', 'log', 'cyan')
+        await this.humanDelay(5000, 7000)
+      }
+    } else {
+      log(false, 'CREATOR', `✅ URL changed: ${urlBeforeClick} → ${urlAfterClick}`, 'log', 'green')
+    }
+    
     const result = await this.handleEmailErrors(email)
     if (!result.success) {
+      return null
+    }
+    
+    // CRITICAL: Verify we can actually proceed (password page OR no error)
+    const finalCheck = await this.verifyNoErrors('EMAIL_FINAL_CHECK')
+    if (!finalCheck) {
+      log(false, 'CREATOR', '❌ Email step has errors, cannot proceed', 'error')
       return null
     }
     
@@ -487,10 +849,32 @@ export class AccountCreator {
     log(false, 'CREATOR', `Retrying with: ${newEmail}`, 'log', 'cyan')
     
     const emailInput = this.page.locator('input[type="email"]').first()
-    await emailInput.clear()
-    await this.humanDelay(500, 1000)
-    await emailInput.fill(newEmail)
-    await this.humanDelay(800, 2000)
+    
+    // CRITICAL: Retry fill with verification
+    const retryFillSuccess = await this.retryOperation(
+      async () => {
+        await emailInput.clear()
+        await this.humanDelay(800, 1500) // INCREASED from 500-1000
+        await emailInput.fill(newEmail)
+        await this.humanDelay(1200, 2500) // INCREASED from 800-2000
+        
+        // Verify value was filled correctly
+        const verified = await this.verifyInputValue('input[type="email"]', newEmail, 'EMAIL_RETRY')
+        if (!verified) {
+          throw new Error('Email retry input value not verified')
+        }
+        
+        return true
+      },
+      'EMAIL_RETRY_FILL',
+      3,
+      1000
+    )
+    
+    if (!retryFillSuccess) {
+      log(false, 'CREATOR', 'Failed to fill retry email', 'error')
+      return { success: false, email: null }
+    }
     
     const nextBtn = this.page.locator('button[data-testid="primaryButton"], button[type="submit"]').first()
     await nextBtn.click()
@@ -626,7 +1010,7 @@ export class AccountCreator {
     return { success: true, email: cleanEmail }
   }
 
-  private async clickNext(step: string): Promise<void> {
+  private async clickNext(step: string): Promise<boolean> {
     log(false, 'CREATOR', `Clicking Next button (${step})...`, 'log')
     
     // CRITICAL: Ensure page is stable before clicking
@@ -654,7 +1038,7 @@ export class AccountCreator {
       await this.humanDelay(3000, 5000)
     }
     
-    // Get current URL before clicking
+    // Get current URL and page state before clicking
     const urlBefore = this.page.url()
     
     await nextBtn.click()
@@ -666,11 +1050,32 @@ export class AccountCreator {
     // CRITICAL: Wait for page to be stable after clicking
     await this.waitForPageStable(`AFTER_NEXT_${step.toUpperCase()}`, 20000)
     
-    // Verify navigation happened (if expected)
+    // CRITICAL: Verify the click was successful
     const urlAfter = this.page.url()
+    let clickSuccessful = false
+    
     if (urlBefore !== urlAfter) {
-      log(false, 'CREATOR', `Navigation detected: ${urlBefore} → ${urlAfter}`, 'log', 'cyan')
+      log(false, 'CREATOR', `✅ Navigation detected: ${urlBefore} → ${urlAfter}`, 'log', 'green')
+      clickSuccessful = true
+    } else {
+      log(false, 'CREATOR', `URL unchanged after clicking Next (${step})`, 'log', 'yellow')
+      
+      // URL didn't change - this might be OK if content changed
+      // Wait a bit more and check for errors
+      await this.humanDelay(2000, 3000)
+      
+      const hasErrors = !(await this.verifyNoErrors(`NEXT_${step.toUpperCase()}`))
+      if (hasErrors) {
+        log(false, 'CREATOR', `❌ Errors detected after clicking Next (${step})`, 'error')
+        return false
+      }
+      
+      // No errors - assume success (some pages don't change URL)
+      log(false, 'CREATOR', `No errors detected, assuming Next (${step}) was successful`, 'log', 'yellow')
+      clickSuccessful = true
     }
+    
+    return clickSuccessful
   }
 
   private async fillPassword(): Promise<string | null> {
@@ -686,10 +1091,31 @@ export class AccountCreator {
     const passwordInput = this.page.locator('input[type="password"]').first()
     await passwordInput.waitFor({ timeout: 15000 })
     
-    await passwordInput.clear()
-    await this.humanDelay(500, 1000)
-    await passwordInput.fill(password)
-    await this.humanDelay(800, 2000)
+    // CRITICAL: Retry fill with verification
+    const passwordFillSuccess = await this.retryOperation(
+      async () => {
+        await passwordInput.clear()
+        await this.humanDelay(800, 1500) // INCREASED from 500-1000
+        await passwordInput.fill(password)
+        await this.humanDelay(1200, 2500) // INCREASED from 800-2000
+        
+        // Verify value was filled correctly
+        const verified = await this.verifyInputValue('input[type="password"]', password, 'PASSWORD_INPUT')
+        if (!verified) {
+          throw new Error('Password input value not verified')
+        }
+        
+        return true
+      },
+      'PASSWORD_FILL',
+      3,
+      1000
+    )
+    
+    if (!passwordFillSuccess) {
+      log(false, 'CREATOR', 'Failed to fill password after retries', 'error')
+      return null
+    }
     
     log(false, 'CREATOR', '✅ Password filled (hidden for security)', 'log', 'green')
     
@@ -740,76 +1166,90 @@ export class AccountCreator {
     try {
       await this.humanDelay(2000, 3000)
       
+      // === DAY DROPDOWN ===
       const dayButton = this.page.locator('button[name="BirthDay"], button#BirthDayDropdown').first()
       await dayButton.waitFor({ timeout: 15000, state: 'visible' })
       
       log(false, 'CREATOR', 'Clicking day dropdown...', 'log')
       
-      // Use force:true in case label intercepts pointer events
-      await dayButton.click({ force: true })
-      await this.humanDelay(1000, 1500)
+      // CRITICAL: Retry click if it fails
+      const dayClickSuccess = await this.retryOperation(
+        async () => {
+          await dayButton.click({ force: true })
+          await this.humanDelay(1500, 2500) // INCREASED delay
+          
+          // Verify dropdown opened
+          const dayOptionsContainer = this.page.locator('div[role="listbox"], ul[role="listbox"]').first()
+          const isOpen = await dayOptionsContainer.isVisible().catch(() => false)
+          
+          if (!isOpen) {
+            throw new Error('Day dropdown did not open')
+          }
+          
+          return true
+        },
+        'DAY_DROPDOWN_OPEN',
+        3,
+        1000
+      )
       
-      // Wait for dropdown menu to open and be visible
-      log(false, 'CREATOR', 'Waiting for day dropdown to open...', 'log')
-      const dayOptionsContainer = this.page.locator('div[role="listbox"], ul[role="listbox"]').first()
-      
-      try {
-        await dayOptionsContainer.waitFor({ timeout: 10000, state: 'visible' })
-        log(false, 'CREATOR', '✅ Day dropdown opened', 'log', 'green')
-      } catch (error) {
-        log(false, 'CREATOR', 'Day dropdown did not open, retrying click...', 'warn', 'yellow')
-        await dayButton.click({ force: true })
-        await this.humanDelay(1000, 1500)
-        await dayOptionsContainer.waitFor({ timeout: 10000, state: 'visible' })
+      if (!dayClickSuccess) {
+        log(false, 'CREATOR', 'Failed to open day dropdown after retries', 'error')
+        return null
       }
       
-      // Select day from dropdown - the options appear as li/div with role="option"
+      log(false, 'CREATOR', '✅ Day dropdown opened', 'log', 'green')
+      
+      // Select day from dropdown
       log(false, 'CREATOR', `Selecting day: ${birthdate.day}`, 'log')
       const dayOption = this.page.locator(`div[role="option"]:has-text("${birthdate.day}"), li[role="option"]:has-text("${birthdate.day}")`).first()
       await dayOption.waitFor({ timeout: 5000, state: 'visible' })
       await dayOption.click()
-      await this.humanDelay(1000, 1500)
+      await this.humanDelay(1500, 2500) // INCREASED delay
       
-      // CRITICAL: Wait for day dropdown menu to fully close before opening month
-      log(false, 'CREATOR', 'Waiting for day dropdown to close...', 'log')
-      await this.humanDelay(1000, 1500)
+      // CRITICAL: Wait for dropdown to FULLY close
+      await this.waitForDropdownClosed('DAY_DROPDOWN', 8000)
+      await this.humanDelay(2000, 3000) // INCREASED safety delay
       
-      // Verify day dropdown is closed
-      const dayMenuClosed = await this.page.locator('div[role="listbox"], ul[role="listbox"]').isVisible().catch(() => false)
-      if (dayMenuClosed) {
-        log(false, 'CREATOR', 'Day menu still open, waiting more...', 'warn', 'yellow')
-        await this.humanDelay(1000, 2000)
-      }
-      
-      // Fill month dropdown
+      // === MONTH DROPDOWN ===
       const monthButton = this.page.locator('button[name="BirthMonth"], button#BirthMonthDropdown').first()
       await monthButton.waitFor({ timeout: 10000, state: 'visible' })
       
       log(false, 'CREATOR', 'Clicking month dropdown...', 'log')
       
-      // CRITICAL: Use force:true because label intercepts pointer events
-      await monthButton.click({ force: true })
-      await this.humanDelay(1000, 1500)
+      // CRITICAL: Retry click if it fails
+      const monthClickSuccess = await this.retryOperation(
+        async () => {
+          await monthButton.click({ force: true })
+          await this.humanDelay(1500, 2500) // INCREASED delay
+          
+          // Verify dropdown opened
+          const monthOptionsContainer = this.page.locator('div[role="listbox"], ul[role="listbox"]').first()
+          const isOpen = await monthOptionsContainer.isVisible().catch(() => false)
+          
+          if (!isOpen) {
+            throw new Error('Month dropdown did not open')
+          }
+          
+          return true
+        },
+        'MONTH_DROPDOWN_OPEN',
+        3,
+        1000
+      )
       
-      // Wait for month dropdown menu to open and be visible
-      log(false, 'CREATOR', 'Waiting for month dropdown to open...', 'log')
-      const monthOptionsContainer = this.page.locator('div[role="listbox"], ul[role="listbox"]').first()
-      
-      try {
-        await monthOptionsContainer.waitFor({ timeout: 10000, state: 'visible' })
-        log(false, 'CREATOR', '✅ Month dropdown opened', 'log', 'green')
-      } catch (error) {
-        log(false, 'CREATOR', 'Month dropdown did not open, retrying click...', 'warn', 'yellow')
-        await monthButton.click({ force: true })
-        await this.humanDelay(1000, 1500)
-        await monthOptionsContainer.waitFor({ timeout: 10000, state: 'visible' })
+      if (!monthClickSuccess) {
+        log(false, 'CREATOR', 'Failed to open month dropdown after retries', 'error')
+        return null
       }
+      
+      log(false, 'CREATOR', '✅ Month dropdown opened', 'log', 'green')
       
       // Select month by data-value attribute or by position
       log(false, 'CREATOR', `Selecting month: ${birthdate.month}`, 'log')
       const monthOption = this.page.locator(`div[role="option"][data-value="${birthdate.month}"], li[role="option"][data-value="${birthdate.month}"]`).first()
       
-      // Fallback: if data-value doesn't work, try by index (month - 1)
+      // Fallback: if data-value doesn't work, try by index
       const monthVisible = await monthOption.isVisible().catch(() => false)
       if (monthVisible) {
         await monthOption.click()
@@ -819,23 +1259,79 @@ export class AccountCreator {
         const monthOptionByIndex = this.page.locator(`div[role="option"]:nth-child(${birthdate.month}), li[role="option"]:nth-child(${birthdate.month})`).first()
         await monthOptionByIndex.click()
       }
-      await this.humanDelay(1000, 1500)
+      await this.humanDelay(1500, 2500) // INCREASED delay
       
-      // Wait for month dropdown to close
-      log(false, 'CREATOR', 'Waiting for month dropdown to close...', 'log')
-      await this.humanDelay(1000, 1500)
+      // CRITICAL: Wait for dropdown to FULLY close
+      await this.waitForDropdownClosed('MONTH_DROPDOWN', 8000)
+      await this.humanDelay(2000, 3000) // INCREASED safety delay
       
-      // Fill year input
+      // === YEAR INPUT ===
       const yearInput = this.page.locator('input[name="BirthYear"], input[type="number"]').first()
       await yearInput.waitFor({ timeout: 10000, state: 'visible' })
       
       log(false, 'CREATOR', `Filling year: ${birthdate.year}`, 'log')
-      await yearInput.clear()
-      await this.humanDelay(500, 1000)
-      await yearInput.fill(birthdate.year.toString())
-      await this.humanDelay(800, 2000)
+      
+      // CRITICAL: Retry fill with verification
+      const yearFillSuccess = await this.retryOperation(
+        async () => {
+          await yearInput.clear()
+          await this.humanDelay(500, 1000)
+          await yearInput.fill(birthdate.year.toString())
+          await this.humanDelay(1000, 2000)
+          
+          // Verify value was filled correctly
+          const verified = await this.verifyInputValue(
+            'input[name="BirthYear"], input[type="number"]',
+            birthdate.year.toString(),
+            'YEAR_INPUT'
+          )
+          
+          if (!verified) {
+            throw new Error('Year input value not verified')
+          }
+          
+          return true
+        },
+        'YEAR_FILL',
+        3,
+        1000
+      )
+      
+      if (!yearFillSuccess) {
+        log(false, 'CREATOR', 'Failed to fill year after retries', 'error')
+        return null
+      }
       
       log(false, 'CREATOR', `✅ Birthdate filled: ${birthdate.day}/${birthdate.month}/${birthdate.year}`, 'log', 'green')
+      
+      // CRITICAL: Verify no errors appeared after filling birthdate
+      const noErrors = await this.verifyNoErrors('BIRTHDATE_VERIFICATION')
+      if (!noErrors) {
+        log(false, 'CREATOR', '❌ Errors detected after filling birthdate', 'error')
+        return null
+      }
+      
+      // CRITICAL: Verify Next button is enabled (indicates form is valid)
+      await this.humanDelay(1000, 2000)
+      const nextBtn = this.page.locator('button[data-testid="primaryButton"], button[type="submit"]').first()
+      const nextEnabled = await nextBtn.isEnabled().catch(() => false)
+      
+      if (!nextEnabled) {
+        log(false, 'CREATOR', '⚠️ Next button not enabled after filling birthdate', 'warn', 'yellow')
+        log(false, 'CREATOR', 'Waiting for form validation...', 'log', 'cyan')
+        await this.humanDelay(3000, 5000)
+        
+        const retryEnabled = await nextBtn.isEnabled().catch(() => false)
+        if (!retryEnabled) {
+          log(false, 'CREATOR', '❌ Next button still disabled - form may be invalid', 'error')
+          return null
+        }
+      }
+      
+      log(false, 'CREATOR', '✅ Birthdate form validated successfully', 'log', 'green')
+      
+      // CRITICAL: Extra safety delay before submitting
+      await this.humanDelay(2000, 3000)
       
       return birthdate
       
@@ -880,10 +1376,25 @@ export class AccountCreator {
         return null
       }
       
-      await firstNameInput.clear()
-      await this.humanDelay(500, 1000)
-      await firstNameInput.fill(names.firstName)
-      await this.humanDelay(800, 2000)
+      // CRITICAL: Retry fill with verification
+      const firstNameFillSuccess = await this.retryOperation(
+        async () => {
+          await firstNameInput.clear()
+          await this.humanDelay(800, 1500) // INCREASED from 500-1000
+          await firstNameInput.fill(names.firstName)
+          await this.humanDelay(1200, 2500) // INCREASED from 800-2000
+          
+          return true
+        },
+        'FIRSTNAME_FILL',
+        3,
+        1000
+      )
+      
+      if (!firstNameFillSuccess) {
+        log(false, 'CREATOR', 'Failed to fill first name after retries', 'error')
+        return null
+      }
       
       // Fill last name with multiple selector fallbacks
       const lastNameSelectors = [
@@ -910,12 +1421,53 @@ export class AccountCreator {
         return null
       }
       
-      await lastNameInput.clear()
-      await this.humanDelay(500, 1000)
-      await lastNameInput.fill(names.lastName)
-      await this.humanDelay(800, 2000)
+      // CRITICAL: Retry fill with verification
+      const lastNameFillSuccess = await this.retryOperation(
+        async () => {
+          await lastNameInput.clear()
+          await this.humanDelay(800, 1500) // INCREASED from 500-1000
+          await lastNameInput.fill(names.lastName)
+          await this.humanDelay(1200, 2500) // INCREASED from 800-2000
+          
+          return true
+        },
+        'LASTNAME_FILL',
+        3,
+        1000
+      )
+      
+      if (!lastNameFillSuccess) {
+        log(false, 'CREATOR', 'Failed to fill last name after retries', 'error')
+        return null
+      }
       
       log(false, 'CREATOR', `✅ Names filled: ${names.firstName} ${names.lastName}`, 'log', 'green')
+      
+      // CRITICAL: Verify no errors appeared after filling names
+      const noErrors = await this.verifyNoErrors('NAMES_VERIFICATION')
+      if (!noErrors) {
+        log(false, 'CREATOR', '❌ Errors detected after filling names', 'error')
+        return null
+      }
+      
+      // CRITICAL: Verify Next button is enabled (indicates form is valid)
+      await this.humanDelay(1000, 2000)
+      const nextBtn = this.page.locator('button[data-testid="primaryButton"], button[type="submit"]').first()
+      const nextEnabled = await nextBtn.isEnabled().catch(() => false)
+      
+      if (!nextEnabled) {
+        log(false, 'CREATOR', '⚠️ Next button not enabled after filling names', 'warn', 'yellow')
+        log(false, 'CREATOR', 'Waiting for form validation...', 'log', 'cyan')
+        await this.humanDelay(3000, 5000)
+        
+        const retryEnabled = await nextBtn.isEnabled().catch(() => false)
+        if (!retryEnabled) {
+          log(false, 'CREATOR', '❌ Next button still disabled - form may be invalid', 'error')
+          return null
+        }
+      }
+      
+      log(false, 'CREATOR', '✅ Names form validated successfully', 'log', 'green')
       
       return names
       
@@ -999,8 +1551,16 @@ export class AccountCreator {
           // CAPTCHA solved! But account creation may still be in progress
           log(false, 'CREATOR', '✅ CAPTCHA solved! Waiting for account creation...', 'log', 'green')
           
+          // CRITICAL: Wait MUCH longer for Microsoft to process
+          log(false, 'CREATOR', 'Giving Microsoft extra time to process (15-20s)...', 'log', 'cyan')
+          await this.humanDelay(15000, 20000) // INCREASED from 3-5s
+          
           // CRITICAL: Wait for Microsoft to finish creating the account
           await this.waitForAccountCreation()
+          
+          // CRITICAL: Extra delay after account creation
+          log(false, 'CREATOR', 'Account creation complete, stabilizing (10-15s)...', 'log', 'cyan')
+          await this.humanDelay(10000, 15000)
           
           return
         }
@@ -1021,13 +1581,18 @@ export class AccountCreator {
     log(false, 'CREATOR', 'Handling post-creation questions...', 'log', 'cyan')
     
     // CRITICAL: Ensure page is fully loaded and stable before proceeding
-    await this.waitForPageStable('POST_CREATION', 30000)
+    log(false, 'CREATOR', 'Waiting for page to stabilize after account creation...', 'log', 'cyan')
+    await this.waitForPageStable('POST_CREATION', 40000) // INCREASED timeout
     
-    // Additional safety delay
-    await this.humanDelay(3000, 5000)
+    // CRITICAL: Additional LONG safety delay
+    log(false, 'CREATOR', 'Extra stabilization delay (10-15s)...', 'log', 'cyan')
+    await this.humanDelay(10000, 15000) // INCREASED from 3-5s
     
     // CRITICAL: Handle passkey prompt - MUST REFUSE
     await this.handlePasskeyPrompt()
+    
+    // Additional delay between prompts
+    await this.humanDelay(3000, 5000)
     
     // Handle "Stay signed in?" (KMSI) prompt
     const kmsiSelectors = [
@@ -1098,9 +1663,10 @@ export class AccountCreator {
   private async handlePasskeyPrompt(): Promise<void> {
     log(false, 'CREATOR', 'Checking for passkey setup prompt...', 'log', 'cyan')
     
-    // CRITICAL: Wait longer for passkey prompt to appear
+    // CRITICAL: Wait MUCH longer for passkey prompt to appear
     // Microsoft may show this after several seconds
-    await this.humanDelay(5000, 7000)
+    log(false, 'CREATOR', 'Waiting for potential passkey prompt (8-12s)...', 'log', 'cyan')
+    await this.humanDelay(8000, 12000) // INCREASED from 5-7s
     
     // Ensure page is stable before checking
     await this.waitForPageStable('PASSKEY_CHECK', 15000)
@@ -1171,10 +1737,11 @@ export class AccountCreator {
     log(false, 'CREATOR', 'Verifying account is active...', 'log', 'cyan')
     
     // CRITICAL: Ensure current page is stable before navigating
-    await this.waitForPageStable('PRE_VERIFICATION', 15000)
+    await this.waitForPageStable('PRE_VERIFICATION', 20000) // INCREASED
     
-    // Additional delay before navigation
-    await this.humanDelay(3000, 5000)
+    // CRITICAL: MUCH longer delay before navigation
+    log(false, 'CREATOR', 'Extra delay before navigation (8-12s)...', 'log', 'cyan')
+    await this.humanDelay(8000, 12000) // INCREASED from 3-5s
     
     // Navigate to Bing Rewards
     try {
@@ -1186,10 +1753,11 @@ export class AccountCreator {
       })
       
       // CRITICAL: Wait for page to be fully stable after navigation
-      await this.waitForPageStable('REWARDS_PAGE', 30000)
+      await this.waitForPageStable('REWARDS_PAGE', 40000) // INCREASED
       
-      // Additional safety delay
-      await this.humanDelay(5000, 7000)
+      // CRITICAL: MUCH longer safety delay for identity to load
+      log(false, 'CREATOR', 'Waiting for user identity to fully load (10-15s)...', 'log', 'cyan')
+      await this.humanDelay(10000, 15000) // INCREASED from 5-7s
       
       const currentUrl = this.page.url()
       log(false, 'CREATOR', `Current URL: ${currentUrl}`, 'log', 'cyan')
@@ -1199,13 +1767,16 @@ export class AccountCreator {
         if (currentUrl.includes('login.live.com')) {
           log(false, 'CREATOR', '⚠️ Still on login page - account may not be fully activated', 'warn', 'yellow')
           
-          // Wait longer and retry
-          await this.humanDelay(10000, 15000)
+          // CRITICAL: Wait MUCH longer and retry
+          log(false, 'CREATOR', 'Waiting longer before retry (15-20s)...', 'log', 'cyan')
+          await this.humanDelay(15000, 20000) // INCREASED
+          
           await this.page.goto('https://rewards.bing.com/', { 
             waitUntil: 'networkidle',
             timeout: 60000
           })
-          await this.waitForPageStable('REWARDS_RETRY', 30000)
+          await this.waitForPageStable('REWARDS_RETRY', 40000)
+          await this.humanDelay(10000, 15000) // Additional delay after retry
         } else {
           log(false, 'CREATOR', `⚠️ Unexpected URL: ${currentUrl}`, 'warn', 'yellow')
         }
@@ -1213,8 +1784,9 @@ export class AccountCreator {
       
       log(false, 'CREATOR', '✅ Successfully navigated to rewards.bing.com', 'log', 'green')
       
-      // CRITICAL: Wait for user identity to load before declaring success
-      await this.humanDelay(5000, 7000)
+      // CRITICAL: Wait LONGER for user identity to load before declaring success
+      log(false, 'CREATOR', 'Final wait for complete page load (8-12s)...', 'log', 'cyan')
+      await this.humanDelay(8000, 12000) // INCREASED from 5-7s
         
       // CRITICAL: Verify user identity is loaded
       log(false, 'CREATOR', 'Verifying user identity...', 'log', 'cyan')
@@ -1245,8 +1817,9 @@ export class AccountCreator {
       if (!identityVerified) {
         log(false, 'CREATOR', '⚠️ Could not verify user identity on page', 'warn', 'yellow')
         
-        // Wait longer and check again
-        await this.humanDelay(5000, 7000)
+        // CRITICAL: Wait MUCH longer and check again
+        log(false, 'CREATOR', 'Waiting longer for identity (10-15s)...', 'log', 'cyan')
+        await this.humanDelay(10000, 15000) // INCREASED from 5-7s
         
         for (const selector of identitySelectors) {
           const element = this.page.locator(selector).first()
@@ -1267,14 +1840,20 @@ export class AccountCreator {
       }
       
       // NOW handle popups and tour - AFTER confirming we're logged in
-      await this.humanDelay(3000, 5000)
+      log(false, 'CREATOR', 'Preparing to handle welcome tour and popups...', 'log', 'cyan')
+      await this.humanDelay(5000, 8000) // INCREASED from 3-5s
+      
       await this.handleRewardsWelcomeTour()
-      await this.humanDelay(3000, 5000)
+      
+      log(false, 'CREATOR', 'Pausing between tour and popups...', 'log', 'cyan')
+      await this.humanDelay(5000, 8000) // INCREASED from 3-5s
+      
       await this.handleRewardsPopups()
       
       // If we have a referral URL, ensure we join via it
       if (this.referralUrl) {
-        await this.humanDelay(3000, 4000)
+        log(false, 'CREATOR', 'Preparing for referral enrollment...', 'log', 'cyan')
+        await this.humanDelay(5000, 7000) // INCREASED from 3-4s
         await this.ensureRewardsEnrollment()
       }
       
@@ -1288,10 +1867,11 @@ export class AccountCreator {
     log(false, 'CREATOR', 'Checking for Microsoft Rewards welcome tour...', 'log', 'cyan')
     
     // CRITICAL: Ensure page is stable before checking for tour
-    await this.waitForPageStable('WELCOME_TOUR', 20000)
+    await this.waitForPageStable('WELCOME_TOUR', 30000) // INCREASED
     
-    // Additional delay for tour to appear
-    await this.humanDelay(5000, 7000)
+    // CRITICAL: MUCH longer delay for tour to appear
+    log(false, 'CREATOR', 'Waiting for welcome tour to appear (8-12s)...', 'log', 'cyan')
+    await this.humanDelay(8000, 12000) // INCREASED from 5-7s
     
     // Try to handle the welcome tour (multiple Next buttons)
     const maxClicks = 5
@@ -1342,8 +1922,8 @@ export class AccountCreator {
         if (visible) {
           log(false, 'CREATOR', `Clicking Next button: ${selector}`, 'log', 'cyan')
           await button.click()
-          await this.humanDelay(3000, 4000)
-          await this.waitForPageStable('AFTER_TOUR_NEXT', 15000)
+          await this.humanDelay(4000, 6000) // INCREASED from 3-4s
+          await this.waitForPageStable('AFTER_TOUR_NEXT', 20000) // INCREASED
           
           clickedNext = true
           log(false, 'CREATOR', `✅ Clicked Next (step ${i + 1})`, 'log', 'green')
@@ -1387,10 +1967,11 @@ export class AccountCreator {
     log(false, 'CREATOR', 'Checking for Microsoft Rewards popups...', 'log', 'cyan')
     
     // CRITICAL: Ensure page is stable before checking for popups
-    await this.waitForPageStable('REWARDS_POPUPS', 20000)
+    await this.waitForPageStable('REWARDS_POPUPS', 30000) // INCREASED
     
-    // Wait longer for any popups to appear
-    await this.humanDelay(5000, 7000)
+    // CRITICAL: Wait MUCH longer for any popups to appear
+    log(false, 'CREATOR', 'Waiting for popups to appear (8-12s)...', 'log', 'cyan')
+    await this.humanDelay(8000, 12000) // INCREASED from 5-7s
     
     // Handle ReferAndEarn popup
     const referralPopupSelectors = [
@@ -1413,8 +1994,9 @@ export class AccountCreator {
     }
     
     if (referralPopupFound) {
-      // Wait before clicking to ensure popup is fully loaded
-      await this.humanDelay(2000, 3000)
+      // CRITICAL: Wait longer before clicking to ensure popup is fully loaded
+      log(false, 'CREATOR', 'Referral popup found, waiting for it to stabilize (3-5s)...', 'log', 'cyan')
+      await this.humanDelay(3000, 5000) // INCREASED from 2-3s
       
       // Click "Get started" button
       const getStartedSelectors = [
@@ -1433,8 +2015,8 @@ export class AccountCreator {
         if (visible) {
           log(false, 'CREATOR', 'Clicking "Get started" button', 'log', 'cyan')
           await button.click()
-          await this.humanDelay(3000, 4000)
-          await this.waitForPageStable('AFTER_GET_STARTED', 15000)
+          await this.humanDelay(4000, 6000) // INCREASED from 3-4s
+          await this.waitForPageStable('AFTER_GET_STARTED', 20000) // INCREASED
           log(false, 'CREATOR', '✅ Clicked Get started', 'log', 'green')
           break
         }
@@ -1480,10 +2062,11 @@ export class AccountCreator {
       })
       
       // CRITICAL: Wait for page to be stable after navigation
-      await this.waitForPageStable('REFERRAL_ENROLLMENT', 30000)
+      await this.waitForPageStable('REFERRAL_ENROLLMENT', 40000) // INCREASED
       
-      // Additional delay
-      await this.humanDelay(5000, 7000)
+      // CRITICAL: Longer additional delay
+      log(false, 'CREATOR', 'Stabilizing after referral navigation (8-12s)...', 'log', 'cyan')
+      await this.humanDelay(8000, 12000) // INCREASED from 5-7s
       
       // Look for "Join Microsoft Rewards" button
       const joinButtonSelectors = [
@@ -1504,8 +2087,8 @@ export class AccountCreator {
         if (visible) {
           log(false, 'CREATOR', `Clicking "Join Microsoft Rewards" button: ${selector}`, 'log', 'cyan')
           await button.click()
-          await this.humanDelay(3000, 5000)
-          await this.waitForPageStable('AFTER_JOIN', 20000)
+          await this.humanDelay(5000, 8000) // INCREASED from 3-5s
+          await this.waitForPageStable('AFTER_JOIN', 30000) // INCREASED
           log(false, 'CREATOR', '✅ Clicked Join button', 'log', 'green')
           joined = true
           break
@@ -1516,14 +2099,16 @@ export class AccountCreator {
         log(false, 'CREATOR', 'Join button not found - account may already be enrolled', 'log', 'yellow')
       }
       
-      // CRITICAL: Wait for enrollment to complete and page to stabilize
-      await this.waitForPageStable('POST_ENROLLMENT', 30000)
-      await this.humanDelay(5000, 7000)
+      // CRITICAL: Wait MUCH longer for enrollment to complete and page to stabilize
+      log(false, 'CREATOR', 'Waiting for enrollment to complete...', 'log', 'cyan')
+      await this.waitForPageStable('POST_ENROLLMENT', 40000) // INCREASED
+      await this.humanDelay(10000, 15000) // INCREASED from 5-7s
       
-      // Handle any popups after joining - with delays between
-      await this.humanDelay(3000, 5000)
+      // Handle any popups after joining - with LONGER delays between
+      log(false, 'CREATOR', 'Handling post-enrollment popups...', 'log', 'cyan')
+      await this.humanDelay(5000, 8000) // INCREASED from 3-5s
       await this.handleRewardsWelcomeTour()
-      await this.humanDelay(3000, 5000)
+      await this.humanDelay(5000, 8000) // INCREASED from 3-5s
       await this.handleRewardsPopups()
       
       log(false, 'CREATOR', '✅ Rewards enrollment completed', 'log', 'green')

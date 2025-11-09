@@ -52,8 +52,8 @@
             "semanticDedup": true, // Filter queries with high word similarity (Jaccard). Reduces repetitive patterns.
             "semanticDedupThreshold": 0.65, // Similarity threshold (0-1). Lower = more strict filtering.
             "delay": {
-                "min": "3min",
-                "max": "5min"
+                "min": "2min",
+                "max": "4min"
             }
         }
     },
@@ -87,7 +87,7 @@
     "riskManagement": {
         "enabled": true,
         "autoAdjustDelays": true,
-        "stopOnCritical": false,
+        "stopOnCritical": true,
         "banPrediction": true,
         "riskThreshold": 75
     },
