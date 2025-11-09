@@ -70,11 +70,10 @@ function stripJsonComments(input: string): string {
 
 // Normalize both legacy (flat) and new (nested) config schemas into the flat Config interface
 function normalizeConfig(raw: unknown): Config {
-    // TYPE SAFETY NOTE: Using `any` here is necessary for backwards compatibility
-    // JUSTIFIED USE OF `any`: The config format has evolved from flat → nested structure over time
-    // This needs to support BOTH formats for backward compatibility with existing user configs
-    // Runtime validation happens through explicit property checks and the Config interface return type ensures type safety at function boundary
-    // Alternative approaches (discriminated unions, conditional types) would require extensive runtime checks making code significantly more complex
+    // TYPE SAFETY NOTE: Using `any` here is intentional and justified
+    // Reason: Config format evolved from flat → nested structure. This function must support BOTH
+    // for backward compatibility. Runtime validation via explicit checks ensures safety.
+    // Return type (Config interface) provides type safety at function boundary.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const n = (raw || {}) as any
 

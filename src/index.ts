@@ -232,14 +232,6 @@ export class MicrosoftRewardsBot {
         
         log('main', 'BANNER', `Microsoft Rewards Bot v${version}`)
         log('main', 'BANNER', `PID: ${process.pid} | Workers: ${this.config.clusters}`)
-        
-        const upd = this.config.update || {}
-        const updTargets: string[] = []
-        if (upd.method && upd.method !== 'zip') updTargets.push(`Update: ${upd.method}`)
-        if (upd.docker) updTargets.push('Docker')
-        if (updTargets.length > 0) {
-            log('main', 'BANNER', `Auto-Update: ${updTargets.join(', ')}`)
-        }
     }
 
     private getVersion(): string {
@@ -770,28 +762,12 @@ export class MicrosoftRewardsBot {
             return 0
         }
 
-        const args: string[] = []
-        
-        // Determine update method from config (github-api is default and recommended)
-        const method = upd.method || 'github-api'
-        
-        if (method === 'github-api' || method === 'api' || method === 'zip') {
-            // Use GitHub API method (no Git needed, no conflicts)
-            args.push('--no-git')
-        } else {
-            // Unknown method, default to github-api
-            log('main', 'UPDATE', `Unknown update method "${method}", using github-api`, 'warn')
-            args.push('--no-git')
-        }
-        
-        // Add Docker flag if enabled
-        if (upd.docker) args.push('--docker')
-
+        // New update.mjs uses GitHub API only and takes no CLI arguments
         log('main', 'UPDATE', `Running update script: ${scriptRel}`, 'log')
 
         // Run update script as a child process and capture exit code
         return new Promise<number>((resolve) => {
-            const child = spawn(process.execPath, [scriptAbs, ...args], { stdio: 'inherit' })
+            const child = spawn(process.execPath, [scriptAbs], { stdio: 'inherit' })
             child.on('close', (code) => {
                 log('main', 'UPDATE', `Update script exited with code ${code ?? 0}`, code === 0 ? 'log' : 'warn')
                 resolve(code ?? 0)

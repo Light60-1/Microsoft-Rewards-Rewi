@@ -83,11 +83,10 @@ export interface ConfigProxy {
 
 export interface ConfigUpdate {
     enabled?: boolean; // Master toggle for auto-updates (default: true)
-    method?: 'github-api' | 'api' | 'zip'; // Update method (default: "github-api")
-    docker?: boolean; // if true, run docker update routine (compose pull/up) after completion
     scriptPath?: string; // optional custom path to update script relative to repo root
     autoUpdateConfig?: boolean; // if true, allow auto-update of config.jsonc when remote changes it (default: false to preserve user settings)
     autoUpdateAccounts?: boolean; // if true, allow auto-update of accounts.json when remote changes it (default: false to preserve credentials)
+    // DEPRECATED (removed in v2.56.2+): method, docker - update.mjs now uses GitHub API only
 }
 
 export interface ConfigVacation {

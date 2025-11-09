@@ -1007,12 +1007,6 @@ export class AccountCreator {
     if (!suggestionsContainer) {
       log(false, 'CREATOR', 'No suggestions found from Microsoft', 'warn', 'yellow')
       
-      // Debug: check HTML content
-      const pageContent = await this.page.content()
-      const hasDataTestId = pageContent.includes('data-testid="suggestions"')
-      const hasToolbar = pageContent.includes('role="toolbar"')
-      log(false, 'CREATOR', `Debug - suggestions in HTML: ${hasDataTestId}, toolbar: ${hasToolbar}`, 'warn', 'yellow')
-      
       // CRITICAL FIX: Generate a new email automatically instead of freezing
       log(false, 'CREATOR', '🔄 Generating a new email automatically...', 'log', 'cyan')
       

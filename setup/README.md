@@ -33,21 +33,15 @@ npm start
 **Automatic update script** that keeps your bot up-to-date with the latest version.
 
 **Features:**
-- Two update methods: Git-based or GitHub API (no Git needed)
+- Uses GitHub API (downloads ZIP - no Git required)
 - Preserves your configuration and accounts
-- No merge conflicts with GitHub API method
+- No merge conflicts, always clean
 - Automatic dependency installation and rebuild
 
 **Usage:**
 ```bash
-# Auto-detect method from config.jsonc
+# Run update manually
 node setup/update/update.mjs
-
-# Force GitHub API method (recommended)
-node setup/update/update.mjs --no-git
-
-# Force Git method
-node setup/update/update.mjs --git
 ```
 
 **Automatic updates:** The bot checks for updates on startup (controlled by `update.enabled` in config.jsonc).

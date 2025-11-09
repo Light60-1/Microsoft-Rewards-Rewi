@@ -50,6 +50,14 @@ if (typeof cleanupInterval.unref === 'function') {
 }
 
 /**
+ * Stop the webhook buffer cleanup interval
+ * Call this during graceful shutdown to prevent memory leaks
+ */
+export function stopWebhookCleanup(): void {
+    clearInterval(cleanupInterval)
+}
+
+/**
  * Get or create a webhook buffer for the given URL
  * Buffers batch log messages to reduce Discord API calls
  */
