@@ -69,20 +69,26 @@ export class AccountCreator {
   ): Promise<T | null> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        log(false, 'CREATOR', `[${context}] Attempt ${attempt}/${maxRetries}`, 'log', 'cyan')
+        // Only log first attempt if it fails
         const result = await operation()
-        log(false, 'CREATOR', `[${context}] ✅ Success on attempt ${attempt}`, 'log', 'green')
+        
+        // Only log success if it took multiple attempts
+        if (attempt > 1) {
+          log(false, 'CREATOR', `[${context}] ✅ Success on attempt ${attempt}`, 'log', 'green')
+        }
         return result
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)
-        log(false, 'CREATOR', `[${context}] Attempt ${attempt} failed: ${msg}`, 'warn', 'yellow')
         
         if (attempt < maxRetries) {
+          // Only log first failure
+          if (attempt === 1) {
+            log(false, 'CREATOR', `[${context}] Retrying (${msg.substring(0, 50)})`, 'warn', 'yellow')
+          }
           const delayMs = initialDelayMs * Math.pow(2, attempt - 1)
-          log(false, 'CREATOR', `[${context}] Retrying in ${delayMs}ms...`, 'log', 'yellow')
           await this.page.waitForTimeout(delayMs)
         } else {
-          log(false, 'CREATOR', `[${context}] ❌ All attempts failed`, 'error')
+          log(false, 'CREATOR', `[${context}] ❌ Failed after ${maxRetries} attempts`, 'error')
           return null
         }
       }
@@ -357,72 +363,56 @@ export class AccountCreator {
    * CRITICAL: Wait for page to be completely stable before continuing
    * Checks for loading spinners, network activity, URL stability, and JS execution
    */
-  private async waitForPageStable(context: string, maxWaitMs: number = 30000): Promise<boolean> {
-    log(false, 'CREATOR', `[${context}] Waiting for page to be stable...`, 'log', 'cyan')
+  private async waitForPageStable(context: string, maxWaitMs: number = 15000): Promise<boolean> {
+    // REDUCED: Don't log start - too verbose
     
     const startTime = Date.now()
-    const startUrl = this.page.url()
     
     try {
       // STEP 1: Wait for network to be idle
-      await this.page.waitForLoadState('networkidle', { timeout: maxWaitMs })
-      log(false, 'CREATOR', `[${context}] ✅ Network idle`, 'log', 'green')
+      await this.page.waitForLoadState('networkidle', { timeout: Math.min(maxWaitMs, 10000) })
       
       // STEP 2: Wait for DOM to be fully loaded
-      await this.page.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => {})
+      await this.page.waitForLoadState('domcontentloaded', { timeout: 3000 }).catch(() => {})
       
-      // STEP 3: Check document.readyState
-      const readyState = await this.page.evaluate(() => document.readyState).catch(() => 'unknown')
-      log(false, 'CREATOR', `[${context}] Document readyState: ${readyState}`, 'log', 'cyan')
+      // STEP 3: REDUCED delay - pages load fast
+      await this.humanDelay(1500, 2500)
       
-      // STEP 4: Additional delay to ensure everything is rendered and JS executed
-      await this.humanDelay(3000, 5000)
-      
-      // Check for loading indicators
+      // STEP 4: Check for loading indicators
       const loadingSelectors = [
         '.loading',
         '[class*="spinner"]',
         '[class*="loading"]',
-        '[aria-busy="true"]',
-        'div:has-text("Loading")',
-        'div:has-text("Chargement")',
-        'div:has-text("Please wait")',
-        'div:has-text("Veuillez patienter")',
-        'div:has-text("Creating")',
-        'div:has-text("Création")'
+        '[aria-busy="true"]'
       ]
       
-      // Wait for all loading indicators to disappear
+      // Wait for loading indicators to disappear
       for (const selector of loadingSelectors) {
         const element = this.page.locator(selector).first()
         const visible = await element.isVisible().catch(() => false)
         
         if (visible) {
-          log(false, 'CREATOR', `[${context}] Loading indicator detected: ${selector}`, 'log', 'yellow')
-          
-          try {
-            await element.waitFor({ state: 'hidden', timeout: maxWaitMs - (Date.now() - startTime) })
-            log(false, 'CREATOR', `[${context}] ✅ Loading indicator gone`, 'log', 'green')
-          } catch {
-            log(false, 'CREATOR', `[${context}] ⚠️ Loading indicator still present`, 'warn', 'yellow')
-          }
+          // Wait silently, no spam logs
+          await element.waitFor({ state: 'hidden', timeout: Math.min(5000, maxWaitMs - (Date.now() - startTime)) }).catch(() => {})
         }
       }
       
-      // Verify URL hasn't changed during wait (unless we expect it to)
-      const endUrl = this.page.url()
-      if (startUrl !== endUrl) {
-        log(false, 'CREATOR', `[${context}] URL changed: ${startUrl} → ${endUrl}`, 'log', 'yellow')
-      }
-      
+      // Success - only log if it took a while (over 5s)
       const elapsed = Date.now() - startTime
-      log(false, 'CREATOR', `[${context}] ✅ Page is stable (waited ${elapsed}ms)`, 'log', 'green')
+      if (elapsed > 5000) {
+        log(false, 'CREATOR', `[${context}] ✅ Page stable (${elapsed}ms)`, 'log', 'green')
+      }
       
       return true
       
     } catch (error) {
+      // Only log actual failures, not warnings
       const msg = error instanceof Error ? error.message : String(error)
-      log(false, 'CREATOR', `[${context}] ⚠️ Page stability check failed: ${msg}`, 'warn', 'yellow')
+      if (msg.includes('Timeout')) {
+        // Timeout is not critical - page might still be usable
+        return true
+      }
+      log(false, 'CREATOR', `[${context}] ⚠️ Stability issue: ${msg}`, 'warn', 'yellow')
       return false
     }
   }
@@ -671,8 +661,8 @@ export class AccountCreator {
       log(false, 'CREATOR', `Navigating to referral URL: ${this.referralUrl}`, 'log', 'cyan')
       await this.page.goto(this.referralUrl, { waitUntil: 'networkidle', timeout: 60000 })
       
-      await this.waitForPageStable('REFERRAL_PAGE', 20000)
-      await this.humanDelay(2000, 3000)
+      await this.waitForPageStable('REFERRAL_PAGE', 10000)
+      await this.humanDelay(1000, 2000)
       
       log(false, 'CREATOR', 'Looking for "Join Microsoft Rewards" button...', 'log')
       
@@ -683,23 +673,48 @@ export class AccountCreator {
         'button[class*="join"]'
       ]
       
-      let clicked = false
+      let clickSuccess = false
       for (const selector of joinButtonSelectors) {
         const button = this.page.locator(selector).first()
         const visible = await button.isVisible().catch(() => false)
         
         if (visible) {
+          const urlBefore = this.page.url()
+          
           await button.click()
           await this.humanDelay(2000, 3000)
-          await this.waitForPageStable('AFTER_JOIN_CLICK', 15000)
-          log(false, 'CREATOR', `✅ Clicked join button with selector: ${selector}`, 'log', 'green')
-          clicked = true
-          break
+          
+          // CRITICAL: Verify the click actually did something
+          const urlAfter = this.page.url()
+          
+          if (urlAfter !== urlBefore || urlAfter.includes('login.live.com') || urlAfter.includes('signup')) {
+            log(false, 'CREATOR', `✅ Join button worked (${urlBefore} → ${urlAfter})`, 'log', 'green')
+            await this.waitForPageStable('AFTER_JOIN_CLICK', 8000)
+            clickSuccess = true
+            break
+          } else {
+            log(false, 'CREATOR', '⚠️ Join button clicked but no navigation - retrying', 'warn', 'yellow')
+            await this.humanDelay(2000, 3000)
+            // Try clicking again
+            await button.click()
+            await this.humanDelay(2000, 3000)
+            
+            const urlRetry = this.page.url()
+            if (urlRetry !== urlBefore) {
+              log(false, 'CREATOR', '✅ Join button worked on retry', 'log', 'green')
+              await this.waitForPageStable('AFTER_JOIN_CLICK', 8000)
+              clickSuccess = true
+              break
+            }
+          }
         }
       }
       
-      if (!clicked) {
-        log(false, 'CREATOR', 'Could not find join button, continuing anyway...', 'warn', 'yellow')
+      if (!clickSuccess) {
+        log(false, 'CREATOR', '⚠️ Join button not found or did not work - continuing to login page', 'warn', 'yellow')
+        // Navigate directly to signup
+        await this.page.goto('https://login.live.com/', { waitUntil: 'networkidle', timeout: 30000 })
+        await this.waitForPageStable('DIRECT_LOGIN', 8000)
       }
     } else {
       const url = 'https://login.live.com/'
@@ -714,7 +729,7 @@ export class AccountCreator {
   private async clickCreateAccount(): Promise<void> {
     log(false, 'CREATOR', 'Looking for "Create account" button...', 'log')
     
-    await this.waitForPageStable('BEFORE_CREATE_ACCOUNT', 15000)
+    await this.waitForPageStable('BEFORE_CREATE_ACCOUNT', 8000)
     
     const createAccountSelectors = [
       'a[id*="signup"]',
@@ -729,18 +744,29 @@ export class AccountCreator {
       
       try {
         await button.waitFor({ timeout: 5000 })
-        await button.click()
-        await this.humanDelay(2000, 3000)
-        await this.waitForPageStable('AFTER_CREATE_ACCOUNT', 15000)
         
-        log(false, 'CREATOR', `✅ Clicked "Create account" with selector: ${selector}`, 'log', 'green')
-        return
+        const urlBefore = this.page.url()
+        await button.click()
+        await this.humanDelay(1500, 2500)
+        
+        // CRITICAL: Verify click worked
+        const urlAfter = this.page.url()
+        const emailFieldAppeared = await this.page.locator('input[type="email"]').first().isVisible().catch(() => false)
+        
+        if (urlAfter !== urlBefore || emailFieldAppeared) {
+          await this.waitForPageStable('AFTER_CREATE_ACCOUNT', 8000)
+          log(false, 'CREATOR', '✅ Navigated to account creation page', 'log', 'green')
+          return
+        } else {
+          log(false, 'CREATOR', '⚠️ Create account button did not navigate - trying next selector', 'warn', 'yellow')
+          continue
+        }
       } catch {
         continue
       }
     }
     
-    throw new Error('Could not find "Create account" button with any selector')
+    throw new Error('Could not find working "Create account" button')
   }
 
   private async generateAndFillEmail(): Promise<string | null> {
@@ -1620,19 +1646,15 @@ export class AccountCreator {
   private async handlePostCreationQuestions(): Promise<void> {
     log(false, 'CREATOR', 'Handling post-creation questions...', 'log', 'cyan')
     
-    // CRITICAL: Ensure page is fully loaded and stable before proceeding
-    log(false, 'CREATOR', 'Waiting for page to stabilize after account creation...', 'log', 'cyan')
-    await this.waitForPageStable('POST_CREATION', 40000) // INCREASED timeout
-    
-    // CRITICAL: Additional LONG safety delay
-    log(false, 'CREATOR', 'Extra stabilization delay (10-15s)...', 'log', 'cyan')
-    await this.humanDelay(10000, 15000) // INCREASED from 3-5s
+    // Wait for page to stabilize (REDUCED - pages load fast)
+    await this.waitForPageStable('POST_CREATION', 15000)
+    await this.humanDelay(3000, 5000)
     
     // CRITICAL: Handle passkey prompt - MUST REFUSE
     await this.handlePasskeyPrompt()
     
-    // Additional delay between prompts
-    await this.humanDelay(3000, 5000)
+    // Brief delay between prompts
+    await this.humanDelay(2000, 3000)
     
     // Handle "Stay signed in?" (KMSI) prompt
     const kmsiSelectors = [
@@ -1703,10 +1725,8 @@ export class AccountCreator {
   private async handlePasskeyPrompt(): Promise<void> {
     log(false, 'CREATOR', 'Checking for passkey setup prompt...', 'log', 'cyan')
     
-    // CRITICAL: Wait MUCH longer for passkey prompt to appear
-    // Microsoft may show this after several seconds
-    log(false, 'CREATOR', 'Waiting for potential passkey prompt (8-12s)...', 'log', 'cyan')
-    await this.humanDelay(8000, 12000) // INCREASED from 5-7s
+    // Wait for passkey prompt to appear (REDUCED)
+    await this.humanDelay(3000, 5000)
     
     // Ensure page is stable before checking
     await this.waitForPageStable('PASSKEY_CHECK', 15000)
@@ -1776,12 +1796,9 @@ export class AccountCreator {
   private async verifyAccountActive(): Promise<void> {
     log(false, 'CREATOR', 'Verifying account is active...', 'log', 'cyan')
     
-    // CRITICAL: Ensure current page is stable before navigating
-    await this.waitForPageStable('PRE_VERIFICATION', 20000) // INCREASED
-    
-    // CRITICAL: MUCH longer delay before navigation
-    log(false, 'CREATOR', 'Extra delay before navigation (8-12s)...', 'log', 'cyan')
-    await this.humanDelay(8000, 12000) // INCREASED from 3-5s
+    // Ensure page is stable before navigating (REDUCED)
+    await this.waitForPageStable('PRE_VERIFICATION', 10000)
+    await this.humanDelay(3000, 5000)
     
     // Navigate to Bing Rewards
     try {
@@ -1792,12 +1809,9 @@ export class AccountCreator {
         timeout: 60000
       })
       
-      // CRITICAL: Wait for page to be fully stable after navigation
-      await this.waitForPageStable('REWARDS_PAGE', 40000) // INCREASED
-      
-      // CRITICAL: MUCH longer safety delay for identity to load
-      log(false, 'CREATOR', 'Waiting for user identity to fully load (10-15s)...', 'log', 'cyan')
-      await this.humanDelay(10000, 15000) // INCREASED from 5-7s
+      // Wait for page to stabilize after navigation (REDUCED)
+      await this.waitForPageStable('REWARDS_PAGE', 15000)
+      await this.humanDelay(3000, 5000)
       
       const currentUrl = this.page.url()
       log(false, 'CREATOR', `Current URL: ${currentUrl}`, 'log', 'cyan')
@@ -1807,16 +1821,15 @@ export class AccountCreator {
         if (currentUrl.includes('login.live.com')) {
           log(false, 'CREATOR', '⚠️ Still on login page - account may not be fully activated', 'warn', 'yellow')
           
-          // CRITICAL: Wait MUCH longer and retry
-          log(false, 'CREATOR', 'Waiting longer before retry (15-20s)...', 'log', 'cyan')
-          await this.humanDelay(15000, 20000) // INCREASED
+          // Wait before retry (REDUCED)
+          await this.humanDelay(5000, 8000)
           
           await this.page.goto('https://rewards.bing.com/', { 
             waitUntil: 'networkidle',
-            timeout: 60000
+            timeout: 30000
           })
-          await this.waitForPageStable('REWARDS_RETRY', 40000)
-          await this.humanDelay(10000, 15000) // Additional delay after retry
+          await this.waitForPageStable('REWARDS_RETRY', 15000)
+          await this.humanDelay(3000, 5000)
         } else {
           log(false, 'CREATOR', `⚠️ Unexpected URL: ${currentUrl}`, 'warn', 'yellow')
         }
@@ -1857,9 +1870,8 @@ export class AccountCreator {
       if (!identityVerified) {
         log(false, 'CREATOR', '⚠️ Could not verify user identity on page', 'warn', 'yellow')
         
-        // CRITICAL: Wait MUCH longer and check again
-        log(false, 'CREATOR', 'Waiting longer for identity (10-15s)...', 'log', 'cyan')
-        await this.humanDelay(10000, 15000) // INCREASED from 5-7s
+        // Wait and check again (REDUCED)
+        await this.humanDelay(3000, 5000)
         
         for (const selector of identitySelectors) {
           const element = this.page.locator(selector).first()
@@ -1879,21 +1891,16 @@ export class AccountCreator {
         log(false, 'CREATOR', '⚠️ Account state uncertain - proceeding anyway', 'warn', 'yellow')
       }
       
-      // NOW handle popups and tour - AFTER confirming we're logged in
-      log(false, 'CREATOR', 'Preparing to handle welcome tour and popups...', 'log', 'cyan')
-      await this.humanDelay(5000, 8000) // INCREASED from 3-5s
-      
+      // Handle popups and tour (REDUCED delays)
+      await this.humanDelay(2000, 3000)
       await this.handleRewardsWelcomeTour()
       
-      log(false, 'CREATOR', 'Pausing between tour and popups...', 'log', 'cyan')
-      await this.humanDelay(5000, 8000) // INCREASED from 3-5s
-      
+      await this.humanDelay(2000, 3000)
       await this.handleRewardsPopups()
       
-      // If we have a referral URL, ensure we join via it
+      // Referral enrollment if needed
       if (this.referralUrl) {
-        log(false, 'CREATOR', 'Preparing for referral enrollment...', 'log', 'cyan')
-        await this.humanDelay(5000, 7000) // INCREASED from 3-4s
+        await this.humanDelay(2000, 3000)
         await this.ensureRewardsEnrollment()
       }
       
@@ -1904,14 +1911,9 @@ export class AccountCreator {
   }
   
   private async handleRewardsWelcomeTour(): Promise<void> {
-    log(false, 'CREATOR', 'Checking for Microsoft Rewards welcome tour...', 'log', 'cyan')
-    
-    // CRITICAL: Ensure page is stable before checking for tour
-    await this.waitForPageStable('WELCOME_TOUR', 30000) // INCREASED
-    
-    // CRITICAL: MUCH longer delay for tour to appear
-    log(false, 'CREATOR', 'Waiting for welcome tour to appear (8-12s)...', 'log', 'cyan')
-    await this.humanDelay(8000, 12000) // INCREASED from 5-7s
+    // Page loads fast, reduced delays
+    await this.waitForPageStable('WELCOME_TOUR', 10000)
+    await this.humanDelay(2000, 3000)
     
     // Try to handle the welcome tour (multiple Next buttons)
     const maxClicks = 5
@@ -1960,13 +1962,11 @@ export class AccountCreator {
         const visible = await button.isVisible().catch(() => false)
         
         if (visible) {
-          log(false, 'CREATOR', `Clicking Next button: ${selector}`, 'log', 'cyan')
           await button.click()
-          await this.humanDelay(4000, 6000) // INCREASED from 3-4s
-          await this.waitForPageStable('AFTER_TOUR_NEXT', 20000) // INCREASED
+          await this.humanDelay(1500, 2500)
+          await this.waitForPageStable('AFTER_TOUR_NEXT', 8000)
           
           clickedNext = true
-          log(false, 'CREATOR', `✅ Clicked Next (step ${i + 1})`, 'log', 'green')
           break
         }
       }
@@ -1984,11 +1984,9 @@ export class AccountCreator {
           const visible = await button.isVisible().catch(() => false)
           
           if (visible) {
-            log(false, 'CREATOR', 'Clicking "Pin and start earning" button', 'log', 'cyan')
             await button.click()
-            await this.humanDelay(3000, 4000)
-            await this.waitForPageStable('AFTER_PIN', 15000)
-            log(false, 'CREATOR', '✅ Clicked Pin button', 'log', 'green')
+            await this.humanDelay(1500, 2500)
+            await this.waitForPageStable('AFTER_PIN', 8000)
             break
           }
         }
@@ -1996,22 +1994,13 @@ export class AccountCreator {
         break
       }
       
-      // Wait between steps to avoid spamming
-      await this.humanDelay(2000, 3000)
+      await this.humanDelay(1000, 1500)
     }
-    
-    log(false, 'CREATOR', '✅ Welcome tour handled', 'log', 'green')
   }
   
   private async handleRewardsPopups(): Promise<void> {
-    log(false, 'CREATOR', 'Checking for Microsoft Rewards popups...', 'log', 'cyan')
-    
-    // CRITICAL: Ensure page is stable before checking for popups
-    await this.waitForPageStable('REWARDS_POPUPS', 30000) // INCREASED
-    
-    // CRITICAL: Wait MUCH longer for any popups to appear
-    log(false, 'CREATOR', 'Waiting for popups to appear (8-12s)...', 'log', 'cyan')
-    await this.humanDelay(8000, 12000) // INCREASED from 5-7s
+    await this.waitForPageStable('REWARDS_POPUPS', 10000)
+    await this.humanDelay(2000, 3000)
     
     // Handle ReferAndEarn popup
     const referralPopupSelectors = [
@@ -2053,11 +2042,9 @@ export class AccountCreator {
         const visible = await button.isVisible().catch(() => false)
         
         if (visible) {
-          log(false, 'CREATOR', 'Clicking "Get started" button', 'log', 'cyan')
           await button.click()
-          await this.humanDelay(4000, 6000) // INCREASED from 3-4s
-          await this.waitForPageStable('AFTER_GET_STARTED', 20000) // INCREASED
-          log(false, 'CREATOR', '✅ Clicked Get started', 'log', 'green')
+          await this.humanDelay(1500, 2500)
+          await this.waitForPageStable('AFTER_GET_STARTED', 8000)
           break
         }
       }
@@ -2075,38 +2062,24 @@ export class AccountCreator {
       const visible = await button.isVisible().catch(() => false)
       
       if (visible) {
-        log(false, 'CREATOR', `Closing popup with selector: ${selector}`, 'log', 'cyan')
         await button.click()
-        await this.humanDelay(2000, 3000)
-        await this.waitForPageStable('AFTER_CLOSE_POPUP', 10000)
+        await this.humanDelay(1000, 1500)
+        await this.waitForPageStable('AFTER_CLOSE_POPUP', 5000)
       }
     }
-    
-    log(false, 'CREATOR', '✅ Popups handled', 'log', 'green')
   }
   
   private async ensureRewardsEnrollment(): Promise<void> {
-    log(false, 'CREATOR', 'Ensuring Microsoft Rewards enrollment via referral URL...', 'log', 'cyan')
-    
-    if (!this.referralUrl) {
-      log(false, 'CREATOR', 'No referral URL provided, skipping enrollment check', 'warn', 'yellow')
-      return
-    }
+    if (!this.referralUrl) return
     
     try {
-      // Navigate to referral URL
-      log(false, 'CREATOR', `Navigating to referral URL: ${this.referralUrl}`, 'log', 'cyan')
       await this.page.goto(this.referralUrl, { 
         waitUntil: 'networkidle',
-        timeout: 60000
+        timeout: 30000
       })
       
-      // CRITICAL: Wait for page to be stable after navigation
-      await this.waitForPageStable('REFERRAL_ENROLLMENT', 40000) // INCREASED
-      
-      // CRITICAL: Longer additional delay
-      log(false, 'CREATOR', 'Stabilizing after referral navigation (8-12s)...', 'log', 'cyan')
-      await this.humanDelay(8000, 12000) // INCREASED from 5-7s
+      await this.waitForPageStable('REFERRAL_ENROLLMENT', 10000)
+      await this.humanDelay(2000, 3000)
       
       // Look for "Join Microsoft Rewards" button
       const joinButtonSelectors = [
@@ -2125,30 +2098,25 @@ export class AccountCreator {
         const visible = await button.isVisible().catch(() => false)
         
         if (visible) {
-          log(false, 'CREATOR', `Clicking "Join Microsoft Rewards" button: ${selector}`, 'log', 'cyan')
           await button.click()
-          await this.humanDelay(5000, 8000) // INCREASED from 3-5s
-          await this.waitForPageStable('AFTER_JOIN', 30000) // INCREASED
-          log(false, 'CREATOR', '✅ Clicked Join button', 'log', 'green')
+          await this.humanDelay(2000, 3000)
+          await this.waitForPageStable('AFTER_JOIN', 10000)
           joined = true
           break
         }
       }
       
       if (!joined) {
-        log(false, 'CREATOR', 'Join button not found - account may already be enrolled', 'log', 'yellow')
+        log(false, 'CREATOR', 'Join button not found - may already be enrolled', 'log', 'yellow')
       }
       
-      // CRITICAL: Wait MUCH longer for enrollment to complete and page to stabilize
-      log(false, 'CREATOR', 'Waiting for enrollment to complete...', 'log', 'cyan')
-      await this.waitForPageStable('POST_ENROLLMENT', 40000) // INCREASED
-      await this.humanDelay(10000, 15000) // INCREASED from 5-7s
+      await this.waitForPageStable('POST_ENROLLMENT', 10000)
+      await this.humanDelay(2000, 3000)
       
-      // Handle any popups after joining - with LONGER delays between
-      log(false, 'CREATOR', 'Handling post-enrollment popups...', 'log', 'cyan')
-      await this.humanDelay(5000, 8000) // INCREASED from 3-5s
+      // Handle post-enrollment popups
+      await this.humanDelay(2000, 3000)
       await this.handleRewardsWelcomeTour()
-      await this.humanDelay(5000, 8000) // INCREASED from 3-5s
+      await this.humanDelay(2000, 3000)
       await this.handleRewardsPopups()
       
       log(false, 'CREATOR', '✅ Rewards enrollment completed', 'log', 'green')
