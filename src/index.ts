@@ -71,9 +71,7 @@ export class MicrosoftRewardsBot {
         this.accounts = []
         this.utils = new Util()
         this.config = loadConfig()
-        if (this.config.jobState?.enabled !== false) {
-            this.accountJobState = new JobState(this.config)
-        }
+        // JobState will be initialized in initialize() method after validation
         this.browser = {
             func: new BrowserFunc(this),
             utils: new BrowserUtil(this)
@@ -812,8 +810,8 @@ export class MicrosoftRewardsBot {
             const { ConclusionWebhook } = await import('./util/ConclusionWebhook')
             await ConclusionWebhook(
                 this.config,
-                'ðŸš¨ Critical Security Alert',
-                `@everyone\n\n**Account:** ${email}\n**Issue:** ${reason}\n**Status:** All accounts paused pending review`,
+                '🚨 Critical Security Alert',
+                `**Account:** ${email}\n**Issue:** ${reason}\n**Status:** All accounts paused pending review`,
                 undefined,
                 DISCORD.COLOR_RED
             )
