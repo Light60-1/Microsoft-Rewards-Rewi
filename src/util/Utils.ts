@@ -114,18 +114,13 @@ export class Util {
      * @example utils.chunkArray([1,2,3,4,5], 2) // [[1,2,3], [4,5]]
      */
     chunkArray<T>(arr: T[], numChunks: number): T[][] {
-        // FIXED: Stricter validation with better error messages
+        // Validate input parameters
         if (!Array.isArray(arr)) {
             throw new Error('Invalid input: arr must be an array.')
         }
         
         if (arr.length === 0) {
             return []
-        }
-        
-        // Check for undefined/null elements which could cause issues downstream
-        if (arr.some(item => item === undefined || item === null)) {
-            throw new Error('Array contains undefined or null elements which are not allowed.')
         }
         
         if (!Number.isFinite(numChunks) || numChunks <= 0) {

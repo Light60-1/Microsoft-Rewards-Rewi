@@ -387,7 +387,8 @@ export class Search extends Workers {
 
     private async clickRandomLink(page: Page) {
         try {
-            await page.click('#b_results .b_algo h2', { timeout: 2000 }).catch(() => { }) // Since we don't really care if it did it or not
+            // Silent catch justified: Click is best-effort humanization, failure is acceptable
+            await page.click('#b_results .b_algo h2', { timeout: 2000 }).catch(() => {})
 
             // Only used if the browser is not the edge browser (continue on Edge popup)
             await this.closeContinuePopup(page)

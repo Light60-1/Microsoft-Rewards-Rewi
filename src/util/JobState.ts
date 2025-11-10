@@ -41,7 +41,11 @@ export class JobState {
       const raw = fs.readFileSync(file, 'utf-8')
       const parsed = JSON.parse(raw)
       return parsed && typeof parsed === 'object' && parsed.days ? parsed as FileState : { days: {} }
-    } catch { return { days: {} } }
+    } catch (error) {
+      // Silent catch justified: Corrupted job state files should be reset to empty state
+      // rather than crashing the bot. This is a recoverable error.
+      return { days: {} }
+    }
   }
 
   private save(email: string, state: FileState): void {

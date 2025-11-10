@@ -70,12 +70,15 @@ function stripJsonComments(input: string): string {
 
 // Normalize both legacy (flat) and new (nested) config schemas into the flat Config interface
 function normalizeConfig(raw: unknown): Config {
-    // TYPE SAFETY NOTE: Using `any` here is intentional and justified
-    // Reason: Config format evolved from flat → nested structure. This function must support BOTH
-    // for backward compatibility. Runtime validation via explicit checks ensures safety.
-    // Return type (Config interface) provides type safety at function boundary.
+    // TYPE SAFETY: Validate raw input before processing
+    // Config files are untrusted JSON that could have any structure
+    // We use explicit runtime checks for each property below
+    if (!raw || typeof raw !== 'object') {
+        throw new Error('Config must be a valid object')
+    }
+    
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const n = (raw || {}) as any
+    const n = raw as Record<string, any>
 
     // Browser settings
     const browserConfig = n.browser ?? {}
@@ -356,19 +359,20 @@ export function loadAccounts(): Account[] {
         // Accept either a root array or an object with an `accounts` array, ignore `_note`
         const parsed = Array.isArray(parsedUnknown) ? parsedUnknown : (parsedUnknown && typeof parsedUnknown === 'object' && Array.isArray((parsedUnknown as { accounts?: unknown }).accounts) ? (parsedUnknown as { accounts: unknown[] }).accounts : null)
         if (!Array.isArray(parsed)) throw new Error('accounts must be an array')
-        // FIXED: Validate entries BEFORE type assertion for better type safety
+        // TYPE SAFETY: Validate entries BEFORE processing
         for (const entry of parsed) {
-            // Pre-validation: Check basic structure before casting
+            // Pre-validation: Check basic structure
             if (!entry || typeof entry !== 'object') {
                 throw new Error('each account entry must be an object')
             }
             
-            // JUSTIFIED USE OF `any`: Accounts come from untrusted user JSON with unpredictable structure
-            // We perform explicit runtime validation of each property below (typeof checks, regex validation, etc.)
-            // This is safer than trusting a type assertion to a specific interface
+            // Use Record<string, any> to access dynamic properties from untrusted JSON
+            // Runtime validation below ensures type safety
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const a = entry as any
-            if (!a || typeof a.email !== 'string' || typeof a.password !== 'string') {
+            const a = entry as Record<string, any>
+            
+            // Validate required fields with proper type checking
+            if (typeof a.email !== 'string' || typeof a.password !== 'string') {
                 throw new Error('each account must have email and password strings')
             }
             a.email = String(a.email).trim()
@@ -392,11 +396,15 @@ export function loadAccounts(): Account[] {
             if (!a.proxy || typeof a.proxy !== 'object') {
                 a.proxy = { proxyAxios: true, url: '', port: 0, username: '', password: '' }
             } else {
-                a.proxy.proxyAxios = a.proxy.proxyAxios !== false
-                a.proxy.url = typeof a.proxy.url === 'string' ? a.proxy.url : ''
-                a.proxy.port = typeof a.proxy.port === 'number' ? a.proxy.port : 0
-                a.proxy.username = typeof a.proxy.username === 'string' ? a.proxy.username : ''
-                a.proxy.password = typeof a.proxy.password === 'string' ? a.proxy.password : ''
+                // Safe proxy property access with runtime validation
+                const proxy = a.proxy as Record<string, unknown>
+                a.proxy = {
+                    proxyAxios: proxy.proxyAxios !== false,
+                    url: typeof proxy.url === 'string' ? proxy.url : '',
+                    port: typeof proxy.port === 'number' ? proxy.port : 0,
+                    username: typeof proxy.username === 'string' ? proxy.username : '',
+                    password: typeof proxy.password === 'string' ? proxy.password : ''
+                }
             }
         }
         // Filter out disabled accounts (enabled: false)

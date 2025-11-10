@@ -350,6 +350,7 @@ export class AccountCreator {
       await this.page.waitForLoadState('networkidle', { timeout: Math.min(maxWaitMs, 10000) })
       
       // STEP 2: Wait for DOM to be fully loaded
+      // Silent catch justified: DOMContentLoaded may already be complete
       await this.page.waitForLoadState('domcontentloaded', { timeout: 3000 }).catch(() => {})
       
       // STEP 3: REDUCED delay - pages load fast
@@ -369,7 +370,7 @@ export class AccountCreator {
         const visible = await element.isVisible().catch(() => false)
         
         if (visible) {
-          // Wait silently, no spam logs
+          // Silent catch justified: Loading indicators may disappear before timeout, which is fine
           await element.waitFor({ state: 'hidden', timeout: Math.min(5000, maxWaitMs - (Date.now() - startTime)) }).catch(() => {})
         }
       }

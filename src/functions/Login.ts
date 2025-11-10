@@ -543,6 +543,7 @@ export class Login {
     await this.bot.utils.wait(500) // Increased from 250ms
     
     // IMPROVEMENT: Wait for page to be fully ready before looking for email field
+    // Silent catch justified: DOMContentLoaded may already be complete, which is fine
     await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {})
     await this.bot.utils.wait(300) // Extra settling time
 
@@ -572,6 +573,7 @@ export class Login {
       const content = await page.content().catch(() => '')
       if (content.length < 1000) {
         this.bot.log(this.bot.isMobile, 'LOGIN', 'Page content too small, reloading...', 'warn')
+        // Silent catch justified: Reload may timeout if page is slow, but we continue anyway
         await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {})
         await this.bot.utils.wait(1500)
       }
