@@ -34,6 +34,18 @@ export class AccountCreator {
   }
 
   /**
+   * Helper: Check if email domain is a Microsoft-managed domain
+   * Extracted to avoid duplication and improve maintainability
+   */
+  private isMicrosoftDomain(domain: string | undefined): boolean {
+    if (!domain) return false
+    const lowerDomain = domain.toLowerCase()
+    return lowerDomain === 'outlook.com' || 
+           lowerDomain === 'hotmail.com' || 
+           lowerDomain === 'outlook.fr'
+  }
+
+  /**
    * UTILITY: Find first visible element from list of selectors
    * Reserved for future use - simplifies selector fallback logic
    * 
@@ -950,12 +962,16 @@ export class AccountCreator {
         await emailInput.fill(newEmail)
         await this.humanDelay(1200, 2500)
         
-        // SMART VERIFICATION: Microsoft may separate domain
+        // SMART VERIFICATION: Microsoft may separate domain for managed email providers
         const inputValue = await emailInput.inputValue().catch(() => '')
         const emailUsername = newEmail.split('@')[0]
         const emailDomain = newEmail.split('@')[1]
         
-        if (inputValue === newEmail || (inputValue === emailUsername && (emailDomain === 'outlook.com' || emailDomain === 'hotmail.com' || emailDomain === 'outlook.fr'))) {
+        // Check if input matches full email OR username only (when domain is Microsoft-managed)
+        const isFullMatch = inputValue === newEmail
+        const isUsernameOnlyMatch = inputValue === emailUsername && this.isMicrosoftDomain(emailDomain)
+        
+        if (isFullMatch || isUsernameOnlyMatch) {
           return true
         } else {
           throw new Error('Email retry input value not verified')
@@ -1024,12 +1040,16 @@ export class AccountCreator {
           await emailInput.fill(newEmail)
           await this.humanDelay(1200, 2500)
           
-          // SMART VERIFICATION: Microsoft may separate domain
+          // SMART VERIFICATION: Microsoft may separate domain for managed email providers
           const inputValue = await emailInput.inputValue().catch(() => '')
           const emailUsername = newEmail.split('@')[0]
           const emailDomain = newEmail.split('@')[1]
           
-          if (inputValue === newEmail || (inputValue === emailUsername && (emailDomain === 'outlook.com' || emailDomain === 'hotmail.com' || emailDomain === 'outlook.fr'))) {
+          // Check if input matches full email OR username only (when domain is Microsoft-managed)
+          const isFullMatch = inputValue === newEmail
+          const isUsernameOnlyMatch = inputValue === emailUsername && this.isMicrosoftDomain(emailDomain)
+          
+          if (isFullMatch || isUsernameOnlyMatch) {
             return true
           } else {
             throw new Error('Email auto-retry input value not verified')

@@ -6,6 +6,7 @@ import { dashboardState } from './state'
 export class BotController {
   private botInstance: MicrosoftRewardsBot | null = null
   private startTime?: Date
+  private isStarting: boolean = false // Race condition protection
 
   constructor() {
     process.on('exit', () => this.stop())
@@ -24,11 +25,17 @@ export class BotController {
   }
 
   public async start(): Promise<{ success: boolean; error?: string; pid?: number }> {
+    // FIXED: Race condition protection - prevent multiple simultaneous start() calls
     if (this.botInstance) {
       return { success: false, error: 'Bot is already running' }
     }
+    
+    if (this.isStarting) {
+      return { success: false, error: 'Bot is currently starting, please wait' }
+    }
 
     try {
+      this.isStarting = true
       this.log('🚀 Starting bot...', 'log')
 
       const { MicrosoftRewardsBot } = await import('../index')
@@ -61,6 +68,8 @@ export class BotController {
       this.log(`Failed to start bot: ${errorMsg}`, 'error')
       this.cleanup()
       return { success: false, error: errorMsg }
+    } finally {
+      this.isStarting = false
     }
   }
 

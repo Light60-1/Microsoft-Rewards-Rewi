@@ -1,5 +1,6 @@
 import { Page } from 'rebrowser-playwright'
 
+import { TIMEOUTS } from '../constants'
 import { DashboardData, MorePromotion, PromotionalItem, PunchCard } from '../interface/DashboardData'
 
 import { MicrosoftRewardsBot } from '../index'
@@ -12,6 +13,14 @@ import { Retry } from '../util/Retry'
 const ACTIVITY_SELECTORS = {
   byName: (name: string) => `[data-bi-id^="${name}"] .pointLink:not(.contentContainer .pointLink)`,
   byOfferId: (offerId: string) => `[data-bi-id^="${offerId}"] .pointLink:not(.contentContainer .pointLink)`
+} as const
+
+// Activity processing delays (in milliseconds)
+const ACTIVITY_DELAYS = {
+  THROTTLE_MIN: 800,
+  THROTTLE_MAX: 1400,
+  ACTIVITY_SPACING_MIN: 1200,
+  ACTIVITY_SPACING_MAX: 2600
 } as const
 
 export class Workers {
@@ -161,7 +170,7 @@ export class Workers {
         for (const activity of activities) {
             try {
                 activityPage = await this.manageTabLifecycle(activityPage, activityInitial)
-                await this.applyThrottle(throttle, 800, 1400)
+                await this.applyThrottle(throttle, ACTIVITY_DELAYS.THROTTLE_MIN, ACTIVITY_DELAYS.THROTTLE_MAX)
 
                 const selector = await this.buildActivitySelector(activityPage, activity, punchCard)
                 await this.prepareActivityPage(activityPage, selector, throttle)
@@ -173,7 +182,7 @@ export class Workers {
                     this.bot.log(this.bot.isMobile, 'ACTIVITY', `Skipped activity "${activity.title}" | Reason: Unsupported type: "${activity.promotionType}"!`, 'warn')
                 }
 
-                await this.applyThrottle(throttle, 1200, 2600)
+                await this.applyThrottle(throttle, ACTIVITY_DELAYS.ACTIVITY_SPACING_MIN, ACTIVITY_DELAYS.ACTIVITY_SPACING_MAX)
             } catch (error) {
                 this.bot.log(this.bot.isMobile, 'ACTIVITY', 'An error occurred:' + error, 'error')
                 throttle.record(false)
@@ -209,7 +218,13 @@ export class Workers {
 
         // Validate offerId exists before using it in selector
         if (!activity.offerId) {
-            this.bot.log(this.bot.isMobile, 'WORKERS', `Activity "${activity.name || activity.title}" has no offerId, falling back to name-based selector`, 'warn')
+            // IMPROVED: More prominent logging for data integrity issue
+            this.bot.log(
+                this.bot.isMobile, 
+                'WORKERS', 
+                `⚠️ DATA INTEGRITY: Activity "${activity.name || activity.title}" is missing offerId field. This may indicate a dashboard API change or data corruption. Falling back to name-based selector.`, 
+                'warn'
+            )
             return ACTIVITY_SELECTORS.byName(activity.name)
         }
 
@@ -217,9 +232,9 @@ export class Workers {
     }
 
     private async prepareActivityPage(page: Page, selector: string, throttle: AdaptiveThrottler): Promise<void> {
-        await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(logError('WORKERS', 'Network idle wait failed', this.bot.isMobile))
+        await page.waitForLoadState('networkidle', { timeout: TIMEOUTS.DASHBOARD_WAIT }).catch(logError('WORKERS', 'Network idle wait failed', this.bot.isMobile))
         await this.bot.browser.utils.humanizePage(page)
-        await this.applyThrottle(throttle, 1200, 2600)
+        await this.applyThrottle(throttle, ACTIVITY_DELAYS.ACTIVITY_SPACING_MIN, ACTIVITY_DELAYS.ACTIVITY_SPACING_MAX)
     }
 
     private async executeActivity(page: Page, activity: PromotionalItem | MorePromotion, selector: string, throttle: AdaptiveThrottler, retry: Retry): Promise<void> {
@@ -227,14 +242,14 @@ export class Workers {
         
         // Check if element exists before clicking (avoid 30s timeout)
         try {
-            await page.waitForSelector(selector, { timeout: 5000 })
+            await page.waitForSelector(selector, { timeout: TIMEOUTS.NETWORK_IDLE })
         } catch (error) {
             this.bot.log(this.bot.isMobile, 'ACTIVITY', `Activity selector not found (might be completed or unavailable): ${selector}`, 'warn')
             return // Skip this activity gracefully instead of waiting 30s
         }
 
         // Click with timeout to prevent indefinite hangs
-        await page.click(selector, { timeout: 10000 })
+        await page.click(selector, { timeout: TIMEOUTS.DASHBOARD_WAIT })
         page = await this.bot.browser.utils.getLatestTab(page)
 
         // Execute activity with timeout protection using Promise.race
