@@ -68,8 +68,8 @@ export class Retry {
         attempt += 1
         const retry = isRetryable ? isRetryable(e) : true
         if (!retry || attempt >= this.policy.maxAttempts) break
-        // FIXED: Jitter should always increase delay, not decrease it (remove the -1)
-        const jitter = 1 + Math.random() * this.policy.jitter
+        // Apply jitter: vary delay by ±jitter% (e.g., jitter=0.2 means ±20%)
+        const jitter = 1 + (Math.random() * 2 - 1) * this.policy.jitter
         const sleep = Math.min(this.policy.maxDelay, Math.max(0, Math.floor(delay * jitter)))
         await new Promise((r) => setTimeout(r, sleep))
         delay = Math.min(this.policy.maxDelay, Math.floor(delay * (this.policy.multiplier || 2)))
