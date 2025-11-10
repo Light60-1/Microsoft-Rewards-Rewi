@@ -45,7 +45,6 @@ export interface ConfigBrowser {
 
 export interface ConfigFingerprinting {
     saveFingerprint?: ConfigSaveFingerprint;
-    enableInjection?: boolean; // Enable fingerprint injection (default: true, set to false if session closed errors occur)
 }
 
 export interface ConfigSearchSettings {

@@ -53,7 +53,11 @@ function shouldReportError(errorMessage: string): boolean {
         /invalid.*configuration/i,
         /missing.*required.*field/i,
         /port.*already.*in.*use/i,
-        /eaddrinuse/i
+        /eaddrinuse/i,
+        // Rebrowser-playwright expected errors (benign, non-fatal)
+        /rebrowser-patches.*cannot get world/i,
+        /session closed.*rebrowser/i,
+        /addScriptToEvaluateOnNewDocument.*session closed/i
     ]
     
     // Don't report user configuration errors

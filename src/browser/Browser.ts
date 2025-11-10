@@ -58,14 +58,11 @@ class Browser {
                 '--disk-cache-size=1'
             ] : []
 
-            // IMPROVED: Add channel option to stabilize rebrowser-playwright
             browser = await playwright.chromium.launch({
                 headless,
                 ...(proxyConfig && { proxy: proxyConfig }),
                 args: [...baseArgs, ...linuxStabilityArgs],
-                timeout: isLinux ? 90000 : 60000,
-                // Use chromium channel for better stability with rebrowser-playwright
-                channel: undefined as unknown as undefined
+                timeout: isLinux ? 90000 : 60000
             })
         } catch (e: unknown) {
             const msg = (e instanceof Error ? e.message : String(e))
@@ -83,63 +80,7 @@ class Browser {
 
         const sessionData = await loadSessionData(this.bot.config.sessionPath, email, this.bot.isMobile, saveFingerprint)
         const fingerprint = sessionData.fingerprint ? sessionData.fingerprint : await this.generateFingerprint()
-        
-        // Check if fingerprint injection is enabled (can be disabled to avoid session closed errors)
-        const enableInjection = this.bot.config.fingerprinting?.enableInjection !== false
-        
-        // FIXED: Add error handling and retry logic for fingerprint injection
-        let context: BrowserContext | undefined
-        
-        if (!enableInjection) {
-            // Fallback: use plain context without fingerprint injection
-            this.bot.log(this.bot.isMobile, 'BROWSER', 'Fingerprint injection disabled, using plain context', 'warn')
-            context = await browser.newContext({
-                ignoreHTTPSErrors: true,
-                bypassCSP: true,
-                userAgent: fingerprint.fingerprint.navigator.userAgent,
-                viewport: this.bot.isMobile 
-                    ? { width: 390, height: 844 }
-                    : { width: 1280, height: 800 }
-            }) as unknown as BrowserContext
-        } else {
-            // Use fingerprint injection with retry logic
-            let retries = 3
-            while (retries > 0) {
-                try {
-                    context = await newInjectedContext(browser as unknown as import('playwright').Browser, { 
-                        fingerprint: fingerprint,
-                        // Add context options to prevent premature closure
-                        newContextOptions: {
-                            ignoreHTTPSErrors: true,
-                            bypassCSP: true
-                        }
-                    })
-                    break
-                } catch (e) {
-                    retries--
-                    if (retries === 0) {
-                        this.bot.log(this.bot.isMobile, 'BROWSER', `Fingerprint injection failed after retries: ${e instanceof Error ? e.message : String(e)}`, 'error')
-                        this.bot.log(this.bot.isMobile, 'BROWSER', 'Falling back to plain context without fingerprint injection', 'warn')
-                        // Final fallback: use plain context
-                        context = await browser.newContext({
-                            ignoreHTTPSErrors: true,
-                            bypassCSP: true,
-                            userAgent: fingerprint.fingerprint.navigator.userAgent,
-                            viewport: this.bot.isMobile 
-                                ? { width: 390, height: 844 }
-                                : { width: 1280, height: 800 }
-                        }) as unknown as BrowserContext
-                        break
-                    }
-                    this.bot.log(this.bot.isMobile, 'BROWSER', `Fingerprint injection failed, retrying... (${retries} left)`, 'warn')
-                    await new Promise(resolve => setTimeout(resolve, 1000))
-                }
-            }
-        }
-
-        if (!context) {
-            throw new Error('Failed to create browser context')
-        }
+        const context = await newInjectedContext(browser as unknown as import('playwright').Browser, { fingerprint: fingerprint })
 
         const globalTimeout = this.bot.config.browser?.globalTimeout ?? 30000
         context.setDefaultTimeout(typeof globalTimeout === 'number' ? globalTimeout : this.bot.utils.stringToMs(globalTimeout))
