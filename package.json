@@ -22,6 +22,7 @@
     "build": "tsc",
     "postbuild": "node -e \"console.log('\\n✅ Build complete! Run \\\"npm start\\\" to launch the bot.\\n')\"",
     "test": "node --test --loader ts-node/esm tests/**/*.test.ts",
+    "prestart": "node -e \"const fs = require('fs'); if (!fs.existsSync('./dist/index.js')) { console.log('⚠️  Build not found, building now...'); require('child_process').execSync('npm run build', {stdio: 'inherit'}); }\"",
     "start": "node --enable-source-maps ./dist/index.js",
     "ts-start": "node --loader ts-node/esm ./src/index.ts",
     "dev": "ts-node ./src/index.ts -dev",
