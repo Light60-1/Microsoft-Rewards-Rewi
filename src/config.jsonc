@@ -96,7 +96,9 @@
         "saveFingerprint": {
             "mobile": true,
             "desktop": true
-        }
+        },
+        // Set to false if you encounter "session closed" errors with fingerprint injection
+        "enableInjection": true
     },
 
     // === PROXY ===
