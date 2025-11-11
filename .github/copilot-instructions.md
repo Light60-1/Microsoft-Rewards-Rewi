@@ -95,17 +95,19 @@ docker/                         # Docker deployment files
 ├── entrypoint.sh               # Container initialization script
 ├── run_daily.sh                # Daily execution wrapper (cron)
 └── crontab.template            # Cron schedule template
-scripts/                        # Utility scripts
-└── run.sh                      # Nix development environment launcher
-setup/
+scripts/                        # Automation scripts
+└── installer/                  # Setup and update automation
+    ├── setup.mjs               # Initial setup automation
+    ├── update.mjs              # GitHub ZIP-based auto-updater (NO GIT REQUIRED!)
+    └── README.md               # Installer documentation
+setup/                          # Setup and execution scripts
 ├── setup.bat                   # Windows setup script
 ├── setup.sh                    # Linux/Mac setup script
+├── run.sh                      # Nix development environment launcher
 ├── nix/                        # NixOS configuration
 │   ├── flake.nix               # Nix flake definition
 │   └── flake.lock              # Nix flake lock file
-└── update/
-    ├── setup.mjs               # Initial setup automation
-    └── update.mjs              # GitHub ZIP-based auto-updater (NO GIT REQUIRED!)
+└── README.md                   # Setup guide
 ```
 
 ---
@@ -1115,10 +1117,11 @@ private combinedDeduplication(queries: string[], threshold = 0.65): string[] {
 - **Methods:** `generateEmail()` (8 realistic patterns), `generatePassword()` (14-18 chars), `generateBirthdate()` (age 20-45), `generateNames()` (extracts from email)
 - **Pattern:** Uses nameDatabase.ts with 100+ first/last names
 
-### Auto-Update System (`setup/update/update.mjs`)
+### Auto-Update System (`scripts/installer/update.mjs`)
 
 **update.mjs (600+ LINES - CRITICAL FEATURE):**
 - **Purpose:** Git-free update system using GitHub ZIP downloads (NO merge conflicts!)
+- **Location:** `scripts/installer/update.mjs` (moved from `setup/update/`)
 - **Features:** Version comparison (cache-busting), GitHub API ZIP download, selective file preservation, automatic rollback on build failure, integrity checks, Docker vs Host detection, dependency installation, TypeScript rebuild verification, update marker creation
 - **Protected Files:** `src/config.jsonc`, `src/accounts.jsonc`, `sessions/`, `.playwright-chromium-installed`
 - **Workflow:** Check version → Create backups → Download ZIP → Extract → Selective copy → Restore protected → npm ci → npm install → npm build → Verify integrity → Create marker → Clean temp

@@ -51,7 +51,7 @@ These files are **conditionally protected** (based on config):
 Run the update manually:
 
 ```bash
-node setup/update/update.mjs
+node scripts/installer/update.mjs
 ```
 
 ## Update Detection
@@ -95,8 +95,9 @@ If no updates are available, **no marker is created** and the bot won't restart.
 
 ### File Structure
 ```
-setup/update/
-  ├── update.mjs         # Main update script (468 lines)
+scripts/installer/
+  ├── update.mjs         # Main update script (auto-updater)
+  ├── setup.mjs          # Initial setup wizard
   └── README.md          # This file
 ```
 

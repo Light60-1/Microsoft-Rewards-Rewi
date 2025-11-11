@@ -751,7 +751,7 @@ export class MicrosoftRewardsBot {
             return 0
         }
 
-        const scriptRel = upd.scriptPath || 'setup/update/update.mjs'
+        const scriptRel = upd.scriptPath || 'scripts/installer/update.mjs'
         const scriptAbs = path.join(process.cwd(), scriptRel)
 
         if (!fs.existsSync(scriptAbs)) {

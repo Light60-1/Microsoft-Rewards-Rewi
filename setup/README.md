@@ -41,15 +41,12 @@ npm start
 **Usage:**
 ```bash
 # Run update manually
-node setup/update/update.mjs
+node scripts/installer/update.mjs
 ```
 
 **Automatic updates:** The bot checks for updates on startup (controlled by `update.enabled` in config.jsonc).
 
-### update/setup.mjs
-**Interactive setup wizard** used by setup.bat/setup.sh.
-
-This is typically not run directly - use the wrapper scripts instead.
+**Note:** Installer scripts have been moved to `scripts/installer/` directory. See `scripts/README.md` for details.
 
 ## Quick Start Guide
 

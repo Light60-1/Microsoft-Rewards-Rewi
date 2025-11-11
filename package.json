@@ -30,7 +30,7 @@
     "dashboard": "node --enable-source-maps ./dist/index.js -dashboard",
     "dashboard-dev": "ts-node ./src/index.ts -dashboard",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
-    "setup": "node ./setup/update/setup.mjs",
+    "setup": "node ./scripts/installer/setup.mjs",
     "kill-chrome-win": "powershell -Command \"Get-Process | Where-Object { $_.MainModule.FileVersionInfo.FileDescription -eq 'Google Chrome for Testing' } | ForEach-Object { Stop-Process -Id $_.Id -Force }\"",
     "create-docker": "docker build -t microsoft-rewards-bot ."
   },

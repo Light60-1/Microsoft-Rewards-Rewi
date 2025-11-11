@@ -13,7 +13,7 @@
  *  - TypeScript rebuild
  * 
  * Usage:
- *   node setup/update/update.mjs        # Run update
+ *   node scripts/installer/update.mjs   # Run update
  *   npm run start                       # Bot runs this automatically if enabled
  */
 
@@ -67,7 +67,7 @@ function stripJsonComments(input) {
       continue
     }
 
-    if (char === '"' || char === "'") {
+    if (char === '"' || char === '\'') {
       inString = true
       stringChar = char
       result += char
@@ -113,10 +113,10 @@ function readJsonConfig(preferredPaths) {
  */
 function run(cmd, args, opts = {}) {
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, { 
-      stdio: 'inherit', 
-      shell: process.platform === 'win32', 
-      ...opts 
+    const child = spawn(cmd, args, {
+      stdio: 'inherit',
+      shell: process.platform === 'win32',
+      ...opts
     })
     child.on('close', (code) => resolve(code ?? 0))
     child.on('error', () => resolve(1))
@@ -138,7 +138,7 @@ async function which(cmd) {
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
     const file = createWriteStream(dest)
-    
+
     httpsGet(url, (response) => {
       // Handle redirects
       if (response.statusCode === 302 || response.statusCode === 301) {
@@ -147,14 +147,14 @@ function downloadFile(url, dest) {
         downloadFile(response.headers.location, dest).then(resolve).catch(reject)
         return
       }
-      
+
       if (response.statusCode !== 200) {
         file.close()
         rmSync(dest, { force: true })
         reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`))
         return
       }
-      
+
       response.pipe(file)
       file.on('finish', () => {
         file.close()
@@ -177,22 +177,22 @@ async function extractZip(zipPath, destDir) {
     const code = await run('unzip', ['-q', '-o', zipPath, '-d', destDir], { stdio: 'ignore' })
     if (code === 0) return
   }
-  
+
   // Try tar (modern Windows/Unix)
   if (await which('tar')) {
     const code = await run('tar', ['-xf', zipPath, '-C', destDir], { stdio: 'ignore' })
     if (code === 0) return
   }
-  
+
   // Try PowerShell Expand-Archive (Windows)
   if (process.platform === 'win32') {
     const code = await run('powershell', [
-      '-Command', 
+      '-Command',
       `Expand-Archive -Path "${zipPath}" -DestinationPath "${destDir}" -Force`
     ], { stdio: 'ignore' })
     if (code === 0) return
   }
-  
+
   throw new Error('No extraction tool found (unzip, tar, or PowerShell required)')
 }
 
@@ -210,7 +210,7 @@ function isDocker() {
     if (existsSync('/.dockerenv')) {
       return true
     }
-    
+
     // Method 2: Check /proc/1/cgroup for docker
     if (existsSync('/proc/1/cgroup')) {
       const cgroupContent = readFileSync('/proc/1/cgroup', 'utf8')
@@ -218,14 +218,14 @@ function isDocker() {
         return true
       }
     }
-    
+
     // Method 3: Check environment variables
-    if (process.env.DOCKER === 'true' || 
-        process.env.CONTAINER === 'docker' ||
-        process.env.KUBERNETES_SERVICE_HOST) {
+    if (process.env.DOCKER === 'true' ||
+      process.env.CONTAINER === 'docker' ||
+      process.env.KUBERNETES_SERVICE_HOST) {
       return true
     }
-    
+
     // Method 4: Check /proc/self/mountinfo for overlay filesystem
     if (existsSync('/proc/self/mountinfo')) {
       const mountinfo = readFileSync('/proc/self/mountinfo', 'utf8')
@@ -233,7 +233,7 @@ function isDocker() {
         return true
       }
     }
-    
+
     return false
   } catch {
     // If any error occurs (e.g., on Windows), assume not Docker
@@ -246,15 +246,15 @@ function isDocker() {
  */
 function getUpdateMode(configData) {
   const dockerMode = configData?.update?.dockerMode || 'auto'
-  
+
   if (dockerMode === 'force-docker') {
     return 'docker'
   }
-  
+
   if (dockerMode === 'force-host') {
     return 'host'
   }
-  
+
   // Auto-detect
   return isDocker() ? 'docker' : 'host'
 }
@@ -275,22 +275,22 @@ async function checkVersion() {
       console.log('⚠️  Could not find local package.json')
       return { updateAvailable: false, localVersion: 'unknown', remoteVersion: 'unknown' }
     }
-    
+
     const localPkg = JSON.parse(readFileSync(localPkgPath, 'utf8'))
     const localVersion = localPkg.version
-    
+
     // Fetch remote version from GitHub
     const repoOwner = 'Obsidian-wtf'
     const repoName = 'Microsoft-Rewards-Bot'
     const branch = 'main'
-    
+
     // Add cache-buster to prevent GitHub from serving stale cached version
     const cacheBuster = Date.now()
     const pkgUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/refs/heads/${branch}/package.json?cb=${cacheBuster}`
-    
+
     console.log('🔍 Checking for updates...')
     console.log(`   Local:  ${localVersion}`)
-    
+
     return new Promise((resolve) => {
       // Request with cache-busting headers
       const options = {
@@ -301,14 +301,14 @@ async function checkVersion() {
           'User-Agent': 'Microsoft-Rewards-Bot-Updater'
         }
       }
-      
+
       const request = httpsGet(pkgUrl, options, (res) => {
         if (res.statusCode !== 200) {
           console.log(`   ⚠️  Could not check remote version (HTTP ${res.statusCode})`)
           resolve({ updateAvailable: false, localVersion, remoteVersion: 'unknown' })
           return
         }
-        
+
         let data = ''
         res.on('data', chunk => data += chunk)
         res.on('end', () => {
@@ -316,7 +316,7 @@ async function checkVersion() {
             const remotePkg = JSON.parse(data)
             const remoteVersion = remotePkg.version
             console.log(`   Remote: ${remoteVersion}`)
-            
+
             // Any difference triggers update (upgrade or downgrade)
             const updateAvailable = localVersion !== remoteVersion
             resolve({ updateAvailable, localVersion, remoteVersion })
@@ -326,13 +326,13 @@ async function checkVersion() {
           }
         })
       })
-      
+
       // Timeout after 10 seconds
       request.on('error', (err) => {
         console.log(`   ⚠️  Network error: ${err.message}`)
         resolve({ updateAvailable: false, localVersion, remoteVersion: 'unknown' })
       })
-      
+
       request.setTimeout(10000, () => {
         request.destroy()
         console.log('   ⚠️  Request timeout')
@@ -351,12 +351,12 @@ async function checkVersion() {
 async function performUpdate() {
   // Step 0: Check if update is needed by comparing versions
   const versionCheck = await checkVersion()
-  
+
   if (!versionCheck.updateAvailable) {
     console.log(`✅ Already up to date (v${versionCheck.localVersion})`)
     return 0 // Exit without creating update marker
   }
-  
+
   // Step 0.5: Detect environment and determine update mode
   const configData = readJsonConfig([
     'src/config.jsonc',
@@ -364,31 +364,31 @@ async function performUpdate() {
     'src/config.json',
     'config.json'
   ])
-  
+
   const updateMode = getUpdateMode(configData)
   const envIcon = updateMode === 'docker' ? '🐳' : '💻'
-  
+
   console.log(`\n📦 Update available: ${versionCheck.localVersion} → ${versionCheck.remoteVersion}`)
   console.log(`${envIcon} Environment: ${updateMode === 'docker' ? 'Docker container' : 'Host system'}`)
   console.log('⏳ Updating... (this may take a moment)\n')
-  
+
   // Step 1: Read user preferences (silent)
   const userConfig = {
     autoUpdateConfig: configData?.update?.autoUpdateConfig ?? false,
     autoUpdateAccounts: configData?.update?.autoUpdateAccounts ?? false
   }
-  
+
   // Step 2: Create backups (protected files + critical for rollback)
   const backupDir = join(process.cwd(), '.update-backup')
   const rollbackDir = join(process.cwd(), '.update-rollback')
-  
+
   // Clean previous backups
   rmSync(backupDir, { recursive: true, force: true })
   rmSync(rollbackDir, { recursive: true, force: true })
-  
+
   mkdirSync(backupDir, { recursive: true })
   mkdirSync(rollbackDir, { recursive: true })
-  
+
   const filesToProtect = [
     { path: 'src/config.jsonc', protect: !userConfig.autoUpdateConfig },
     { path: 'src/accounts.jsonc', protect: !userConfig.autoUpdateAccounts },
@@ -396,16 +396,16 @@ async function performUpdate() {
     { path: 'sessions', protect: true, isDir: true },
     { path: '.playwright-chromium-installed', protect: true }
   ]
-  
+
   const backedUp = []
   for (const file of filesToProtect) {
     if (!file.protect) continue
     const srcPath = join(process.cwd(), file.path)
     if (!existsSync(srcPath)) continue
-    
+
     const destPath = join(backupDir, file.path)
     mkdirSync(dirname(destPath), { recursive: true })
-    
+
     try {
       if (file.isDir) {
         cpSync(srcPath, destPath, { recursive: true })
@@ -417,7 +417,7 @@ async function performUpdate() {
       // Silent failure - continue with update
     }
   }
-  
+
   // Backup critical files for potential rollback
   const criticalFiles = ['package.json', 'package-lock.json', 'dist']
   for (const file of criticalFiles) {
@@ -434,17 +434,17 @@ async function performUpdate() {
       // Continue
     }
   }
-  
+
   // Step 3: Download latest code from GitHub
   process.stdout.write('📥 Downloading...')
   const repoOwner = 'Obsidian-wtf'
   const repoName = 'Microsoft-Rewards-Bot'
   const branch = 'main'
   const archiveUrl = `https://github.com/${repoOwner}/${repoName}/archive/refs/heads/${branch}.zip`
-  
+
   const archivePath = join(process.cwd(), '.update-download.zip')
   const extractDir = join(process.cwd(), '.update-extract')
-  
+
   try {
     await downloadFile(archiveUrl, archivePath)
     process.stdout.write(' ✓\n')
@@ -452,12 +452,12 @@ async function performUpdate() {
     console.log(` ❌\n❌ Download failed: ${err.message}`)
     return 1
   }
-  
+
   // Step 4: Extract archive
   process.stdout.write('📂 Extracting...')
   rmSync(extractDir, { recursive: true, force: true })
   mkdirSync(extractDir, { recursive: true })
-  
+
   try {
     await extractZip(archivePath, extractDir)
     process.stdout.write(' ✓\n')
@@ -465,7 +465,7 @@ async function performUpdate() {
     console.log(` ❌\n❌ Extraction failed: ${err.message}`)
     return 1
   }
-  
+
   // Step 5: Find extracted folder
   const extractedItems = readdirSync(extractDir)
   const extractedRepoDir = extractedItems.find(item => item.startsWith(repoName))
@@ -473,9 +473,9 @@ async function performUpdate() {
     console.log('\n❌ Could not find extracted repository folder')
     return 1
   }
-  
+
   const sourceDir = join(extractDir, extractedRepoDir)
-  
+
   // Step 6: Copy files selectively
   process.stdout.write('📦 Updating files...')
   const itemsToUpdate = [
@@ -494,22 +494,22 @@ async function performUpdate() {
     'README.md',
     'LICENSE'
   ]
-  
+
   for (const item of itemsToUpdate) {
     const srcPath = join(sourceDir, item)
     const destPath = join(process.cwd(), item)
-    
+
     if (!existsSync(srcPath)) continue
-    
+
     // Skip protected items
     const isProtected = backedUp.some(f => f.path === item || destPath.includes(f.path))
     if (isProtected) continue
-    
+
     try {
       if (existsSync(destPath)) {
         rmSync(destPath, { recursive: true, force: true })
       }
-      
+
       if (statSync(srcPath).isDirectory()) {
         cpSync(srcPath, destPath, { recursive: true })
       } else {
@@ -520,16 +520,16 @@ async function performUpdate() {
     }
   }
   process.stdout.write(' ✓\n')
-  
+
   // Step 7: Restore protected files (silent)
   if (backedUp.length > 0) {
     for (const file of backedUp) {
       const backupPath = join(backupDir, file.path)
       if (!existsSync(backupPath)) continue
-      
+
       const destPath = join(process.cwd(), file.path)
       mkdirSync(dirname(destPath), { recursive: true })
-      
+
       try {
         if (file.isDir) {
           rmSync(destPath, { recursive: true, force: true })
@@ -542,12 +542,12 @@ async function performUpdate() {
       }
     }
   }
-  
+
   // Step 8: Cleanup temporary files (silent)
   rmSync(archivePath, { force: true })
   rmSync(extractDir, { recursive: true, force: true })
   rmSync(backupDir, { recursive: true, force: true })
-  
+
   // Step 9: Create update marker for bot restart detection
   const updateMarkerPath = join(process.cwd(), '.update-happened')
   writeFileSync(updateMarkerPath, JSON.stringify({
@@ -556,7 +556,7 @@ async function performUpdate() {
     toVersion: versionCheck.remoteVersion,
     method: 'github-api'
   }, null, 2))
-  
+
   // Step 10: Install dependencies & rebuild
   const hasNpm = await which('npm')
   if (!hasNpm) {
@@ -570,15 +570,15 @@ async function performUpdate() {
     await run('npm', ['install', '--silent'], { stdio: 'ignore' })
   }
   process.stdout.write(' ✓\n')
-  
+
   process.stdout.write('🔨 Building project...')
   const buildCode = await run('npm', ['run', 'build'], { stdio: 'ignore' })
-  
+
   if (buildCode !== 0) {
     // Build failed - rollback
     process.stdout.write(' ❌\n')
     console.log('⚠️  Build failed, rolling back to previous version...')
-    
+
     // Restore from rollback
     for (const file of criticalFiles) {
       const srcPath = join(rollbackDir, file)
@@ -595,14 +595,14 @@ async function performUpdate() {
         // Continue
       }
     }
-    
+
     console.log('✅ Rollback complete - using previous version')
     rmSync(rollbackDir, { recursive: true, force: true })
     return 1
   }
-  
+
   process.stdout.write(' ✓\n')
-  
+
   // Step 11: Verify integrity (check if critical files exist)
   process.stdout.write('🔍 Verifying integrity...')
   const criticalPaths = [
@@ -610,7 +610,7 @@ async function performUpdate() {
     'package.json',
     'src/index.ts'
   ]
-  
+
   let integrityOk = true
   for (const path of criticalPaths) {
     if (!existsSync(join(process.cwd(), path))) {
@@ -618,11 +618,11 @@ async function performUpdate() {
       break
     }
   }
-  
+
   if (!integrityOk) {
     process.stdout.write(' ❌\n')
     console.log('⚠️  Integrity check failed, rolling back...')
-    
+
     // Restore from rollback
     for (const file of criticalFiles) {
       const srcPath = join(rollbackDir, file)
@@ -639,19 +639,19 @@ async function performUpdate() {
         // Continue
       }
     }
-    
+
     console.log('✅ Rollback complete - using previous version')
     rmSync(rollbackDir, { recursive: true, force: true })
     return 1
   }
-  
+
   process.stdout.write(' ✓\n')
-  
+
   // Clean rollback backup on success
   rmSync(rollbackDir, { recursive: true, force: true })
 
   console.log(`\n✅ Updated successfully! (${versionCheck.localVersion} → ${versionCheck.remoteVersion})`)
-  
+
   // Different behavior for Docker vs Host
   if (updateMode === 'docker') {
     console.log('� Docker mode: Update complete')
@@ -676,11 +676,11 @@ async function performUpdate() {
 function cleanup() {
   const tempDirs = [
     '.update-backup',
-    '.update-rollback', 
+    '.update-rollback',
     '.update-extract',
     '.update-download.zip'
   ]
-  
+
   for (const dir of tempDirs) {
     const path = join(process.cwd(), dir)
     try {
@@ -705,7 +705,7 @@ async function main() {
     'src/config.json',
     'config.json'
   ])
-  
+
   if (configData?.update?.enabled === false) {
     console.log('\n⚠️  Updates are disabled in config.jsonc')
     console.log('To enable: set "update.enabled" to true in src/config.jsonc\n')
@@ -722,10 +722,10 @@ async function main() {
   try {
     const code = await performUpdate()
     clearTimeout(timeout)
-    
+
     // Final cleanup of temporary files
     cleanup()
-    
+
     process.exit(code)
   } catch (err) {
     clearTimeout(timeout)

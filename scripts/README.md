@@ -1,22 +1,32 @@
 # Scripts Directory
 
-This directory contains utility scripts for development and deployment.
+This directory contains automation scripts for the Microsoft Rewards Bot.
 
 ## Available Scripts
 
-### `run.sh`
-**Purpose:** Nix development environment launcher  
-**Usage:** `./run.sh`  
-**Description:** Launches the bot using Nix develop environment with xvfb-run for headless browser support.
+### `installer/`
+**Purpose:** Automated setup and update scripts  
+**Description:** Contains Node.js scripts for initial setup and GitHub-based updates.
 
-**Requirements:**
-- Nix package manager
-- xvfb (X Virtual Framebuffer)
+#### `installer/setup.mjs`
+**Purpose:** Initial project setup automation  
+**Usage:** `npm run setup` or `node scripts/installer/setup.mjs`  
+**Description:** Automates initial project configuration, dependency installation, and first-time setup.
 
-**Environment:**
-This script is designed for NixOS or systems with Nix installed. It provides a reproducible development environment as defined in `setup/nix/flake.nix`.
+#### `installer/update.mjs`
+**Purpose:** GitHub ZIP-based auto-updater  
+**Usage:** `node scripts/installer/update.mjs`  
+**Description:** Downloads and applies updates from GitHub without Git. Preserves user configuration files (`accounts.jsonc`, `config.jsonc`, `sessions/`).
+
+**Features:**
+- No Git required
+- No merge conflicts
+- Selective file preservation
+- Automatic rollback on failure
+- Dependency installation
+- TypeScript rebuild
 
 ---
 
 For Docker deployment, see the `docker/` directory.  
-For setup scripts, see the `setup/` directory.
+For shell scripts (setup.bat, setup.sh, run.sh), see the `setup/` directory.
