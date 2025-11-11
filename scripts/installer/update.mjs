@@ -265,7 +265,8 @@ function getUpdateMode(configData) {
 
 /**
  * Check if update is available by comparing versions
- * Returns true if versions differ (allows both upgrades and downgrades)
+ * Uses GitHub API directly (no CDN cache issues, always fresh data)
+ * Rate limit: 60 requests/hour (sufficient for bot updates)
  */
 async function checkVersion() {
   try {
@@ -279,32 +280,32 @@ async function checkVersion() {
     const localPkg = JSON.parse(readFileSync(localPkgPath, 'utf8'))
     const localVersion = localPkg.version
 
-    // Fetch remote version from GitHub
+    // Fetch remote version from GitHub API (no cache)
     const repoOwner = 'Obsidian-wtf'
     const repoName = 'Microsoft-Rewards-Bot'
     const branch = 'main'
 
-    // Add cache-buster to prevent GitHub from serving stale cached version
-    const cacheBuster = Date.now()
-    const pkgUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/refs/heads/${branch}/package.json?cb=${cacheBuster}`
-
     console.log('🔍 Checking for updates...')
     console.log(`   Local:  ${localVersion}`)
 
+    // Use GitHub API directly - no CDN cache, always fresh
+    const apiUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/package.json?ref=${branch}`
+
     return new Promise((resolve) => {
-      // Request with cache-busting headers
       const options = {
         headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-          'User-Agent': 'Microsoft-Rewards-Bot-Updater'
+          'User-Agent': 'Microsoft-Rewards-Bot-Updater',
+          'Accept': 'application/vnd.github.v3.raw',  // Returns raw file content
+          'Cache-Control': 'no-cache'
         }
       }
 
-      const request = httpsGet(pkgUrl, options, (res) => {
+      const request = httpsGet(apiUrl, options, (res) => {
         if (res.statusCode !== 200) {
-          console.log(`   ⚠️  Could not check remote version (HTTP ${res.statusCode})`)
+          console.log(`   ⚠️  GitHub API returned HTTP ${res.statusCode}`)
+          if (res.statusCode === 403) {
+            console.log('   ℹ️  Rate limit may be exceeded (60/hour). Try again later.')
+          }
           resolve({ updateAvailable: false, localVersion, remoteVersion: 'unknown' })
           return
         }
@@ -327,7 +328,6 @@ async function checkVersion() {
         })
       })
 
-      // Timeout after 10 seconds
       request.on('error', (err) => {
         console.log(`   ⚠️  Network error: ${err.message}`)
         resolve({ updateAvailable: false, localVersion, remoteVersion: 'unknown' })
@@ -335,7 +335,7 @@ async function checkVersion() {
 
       request.setTimeout(10000, () => {
         request.destroy()
-        console.log('   ⚠️  Request timeout')
+        console.log('   ⚠️  Request timeout (10s)')
         resolve({ updateAvailable: false, localVersion, remoteVersion: 'unknown' })
       })
     })
