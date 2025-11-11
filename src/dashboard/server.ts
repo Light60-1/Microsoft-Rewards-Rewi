@@ -3,7 +3,7 @@ import fs from 'fs'
 import { createServer } from 'http'
 import path from 'path'
 import { WebSocket, WebSocketServer } from 'ws'
-import { log as botLog } from '../util/Logger'
+import { log as botLog } from '../util/notifications/Logger'
 import { apiRouter } from './routes'
 import { DashboardLog, dashboardState } from './state'
 
@@ -41,7 +41,7 @@ export class DashboardServer {
 
   private setupMiddleware(): void {
     this.app.use(express.json())
-    
+
     // Disable caching for all static files
     this.app.use((req, res, next) => {
       res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private')
@@ -49,7 +49,7 @@ export class DashboardServer {
       res.set('Expires', '0')
       next()
     })
-    
+
     this.app.use('/assets', express.static(path.join(__dirname, '../../assets'), {
       etag: false,
       maxAge: 0
@@ -62,7 +62,7 @@ export class DashboardServer {
 
   private setupRoutes(): void {
     this.app.use('/api', apiRouter)
-    
+
     // Health check
     this.app.get('/health', (_req, res) => {
       res.json({ status: 'ok', uptime: process.uptime() })
@@ -71,12 +71,12 @@ export class DashboardServer {
     // Serve dashboard UI
     this.app.get('/', (_req, res) => {
       const indexPath = path.join(__dirname, '../../public/index.html')
-      
+
       // Force no cache on HTML files
       res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private')
       res.set('Pragma', 'no-cache')
       res.set('Expires', '0')
-      
+
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath)
       } else {
@@ -117,9 +117,9 @@ export class DashboardServer {
       const recentLogs = dashboardState.getLogs(100)
       const status = dashboardState.getStatus()
       const accounts = dashboardState.getAccounts()
-      
-      ws.send(JSON.stringify({ 
-        type: 'init', 
+
+      ws.send(JSON.stringify({
+        type: 'init',
         data: {
           logs: recentLogs,
           status,
@@ -135,7 +135,7 @@ export class DashboardServer {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const loggerModule = require('../util/Logger') as { log: typeof botLog }
     const originalLog = loggerModule.log
-    
+
     loggerModule.log = (
       isMobile: boolean | 'main',
       title: string,
@@ -145,7 +145,7 @@ export class DashboardServer {
     ) => {
       // Call original log function
       const result = originalLog(isMobile, title, message, type, color as keyof typeof import('chalk'))
-      
+
       // Create log entry for dashboard
       const logEntry: DashboardLog = {
         timestamp: new Date().toISOString(),
@@ -154,14 +154,14 @@ export class DashboardServer {
         title,
         message
       }
-      
+
       // Add to dashboard state and broadcast
       dashboardState.addLog(logEntry)
       this.broadcastUpdate('log', { log: logEntry })
-      
+
       return result
     }
-    
+
     dashLog('Bot log interception active')
   }
 

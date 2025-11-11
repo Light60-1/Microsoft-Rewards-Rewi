@@ -8,7 +8,7 @@ import { AppUserData } from '../interface/AppUserData'
 import { Counters, DashboardData, MorePromotion, PromotionalItem } from '../interface/DashboardData'
 import { EarnablePoints } from '../interface/Points'
 import { QuizData } from '../interface/QuizData'
-import { saveSessionData } from '../util/Load'
+import { saveSessionData } from '../util/state/Load'
 
 
 export default class BrowserFunc {
@@ -29,12 +29,12 @@ export default class BrowserFunc {
         const suspendedByHeader = await page.waitForSelector(SELECTORS.SUSPENDED_ACCOUNT, { state: 'visible', timeout: 500 })
             .then(() => true)
             .catch(() => false)
-        
+
         if (suspendedByHeader) {
             this.bot.log(this.bot.isMobile, 'GO-HOME', `Account suspension detected by header selector (iteration ${iteration})`, 'error')
             return true
         }
-        
+
         // Secondary check: look for suspension text in main content area only
         try {
             const mainContent = (await page.locator('#contentContainer, #main, .main-content').first().textContent({ timeout: 500 }).catch(() => '')) || ''
@@ -43,7 +43,7 @@ export default class BrowserFunc {
                 /suspended\s+due\s+to\s+unusual\s+activity/i,
                 /your\s+account\s+is\s+temporarily\s+suspended/i
             ]
-            
+
             const isSuspended = suspensionPatterns.some(pattern => pattern.test(mainContent))
             if (isSuspended) {
                 this.bot.log(this.bot.isMobile, 'GO-HOME', `Account suspension detected by content text (iteration ${iteration})`, 'error')
@@ -54,7 +54,7 @@ export default class BrowserFunc {
             const errorMsg = error instanceof Error ? error.message : String(error)
             this.bot.log(this.bot.isMobile, 'GO-HOME', `Suspension text check skipped: ${errorMsg}`, 'warn')
         }
-        
+
         return false
     }
 
@@ -90,7 +90,7 @@ export default class BrowserFunc {
                     if (isSuspended) {
                         throw new Error('Account has been suspended!')
                     }
-                    
+
                     // Not suspended, just activities not loaded yet - continue to next iteration
                     this.bot.log(this.bot.isMobile, 'GO-HOME', `Activities not found yet (iteration ${iteration}/${RETRY_LIMITS.GO_HOME_MAX}), retrying...`, 'warn')
                 }
@@ -133,10 +133,10 @@ export default class BrowserFunc {
                 this.bot.log(this.bot.isMobile, 'DASHBOARD-DATA', 'Provided page did not equal dashboard page, redirecting to dashboard page')
                 await this.goHome(target)
             }
-            
+
             // Reload with retry
             await this.reloadPageWithRetry(target, 2)
-            
+
             // Wait for the more-activities element to ensure page is fully loaded
             await target.waitForSelector(SELECTORS.MORE_ACTIVITIES, { timeout: TIMEOUTS.DASHBOARD_WAIT }).catch((error) => {
                 // Continuing is intentional: page may still be functional even if this specific element is missing
@@ -149,7 +149,7 @@ export default class BrowserFunc {
 
             if (!scriptContent) {
                 this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', 'Dashboard script not found on first try, attempting recovery', 'warn')
-                
+
                 // Force a navigation retry once before failing hard
                 await this.goHome(target)
                 await target.waitForLoadState('domcontentloaded', { timeout: TIMEOUTS.VERY_LONG }).catch((error) => {
@@ -157,9 +157,9 @@ export default class BrowserFunc {
                     this.bot.log(this.bot.isMobile, 'BROWSER-FUNC', `Dashboard recovery load failed: ${errorMsg}`, 'warn')
                 })
                 await this.bot.utils.wait(this.bot.isMobile ? TIMEOUTS.LONG : TIMEOUTS.MEDIUM)
-                
+
                 scriptContent = await this.extractDashboardScript(target)
-                
+
                 if (!scriptContent) {
                     this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', 'Dashboard data not found within script', 'error')
                     throw new Error('Dashboard data not found within script - check page structure')
@@ -192,14 +192,14 @@ export default class BrowserFunc {
         const startTime = Date.now()
         const MAX_TOTAL_TIME_MS = 30000 // 30 seconds max total
         let lastError: unknown = null
-        
+
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             // Check global timeout
             if (Date.now() - startTime > MAX_TOTAL_TIME_MS) {
                 this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Reload retry exceeded total timeout (${MAX_TOTAL_TIME_MS}ms)`, 'warn')
                 break
             }
-            
+
             try {
                 await page.reload({ waitUntil: 'domcontentloaded' })
                 await this.bot.utils.wait(this.bot.isMobile ? TIMEOUTS.LONG : TIMEOUTS.MEDIUM)
@@ -212,7 +212,7 @@ export default class BrowserFunc {
                 if (msg.includes('has been closed')) {
                     if (attempt === 1) {
                         this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', 'Page appears closed; trying one navigation fallback', 'warn')
-                        try { await this.goHome(page) } catch {/* ignore */}
+                        try { await this.goHome(page) } catch {/* ignore */ }
                     } else {
                         break
                     }
@@ -222,7 +222,7 @@ export default class BrowserFunc {
                 }
             }
         }
-        
+
         if (lastError) throw lastError
     }
 
@@ -233,12 +233,12 @@ export default class BrowserFunc {
         return await page.evaluate(() => {
             const scripts = Array.from(document.querySelectorAll('script'))
             const dashboardPatterns = ['var dashboard', 'dashboard=', 'dashboard :']
-            
+
             const targetScript = scripts.find(script => {
                 const text = script.innerText
                 return text && dashboardPatterns.some(pattern => text.includes(pattern))
             })
-            
+
             return targetScript?.innerText || null
         })
     }
@@ -265,19 +265,19 @@ export default class BrowserFunc {
                         if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
                             continue
                         }
-                        
+
                         const parsed = JSON.parse(jsonStr)
-                        
+
                         // Enhanced validation: check structure and type
                         if (typeof parsed !== 'object' || parsed === null) {
                             continue
                         }
-                        
+
                         // Validate essential dashboard properties exist
                         if (!parsed.userStatus || typeof parsed.userStatus !== 'object') {
                             continue
                         }
-                        
+
                         // Successfully validated dashboard structure
                         return parsed
                     } catch (e) {
@@ -401,7 +401,7 @@ export default class BrowserFunc {
                     const checkInDay = parseInt(item.attributes.progress ?? '', 10) % 7
                     const today = new Date()
                     const lastUpdated = new Date(item.attributes.last_updated ?? '')
-                    
+
                     if (checkInDay < 6 && today.getDate() !== lastUpdated.getDate()) {
                         points.checkIn = parseInt(item.attributes['day_' + (checkInDay + 1) + '_points'] ?? '', 10)
                     }
@@ -493,10 +493,10 @@ export default class BrowserFunc {
                     .map(el => $(el).text())
                     .filter(t => t.length > 0)
                     .map(t => t.substring(0, 100))
-                
+
                 this.bot.log(this.bot.isMobile, 'GET-QUIZ-DATA', `Script not found. Tried variables: ${possibleVariables.join(', ')}`, 'error')
                 this.bot.log(this.bot.isMobile, 'GET-QUIZ-DATA', `Found ${allScripts.length} scripts on page`, 'warn')
-                
+
                 this.bot.log(this.bot.isMobile, 'GET-QUIZ-DATA', 'Script containing quiz data not found', 'error')
                 throw new Error('Script containing quiz data not found - check page structure')
             }
@@ -545,10 +545,10 @@ export default class BrowserFunc {
             const html = await page.content()
             const $ = load(html)
 
-                const element = $('.offer-cta').toArray().find((x: unknown) => {
-                    const el = x as { attribs?: { href?: string } }
-                    return !!el.attribs?.href?.includes(activity.offerId)
-                })
+            const element = $('.offer-cta').toArray().find((x: unknown) => {
+                const el = x as { attribs?: { href?: string } }
+                return !!el.attribs?.href?.includes(activity.offerId)
+            })
             if (element) {
                 selector = `a[href*="${element.attribs.href}"]`
             }

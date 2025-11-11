@@ -7,16 +7,16 @@ import type { Page } from 'playwright'
 import { createInterface } from 'readline'
 import BrowserFunc from './browser/BrowserFunc'
 import BrowserUtil from './browser/BrowserUtil'
-import Axios from './util/Axios'
-import { detectBanReason } from './util/BanDetector'
-import Humanizer from './util/Humanizer'
-import JobState from './util/JobState'
-import { loadAccounts, loadConfig } from './util/Load'
-import { log } from './util/Logger'
-import { MobileRetryTracker } from './util/MobileRetryTracker'
-import { QueryDiversityEngine } from './util/QueryDiversityEngine'
-import { StartupValidator } from './util/StartupValidator'
-import { formatDetailedError, normalizeRecoveryEmail, shortErrorMessage, Util } from './util/Utils'
+import Humanizer from './util/browser/Humanizer'
+import { formatDetailedError, normalizeRecoveryEmail, shortErrorMessage, Util } from './util/core/Utils'
+import Axios from './util/network/Axios'
+import { QueryDiversityEngine } from './util/network/QueryDiversityEngine'
+import { log } from './util/notifications/Logger'
+import JobState from './util/state/JobState'
+import { loadAccounts, loadConfig } from './util/state/Load'
+import { MobileRetryTracker } from './util/state/MobileRetryTracker'
+import { detectBanReason } from './util/validation/BanDetector'
+import { StartupValidator } from './util/validation/StartupValidator'
 
 import { Activities } from './functions/Activities'
 import { Login } from './functions/Login'
@@ -629,7 +629,7 @@ export class MicrosoftRewardsBot {
         try {
             const h = this.config?.humanization
             if (!h || h.immediateBanAlert === false) return
-            const { ConclusionWebhook } = await import('./util/ConclusionWebhook')
+            const { ConclusionWebhook } = await import('./util/notifications/ConclusionWebhook')
             await ConclusionWebhook(
                 this.config,
                 '🚫 Ban Detected',
@@ -806,7 +806,7 @@ export class MicrosoftRewardsBot {
     /** Send a strong alert to all channels and mention @everyone when entering global security standby. */
     private async sendGlobalSecurityStandbyAlert(email: string, reason: string): Promise<void> {
         try {
-            const { ConclusionWebhook } = await import('./util/ConclusionWebhook')
+            const { ConclusionWebhook } = await import('./util/notifications/ConclusionWebhook')
             await ConclusionWebhook(
                 this.config,
                 '🚨 Critical Security Alert',

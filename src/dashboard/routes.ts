@@ -1,7 +1,7 @@
 import { Request, Response, Router } from 'express'
 import fs from 'fs'
 import path from 'path'
-import { getConfigPath, loadAccounts, loadConfig } from '../util/Load'
+import { getConfigPath, loadAccounts, loadConfig } from '../util/state/Load'
 import { botController } from './BotController'
 import { dashboardState } from './state'
 
@@ -100,7 +100,7 @@ apiRouter.get('/config', (_req: Request, res: Response) => {
   try {
     const config = loadConfig()
     const safe = JSON.parse(JSON.stringify(config))
-    
+
     // Mask sensitive data
     if (safe.webhook?.url) safe.webhook.url = maskUrl(safe.webhook.url)
     if (safe.conclusionWebhook?.url) safe.conclusionWebhook.url = maskUrl(safe.conclusionWebhook.url)
@@ -117,7 +117,7 @@ apiRouter.post('/config', (req: Request, res: Response): void => {
   try {
     const newConfig = req.body
     const configPath = getConfigPath()
-    
+
     if (!configPath || !fs.existsSync(configPath)) {
       res.status(404).json({ error: 'Config file not found' })
       return
@@ -146,7 +146,7 @@ apiRouter.post('/start', async (_req: Request, res: Response): Promise<void> => 
     }
 
     const result = await botController.start()
-    
+
     if (result.success) {
       sendSuccess(res, { message: 'Bot started successfully', pid: result.pid })
     } else {
@@ -161,7 +161,7 @@ apiRouter.post('/start', async (_req: Request, res: Response): Promise<void> => 
 apiRouter.post('/stop', (_req: Request, res: Response): void => {
   try {
     const result = botController.stop()
-    
+
     if (result.success) {
       sendSuccess(res, { message: 'Bot stopped successfully' })
     } else {
@@ -176,7 +176,7 @@ apiRouter.post('/stop', (_req: Request, res: Response): void => {
 apiRouter.post('/restart', async (_req: Request, res: Response): Promise<void> => {
   try {
     const result = await botController.restart()
-    
+
     if (result.success) {
       sendSuccess(res, { message: 'Bot restarted successfully', pid: result.pid })
     } else {
@@ -194,7 +194,7 @@ apiRouter.get('/metrics', (_req: Request, res: Response) => {
     const totalPoints = accounts.reduce((sum, a) => sum + (a.points || 0), 0)
     const accountsWithErrors = accounts.filter(a => a.errors && a.errors.length > 0).length
     const avgPoints = accounts.length > 0 ? Math.round(totalPoints / accounts.length) : 0
-    
+
     res.json({
       totalAccounts: accounts.length,
       totalPoints,
@@ -218,14 +218,14 @@ apiRouter.get('/account/:email', (req: Request, res: Response): void => {
       res.status(400).json({ error: 'Email parameter required' })
       return
     }
-    
+
     const account = dashboardState.getAccount(email)
-    
+
     if (!account) {
       res.status(404).json({ error: 'Account not found' })
       return
     }
-    
+
     res.json(account)
   } catch (error) {
     res.status(500).json({ error: getErr(error) })
@@ -240,19 +240,19 @@ apiRouter.post('/account/:email/reset', (req: Request, res: Response): void => {
       res.status(400).json({ error: 'Email parameter required' })
       return
     }
-    
+
     const account = dashboardState.getAccount(email)
-    
+
     if (!account) {
       res.status(404).json({ error: 'Account not found' })
       return
     }
-    
+
     dashboardState.updateAccount(email, {
       status: 'idle',
       errors: []
     })
-    
+
     res.json({ success: true })
   } catch (error) {
     res.status(500).json({ error: getErr(error) })
@@ -263,10 +263,10 @@ apiRouter.post('/account/:email/reset', (req: Request, res: Response): void => {
 function maskUrl(url: string): string {
   try {
     const parsed = new URL(url)
-    const maskedHost = parsed.hostname.length > 6 
+    const maskedHost = parsed.hostname.length > 6
       ? `${parsed.hostname.slice(0, 3)}***${parsed.hostname.slice(-3)}`
       : '***'
-    const maskedPath = parsed.pathname.length > 5 
+    const maskedPath = parsed.pathname.length > 5
       ? `${parsed.pathname.slice(0, 3)}***`
       : '***'
     return `${parsed.protocol}//${maskedHost}${maskedPath}`

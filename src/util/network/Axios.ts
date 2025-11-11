@@ -2,7 +2,7 @@ import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse } f
 import { HttpProxyAgent } from 'http-proxy-agent'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import { SocksProxyAgent } from 'socks-proxy-agent'
-import { AccountProxy } from '../interface/Account'
+import { AccountProxy } from '../../interface/Account'
 
 class AxiosClient {
     private instance: AxiosInstance
@@ -90,13 +90,13 @@ class AxiosClient {
         // FIXED: Initialize lastError to prevent throwing undefined
         let lastError: unknown = new Error('Request failed with unknown error')
         const maxAttempts = 2
-        
+
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 return await this.instance.request(config)
             } catch (err: unknown) {
                 lastError = err
-                
+
                 // Handle HTTP 407 Proxy Authentication Required
                 if (this.isProxyAuthError(err)) {
                     // Retry without proxy on auth failure
@@ -116,15 +116,15 @@ class AxiosClient {
                     const bypassInstance = axios.create()
                     return bypassInstance.request(config)
                 }
-                
+
                 // Non-retryable error
                 throw err
             }
         }
-        
+
         throw lastError
     }
-    
+
     /**
      * Check if error is HTTP 407 Proxy Authentication Required
      */
@@ -132,27 +132,27 @@ class AxiosClient {
         const axiosErr = err as AxiosError | undefined
         return axiosErr?.response?.status === 407
     }
-    
+
     /**
      * Check if error is retryable (network/proxy issues)
      */
     private isRetryableError(err: unknown): boolean {
         const e = err as { code?: string; cause?: { code?: string }; message?: string } | undefined
         if (!e) return false
-        
+
         const code = e.code || e.cause?.code
-        const isNetworkError = code === 'ECONNREFUSED' || 
-                               code === 'ETIMEDOUT' || 
-                               code === 'ECONNRESET' || 
-                               code === 'ENOTFOUND' ||
-                               code === 'EPIPE'
-        
+        const isNetworkError = code === 'ECONNREFUSED' ||
+            code === 'ETIMEDOUT' ||
+            code === 'ECONNRESET' ||
+            code === 'ENOTFOUND' ||
+            code === 'EPIPE'
+
         const msg = String(e.message || '')
         const isProxyIssue = /proxy|tunnel|socks|agent/i.test(msg)
-        
+
         return isNetworkError || isProxyIssue
     }
-    
+
     private sleep(ms: number): Promise<void> {
         return new Promise(resolve => setTimeout(resolve, ms))
     }

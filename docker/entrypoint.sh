@@ -26,7 +26,7 @@ if [ "${RUN_ON_START:-false}" = "true" ]; then
       exit 1
     }
     # Skip random sleep for initial run, but preserve setting for cron jobs
-    SKIP_RANDOM_SLEEP=true src/run_daily.sh
+    SKIP_RANDOM_SLEEP=true docker/run_daily.sh
     echo "[entrypoint-bg] Initial run completed at $(date)"
   ) &
   echo "[entrypoint] Background process started (PID: $!)"

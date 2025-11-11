@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { Util } from './Utils'
+import { Util } from '../core/Utils'
 
 export interface QueryDiversityConfig {
   sources: Array<'google-trends' | 'reddit' | 'news' | 'wikipedia' | 'local-fallback'>
@@ -22,10 +22,10 @@ export class QueryDiversityEngine {
   constructor(config?: Partial<QueryDiversityConfig>, logger?: (source: string, message: string, level?: 'info' | 'warn' | 'error') => void) {
     const maxQueriesPerSource = Math.max(1, Math.min(config?.maxQueriesPerSource || 10, 50))
     const cacheMinutes = Math.max(1, Math.min(config?.cacheMinutes || 30, 1440))
-    
+
     this.config = {
-      sources: config?.sources && config.sources.length > 0 
-        ? config.sources 
+      sources: config?.sources && config.sources.length > 0
+        ? config.sources
         : ['google-trends', 'reddit', 'local-fallback'],
       deduplicate: config?.deduplicate !== false,
       mixStrategies: config?.mixStrategies !== false,
@@ -44,7 +44,7 @@ export class QueryDiversityEngine {
   /**
    * Generic HTTP fetch with error handling and timeout
    */
-  private async fetchHttp(url: string, config?: { 
+  private async fetchHttp(url: string, config?: {
     method?: 'GET' | 'POST'
     headers?: Record<string, string>
     data?: string
@@ -104,7 +104,7 @@ export class QueryDiversityEngine {
    */
   private async getFromSource(source: string): Promise<string[]> {
     this.cleanExpiredCache()
-    
+
     const cached = this.cache.get(source)
     if (cached && Date.now() < cached.expires) {
       return cached.queries
@@ -174,7 +174,7 @@ export class QueryDiversityEngine {
     try {
       const subreddits = ['news', 'worldnews', 'todayilearned', 'askreddit', 'technology']
       const randomSub = subreddits[Math.floor(Math.random() * subreddits.length)]
-      
+
       const data = await this.fetchHttp(`https://www.reddit.com/r/${randomSub}/hot.json?limit=15`)
       const parsed = JSON.parse(data)
       const posts = parsed.data?.children || []
@@ -296,28 +296,28 @@ export class QueryDiversityEngine {
     const result: string[] = []
     const queriesPerSource = Math.ceil(this.config.maxQueriesPerSource)
     const sourceCount = this.config.sources.length
-    
+
     if (sourceCount === 0 || queries.length === 0) {
       return queries.slice(0, targetCount)
     }
-    
+
     const chunkSize = queriesPerSource
     let sourceIndex = 0
-    
+
     for (let i = 0; i < queries.length && result.length < targetCount; i++) {
       const currentChunkStart = sourceIndex * chunkSize
       const currentChunkEnd = currentChunkStart + chunkSize
       const query = queries[i]
-      
+
       if (query && i >= currentChunkStart && i < currentChunkEnd) {
         result.push(query)
       }
-      
+
       if (i === currentChunkEnd - 1) {
         sourceIndex = (sourceIndex + 1) % sourceCount
       }
     }
-    
+
     return result.slice(0, targetCount)
   }
 

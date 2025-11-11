@@ -13,8 +13,8 @@
 
 import type { MicrosoftRewardsBot } from '../index'
 import type { Account } from '../interface/Account'
-import { closeBrowserSafely, createBrowserInstance } from '../util/BrowserFactory'
-import { MobileRetryTracker } from '../util/MobileRetryTracker'
+import { closeBrowserSafely, createBrowserInstance } from '../util/browser/BrowserFactory'
+import { MobileRetryTracker } from '../util/state/MobileRetryTracker'
 import { handleCompromisedMode } from './FlowUtils'
 
 export interface MobileFlowResult {

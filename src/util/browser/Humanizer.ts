@@ -1,6 +1,6 @@
 import { Page } from 'rebrowser-playwright'
-import { Util } from './Utils'
-import type { ConfigHumanization } from '../interface/Config'
+import type { ConfigHumanization } from '../../interface/Config'
+import { Util } from '../core/Utils'
 
 export class Humanizer {
   private util: Util
@@ -46,9 +46,9 @@ export class Humanizer {
         try {
           const n = this.util.stringToMs(String(v))
           return Math.max(0, Math.min(n, 10_000))
-        } catch (e) { 
+        } catch (e) {
           // Parse failed - use default minimum
-          return defMin 
+          return defMin
         }
       }
       min = parse(this.cfg.actionDelay.min)

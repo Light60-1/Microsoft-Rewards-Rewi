@@ -10,10 +10,10 @@
  */
 
 import type { Config } from '../interface/Config'
-import { ConclusionWebhook } from '../util/ConclusionWebhook'
-import { JobState } from '../util/JobState'
-import { log } from '../util/Logger'
-import { Ntfy } from '../util/Ntfy'
+import { ConclusionWebhook } from '../util/notifications/ConclusionWebhook'
+import { log } from '../util/notifications/Logger'
+import { Ntfy } from '../util/notifications/Ntfy'
+import { JobState } from '../util/state/JobState'
 
 export interface AccountResult {
     email: string
@@ -54,7 +54,7 @@ export class SummaryReporter {
             const minutes = Math.floor((duration % 3600) / 60)
             const seconds = duration % 60
 
-            const durationText = hours > 0 
+            const durationText = hours > 0
                 ? `${hours}h ${minutes}m ${seconds}s`
                 : minutes > 0
                     ? `${minutes}m ${seconds}s`
@@ -67,7 +67,7 @@ export class SummaryReporter {
             for (const account of summary.accounts) {
                 const status = account.errors?.length ? '❌' : '✅'
                 description += `${status} ${account.email}: ${account.pointsEarned} points (${Math.round(account.runDuration / 1000)}s)\n`
-                
+
                 if (account.errors?.length) {
                     description += `   ⚠️ ${account.errors[0]}\n`
                 }
@@ -95,7 +95,7 @@ export class SummaryReporter {
 
         try {
             const message = `Collected ${summary.totalPoints} points across ${summary.accounts.length} account(s). Success: ${summary.successCount}, Failed: ${summary.failureCount}`
-            
+
             await Ntfy(message, summary.failureCount > 0 ? 'warn' : 'log')
         } catch (error) {
             log('main', 'SUMMARY', `Failed to send Ntfy notification: ${error instanceof Error ? error.message : String(error)}`, 'error')
@@ -109,7 +109,7 @@ export class SummaryReporter {
         try {
             const day = summary.endTime.toISOString().split('T')?.[0]
             if (!day) return
-            
+
             for (const account of summary.accounts) {
                 this.jobState.markAccountComplete(
                     account.email,
@@ -133,12 +133,12 @@ export class SummaryReporter {
         log('main', 'SUMMARY', '═'.repeat(80))
         log('main', 'SUMMARY', '📊 EXECUTION SUMMARY')
         log('main', 'SUMMARY', '═'.repeat(80))
-        
+
         const duration = Math.round((summary.endTime.getTime() - summary.startTime.getTime()) / 1000)
         log('main', 'SUMMARY', `⏱️  Duration: ${Math.floor(duration / 60)}m ${duration % 60}s`)
         log('main', 'SUMMARY', `📈 Total Points Collected: ${summary.totalPoints}`)
         log('main', 'SUMMARY', `✅ Successful Accounts: ${summary.successCount}/${summary.accounts.length}`)
-        
+
         if (summary.failureCount > 0) {
             log('main', 'SUMMARY', `❌ Failed Accounts: ${summary.failureCount}`, 'warn')
         }
@@ -150,10 +150,10 @@ export class SummaryReporter {
         for (const account of summary.accounts) {
             const status = account.errors?.length ? '❌ FAILED' : '✅ SUCCESS'
             const duration = Math.round(account.runDuration / 1000)
-            
+
             log('main', 'SUMMARY', `${status} | ${account.email}`)
             log('main', 'SUMMARY', `   Points: ${account.pointsEarned} | Duration: ${duration}s`)
-            
+
             if (account.errors?.length) {
                 log('main', 'SUMMARY', `   Error: ${account.errors[0]}`, 'error')
             }

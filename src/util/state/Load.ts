@@ -2,9 +2,9 @@ import { BrowserFingerprintWithHeaders } from 'fingerprint-generator'
 import fs from 'fs'
 import path from 'path'
 import { BrowserContext, Cookie } from 'rebrowser-playwright'
-import { Account } from '../interface/Account'
-import { Config, ConfigBrowser, ConfigSaveFingerprint, ConfigScheduling } from '../interface/Config'
-import { Util } from './Utils'
+import { Account } from '../../interface/Account'
+import { Config, ConfigBrowser, ConfigSaveFingerprint, ConfigScheduling } from '../../interface/Config'
+import { Util } from '../core/Utils'
 
 const utils = new Util()
 
@@ -76,16 +76,16 @@ function normalizeConfig(raw: unknown): Config {
     if (!raw || typeof raw !== 'object') {
         throw new Error('Config must be a valid object')
     }
-    
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const n = raw as Record<string, any>
 
     // Browser settings
     const browserConfig = n.browser ?? {}
-    const headless = process.env.FORCE_HEADLESS === '1' 
-        ? true 
-        : (typeof browserConfig.headless === 'boolean' 
-            ? browserConfig.headless 
+    const headless = process.env.FORCE_HEADLESS === '1'
+        ? true
+        : (typeof browserConfig.headless === 'boolean'
+            ? browserConfig.headless
             : (typeof n.headless === 'boolean' ? n.headless : false)) // Legacy fallback
 
     const globalTimeout = browserConfig.globalTimeout ?? n.globalTimeout ?? '30s'
@@ -339,12 +339,12 @@ export function loadAccounts(): Account[] {
             ]
             let chosen: string | null = null
             for (const p of candidates) {
-                try { 
-                    if (fs.existsSync(p)) { 
+                try {
+                    if (fs.existsSync(p)) {
                         chosen = p
-                        break 
-                    } 
-                } catch (e) { 
+                        break
+                    }
+                } catch (e) {
                     // Filesystem check failed for this path, try next
                     continue
                 }
@@ -365,12 +365,12 @@ export function loadAccounts(): Account[] {
             if (!entry || typeof entry !== 'object') {
                 throw new Error('each account entry must be an object')
             }
-            
+
             // Use Record<string, any> to access dynamic properties from untrusted JSON
             // Runtime validation below ensures type safety
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const a = entry as Record<string, any>
-            
+
             // Validate required fields with proper type checking
             if (typeof a.email !== 'string' || typeof a.password !== 'string') {
                 throw new Error('each account must have email and password strings')
@@ -439,15 +439,15 @@ export function loadConfig(): Config {
                 candidates.push(path.join(base, name))
             }
         }
-        
+
         let cfgPath: string | null = null
         for (const p of candidates) {
-            try { 
-                if (fs.existsSync(p)) { 
+            try {
+                if (fs.existsSync(p)) {
                     cfgPath = p
-                    break 
-                } 
-            } catch (e) { 
+                    break
+                }
+            } catch (e) {
                 // Filesystem check failed for this path, try next
                 continue
             }
@@ -517,7 +517,7 @@ export async function saveSessionData(sessionPath: string, browser: BrowserConte
 
         // Save cookies to a file
         await fs.promises.writeFile(
-            path.join(sessionDir, `${isMobile ? 'mobile_cookies' : 'desktop_cookies'}.json`), 
+            path.join(sessionDir, `${isMobile ? 'mobile_cookies' : 'desktop_cookies'}.json`),
             JSON.stringify(cookies, null, 2)
         )
 

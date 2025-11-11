@@ -18,7 +18,7 @@ function parseEnvNumber(key: string, defaultValue: number, min: number, max: num
     const parsed = Number(raw)
     if (!Number.isFinite(parsed)) {
         queueMicrotask(() => {
-            import('./util/Logger').then(({ log }) => {
+            import('./util/notifications/Logger').then(({ log }) => {
                 log('main', 'CONSTANTS', `Invalid ${key}="${raw}" (not a finite number), using default: ${defaultValue}`, 'warn')
             }).catch(() => {
                 process.stderr.write(`[Constants] Invalid ${key}="${raw}" (not a finite number), using default: ${defaultValue}\n`)
@@ -29,7 +29,7 @@ function parseEnvNumber(key: string, defaultValue: number, min: number, max: num
 
     if (parsed < min || parsed > max) {
         queueMicrotask(() => {
-            import('./util/Logger').then(({ log }) => {
+            import('./util/notifications/Logger').then(({ log }) => {
                 log('main', 'CONSTANTS', `${key}=${parsed} out of range [${min}, ${max}], using default: ${defaultValue}`, 'warn')
             }).catch(() => {
                 process.stderr.write(`[Constants] ${key}=${parsed} out of range [${min}, ${max}], using default: ${defaultValue}\n`)

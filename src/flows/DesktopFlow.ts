@@ -12,7 +12,7 @@
 
 import type { MicrosoftRewardsBot } from '../index'
 import type { Account } from '../interface/Account'
-import { closeBrowserSafely, createBrowserInstance } from '../util/BrowserFactory'
+import { closeBrowserSafely, createBrowserInstance } from '../util/browser/BrowserFactory'
 import { handleCompromisedMode } from './FlowUtils'
 
 export interface DesktopFlowResult {

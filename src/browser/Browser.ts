@@ -4,8 +4,8 @@ import playwright, { BrowserContext } from 'rebrowser-playwright'
 
 import { MicrosoftRewardsBot } from '../index'
 import { AccountProxy } from '../interface/Account'
-import { loadSessionData, saveFingerprintData } from '../util/Load'
-import { updateFingerprintUserAgent } from '../util/UserAgent'
+import { updateFingerprintUserAgent } from '../util/browser/UserAgent'
+import { loadSessionData, saveFingerprintData } from '../util/state/Load'
 
 class Browser {
     private bot: MicrosoftRewardsBot
@@ -22,7 +22,7 @@ class Browser {
                 this.bot.log(this.bot.isMobile, 'BROWSER', 'Auto-installing Chromium...', 'log')
                 execSync('npx playwright install chromium', { stdio: 'ignore', timeout: 120000 })
                 this.bot.log(this.bot.isMobile, 'BROWSER', 'Chromium installed successfully', 'log')
-            } catch (e) { 
+            } catch (e) {
                 // FIXED: Improved error logging (no longer silent)
                 const errorMsg = e instanceof Error ? e.message : String(e)
                 this.bot.log(this.bot.isMobile, 'BROWSER', `Auto-install failed: ${errorMsg}`, 'warn')
@@ -33,13 +33,13 @@ class Browser {
         try {
             const envForceHeadless = process.env.FORCE_HEADLESS === '1'
             const headless = envForceHeadless ? true : (this.bot.config.browser?.headless ?? false)
-            
+
             const engineName = 'chromium'
             this.bot.log(this.bot.isMobile, 'BROWSER', `Launching ${engineName} (headless=${headless})`)
             const proxyConfig = this.buildPlaywrightProxy(proxy)
 
             const isLinux = process.platform === 'linux'
-            
+
             // Base arguments for stability
             const baseArgs = [
                 '--no-sandbox',
@@ -49,7 +49,7 @@ class Browser {
                 '--ignore-certificate-errors-spki-list',
                 '--ignore-ssl-errors'
             ]
-            
+
             // Linux stability fixes
             const linuxStabilityArgs = isLinux ? [
                 '--disable-dev-shm-usage',
@@ -88,10 +88,10 @@ class Browser {
         try {
             context.on('page', async (page) => {
                 try {
-                    const viewport = this.bot.isMobile 
+                    const viewport = this.bot.isMobile
                         ? { width: 390, height: 844 }
                         : { width: 1280, height: 800 }
-                    
+
                     await page.setViewportSize(viewport)
 
                     // Standard styling
@@ -106,13 +106,13 @@ class Browser {
                               }
                             `
                             document.documentElement.appendChild(style)
-                        } catch {/* ignore */}
+                        } catch {/* ignore */ }
                     })
-                } catch (e) { 
+                } catch (e) {
                     this.bot.log(this.bot.isMobile, 'BROWSER', `Page setup warning: ${e instanceof Error ? e.message : String(e)}`, 'warn')
                 }
             })
-        } catch (e) { 
+        } catch (e) {
             this.bot.log(this.bot.isMobile, 'BROWSER', `Context event handler warning: ${e instanceof Error ? e.message : String(e)}`, 'warn')
         }
 

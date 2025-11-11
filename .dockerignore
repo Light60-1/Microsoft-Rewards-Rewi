@@ -52,16 +52,12 @@ browser/
 .eslintcache
 setup/
 
-# Docker files (no recursion)
-Dockerfile
-docker-compose.yml
-compose.yaml
+# Docker files (organized in docker/ folder - no recursion needed)
+docker/
 .dockerignore
 
-# NixOS specific files (not needed in Docker)
-flake.nix
-flake.lock
-run.sh
+# Scripts (organized in scripts/ folder - not needed in Docker)
+scripts/
 
 # Asset files (not needed for runtime)
 assets/

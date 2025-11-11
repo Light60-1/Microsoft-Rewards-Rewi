@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import type { Config } from '../interface/Config'
+import type { Config } from '../../interface/Config'
 
 type AccountCompletionMeta = {
   runId?: string

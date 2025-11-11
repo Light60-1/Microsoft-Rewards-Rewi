@@ -1,6 +1,6 @@
 import type { MicrosoftRewardsBot } from '../index'
-import { log as botLog } from '../util/Logger'
-import { getErrorMessage } from '../util/Utils'
+import { getErrorMessage } from '../util/core/Utils'
+import { log as botLog } from '../util/notifications/Logger'
 import { dashboardState } from './state'
 
 export class BotController {
@@ -14,7 +14,7 @@ export class BotController {
 
   private log(message: string, level: 'log' | 'warn' | 'error' = 'log'): void {
     botLog('main', 'BOT-CONTROLLER', message, level)
-    
+
     dashboardState.addLog({
       timestamp: new Date().toISOString(),
       level,
@@ -29,7 +29,7 @@ export class BotController {
     if (this.botInstance) {
       return { success: false, error: 'Bot is already running' }
     }
-    
+
     if (this.isStarting) {
       return { success: false, error: 'Bot is currently starting, please wait' }
     }
@@ -39,7 +39,7 @@ export class BotController {
       this.log('🚀 Starting bot...', 'log')
 
       const { MicrosoftRewardsBot } = await import('../index')
-      
+
       this.botInstance = new MicrosoftRewardsBot(false)
       this.startTime = new Date()
       dashboardState.setRunning(true)
@@ -49,10 +49,10 @@ export class BotController {
       void (async () => {
         try {
           this.log('✓ Bot initialized, starting execution...', 'log')
-          
+
           await this.botInstance!.initialize()
           await this.botInstance!.run()
-          
+
           this.log('✓ Bot completed successfully', 'log')
         } catch (error) {
           this.log(`Bot error: ${getErrorMessage(error)}`, 'error')
@@ -81,7 +81,7 @@ export class BotController {
     try {
       this.log('🛑 Stopping bot...', 'warn')
       this.log('⚠ Note: Bot will complete current task before stopping', 'warn')
-      
+
       this.cleanup()
       return { success: true }
 
@@ -95,14 +95,14 @@ export class BotController {
 
   public async restart(): Promise<{ success: boolean; error?: string; pid?: number }> {
     this.log('🔄 Restarting bot...', 'log')
-    
+
     const stopResult = this.stop()
     if (!stopResult.success && stopResult.error !== 'Bot is not running') {
       return { success: false, error: `Failed to stop: ${stopResult.error}` }
     }
-    
+
     await this.wait(2000)
-    
+
     return await this.start()
   }
 

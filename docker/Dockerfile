@@ -80,11 +80,12 @@ COPY --from=builder /usr/src/microsoft-rewards-bot/package*.json ./
 COPY --from=builder /usr/src/microsoft-rewards-bot/node_modules ./node_modules
 
 # Copy runtime scripts with proper permissions and normalize line endings for non-Unix users
-COPY --chmod=755 src/run_daily.sh ./src/run_daily.sh
-COPY --chmod=644 src/crontab.template /etc/cron.d/microsoft-rewards-cron.template
-COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
+# IMPROVED: Scripts now organized in docker/ folder
+COPY --chmod=755 docker/run_daily.sh ./docker/run_daily.sh
+COPY --chmod=644 docker/crontab.template /etc/cron.d/microsoft-rewards-cron.template
+COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh \
-    && sed -i 's/\r$//' ./src/run_daily.sh
+    && sed -i 's/\r$//' ./docker/run_daily.sh
 
 # Entrypoint handles TZ, initial run toggle, cron templating & launch
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

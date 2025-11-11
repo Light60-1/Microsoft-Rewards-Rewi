@@ -4,23 +4,23 @@ import { TIMEOUTS } from '../constants'
 import { DashboardData, MorePromotion, PromotionalItem, PunchCard } from '../interface/DashboardData'
 
 import { MicrosoftRewardsBot } from '../index'
-import { AdaptiveThrottler } from '../util/AdaptiveThrottler'
-import JobState from '../util/JobState'
-import { logError } from '../util/Logger'
-import { Retry } from '../util/Retry'
+import { Retry } from '../util/core/Retry'
+import { AdaptiveThrottler } from '../util/notifications/AdaptiveThrottler'
+import { logError } from '../util/notifications/Logger'
+import JobState from '../util/state/JobState'
 
 // Selector patterns (extracted to avoid magic strings)
 const ACTIVITY_SELECTORS = {
-  byName: (name: string) => `[data-bi-id^="${name}"] .pointLink:not(.contentContainer .pointLink)`,
-  byOfferId: (offerId: string) => `[data-bi-id^="${offerId}"] .pointLink:not(.contentContainer .pointLink)`
+    byName: (name: string) => `[data-bi-id^="${name}"] .pointLink:not(.contentContainer .pointLink)`,
+    byOfferId: (offerId: string) => `[data-bi-id^="${offerId}"] .pointLink:not(.contentContainer .pointLink)`
 } as const
 
 // Activity processing delays (in milliseconds)
 const ACTIVITY_DELAYS = {
-  THROTTLE_MIN: 800,
-  THROTTLE_MAX: 1400,
-  ACTIVITY_SPACING_MIN: 1200,
-  ACTIVITY_SPACING_MAX: 2600
+    THROTTLE_MIN: 800,
+    THROTTLE_MAX: 1400,
+    ACTIVITY_SPACING_MIN: 1200,
+    ACTIVITY_SPACING_MAX: 2600
 } as const
 
 export class Workers {
@@ -220,9 +220,9 @@ export class Workers {
         if (!activity.offerId) {
             // IMPROVED: More prominent logging for data integrity issue
             this.bot.log(
-                this.bot.isMobile, 
-                'WORKERS', 
-                `⚠️ DATA INTEGRITY: Activity "${activity.name || activity.title}" is missing offerId field. This may indicate a dashboard API change or data corruption. Falling back to name-based selector.`, 
+                this.bot.isMobile,
+                'WORKERS',
+                `⚠️ DATA INTEGRITY: Activity "${activity.name || activity.title}" is missing offerId field. This may indicate a dashboard API change or data corruption. Falling back to name-based selector.`,
                 'warn'
             )
             return ACTIVITY_SELECTORS.byName(activity.name)
@@ -239,7 +239,7 @@ export class Workers {
 
     private async executeActivity(page: Page, activity: PromotionalItem | MorePromotion, selector: string, throttle: AdaptiveThrottler, retry: Retry): Promise<void> {
         this.bot.log(this.bot.isMobile, 'ACTIVITY', `Found activity type: "${this.bot.activities.getTypeLabel(activity)}" title: "${activity.title}"`)
-        
+
         // Check if element exists before clicking (avoid 30s timeout)
         try {
             await page.waitForSelector(selector, { timeout: TIMEOUTS.NETWORK_IDLE })
@@ -254,7 +254,7 @@ export class Workers {
 
         // Execute activity with timeout protection using Promise.race
         const timeoutMs = this.bot.utils.stringToMs(this.bot.config?.globalTimeout ?? '30s') * 2
-        
+
         await retry.run(async () => {
             const activityPromise = this.bot.activities.run(page, activity)
             const timeoutPromise = new Promise<never>((_, reject) => {
@@ -264,7 +264,7 @@ export class Workers {
                 // Clean up timer if activity completes first
                 activityPromise.finally(() => clearTimeout(timer))
             })
-            
+
             try {
                 await Promise.race([activityPromise, timeoutPromise])
                 throttle.record(true)

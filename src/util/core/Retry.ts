@@ -1,4 +1,4 @@
-import type { ConfigRetryPolicy } from '../interface/Config'
+import type { ConfigRetryPolicy } from '../../interface/Config'
 import { Util } from './Utils'
 
 type NumericPolicy = {
@@ -59,7 +59,7 @@ export class Retry {
     let attempt = 0
     let delay = this.policy.baseDelay
     let lastErr: unknown
-    
+
     while (attempt < this.policy.maxAttempts) {
       try {
         return await fn()

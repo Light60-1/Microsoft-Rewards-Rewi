@@ -1,7 +1,7 @@
 import { load } from 'cheerio'
 import { Page } from 'rebrowser-playwright'
 import { MicrosoftRewardsBot } from '../index'
-import { logError } from '../util/Logger'
+import { logError } from '../util/notifications/Logger'
 
 type DismissButton = { selector: string; label: string; isXPath?: boolean }
 
@@ -145,14 +145,14 @@ export default class BrowserUtil {
     private async dismissTermsUpdateDialog(page: Page): Promise<number> {
         try {
             const { titleId, titleText, nextButton } = BrowserUtil.TERMS_UPDATE_SELECTORS
-            
+
             // Check if terms update page is present
             const titleById = page.locator(titleId)
             const titleByText = page.locator('h1').filter({ hasText: titleText })
-            
+
             const hasTitle = await titleById.isVisible({ timeout: 200 }).catch(() => false) ||
-                           await titleByText.first().isVisible({ timeout: 200 }).catch(() => false)
-            
+                await titleByText.first().isVisible({ timeout: 200 }).catch(() => false)
+
             if (!hasTitle) return 0
 
             // Click the Next button
@@ -199,9 +199,9 @@ export default class BrowserUtil {
             const $ = load(html)
 
             const isNetworkError = $('body.neterror').length
-            const hasHttp400Error = html.includes('HTTP ERROR 400') || 
-                                   html.includes('This page isn\'t working') ||
-                                   html.includes('This page is not working')
+            const hasHttp400Error = html.includes('HTTP ERROR 400') ||
+                html.includes('This page isn\'t working') ||
+                html.includes('This page is not working')
 
             if (isNetworkError || hasHttp400Error) {
                 const errorType = hasHttp400Error ? 'HTTP 400' : 'network error'

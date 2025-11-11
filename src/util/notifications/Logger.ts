@@ -1,8 +1,8 @@
 import axios from 'axios'
 import chalk from 'chalk'
-import { DISCORD, LOGGER_CLEANUP } from '../constants'
+import { DISCORD, LOGGER_CLEANUP } from '../../constants'
+import { loadConfig } from '../state/Load'
 import { sendErrorReport } from './ErrorReportingWebhook'
-import { loadConfig } from './Load'
 import { Ntfy } from './Ntfy'
 
 /**

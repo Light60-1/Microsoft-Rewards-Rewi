@@ -1,8 +1,8 @@
 import axios from 'axios'
 import { BrowserFingerprintWithHeaders } from 'fingerprint-generator'
-import { Architecture, ChromeVersion, EdgeVersion, Platform } from '../interface/UserAgentUtil'
-import { log } from './Logger'
-import { Retry } from './Retry'
+import { Architecture, ChromeVersion, EdgeVersion, Platform } from '../../interface/UserAgentUtil'
+import { Retry } from '../core/Retry'
+import { log } from '../notifications/Logger'
 
 interface UserAgentMetadata {
     mobile: boolean
@@ -95,7 +95,7 @@ export async function getChromeVersion(isMobile: boolean): Promise<string> {
 
 export async function getEdgeVersions(isMobile: boolean): Promise<EdgeVersionResult> {
     const now = Date.now()
-    
+
     // Return cached version if still valid
     if (edgeVersionCache && edgeVersionCache.expiresAt > now) {
         return edgeVersionCache.data
@@ -123,13 +123,13 @@ export async function getEdgeVersions(isMobile: boolean): Promise<EdgeVersionRes
         })
         .catch(() => {
             edgeVersionInFlight = null
-            
+
             // Try stale cache first
             if (edgeVersionCache) {
                 log(isMobile, 'USERAGENT-EDGE-VERSION', 'Using stale cached Edge versions due to fetch failure', 'warn')
                 return edgeVersionCache.data
             }
-            
+
             // Fall back to static versions
             log(isMobile, 'USERAGENT-EDGE-VERSION', 'Using static fallback Edge versions (API unavailable)', 'warn')
             edgeVersionCache = { data: FALLBACK_EDGE_VERSIONS, expiresAt: Date.now() + EDGE_VERSION_CACHE_TTL_MS }
@@ -192,7 +192,7 @@ async function fetchEdgeVersionsWithRetry(isMobile: boolean): Promise<EdgeVersio
 
 async function fetchEdgeVersionsOnce(isMobile: boolean): Promise<EdgeVersionResult> {
     let lastError: unknown = null
-    
+
     // Try axios first
     try {
         const response = await axios<EdgeVersion[]>({
@@ -205,11 +205,11 @@ async function fetchEdgeVersionsOnce(isMobile: boolean): Promise<EdgeVersionResu
             timeout: 10000,
             validateStatus: (status) => status === 200
         })
-        
+
         if (!response.data || !Array.isArray(response.data)) {
             throw new Error('Invalid response format from Edge API')
         }
-        
+
         return mapEdgeVersions(response.data)
     } catch (axiosError) {
         lastError = axiosError
@@ -226,7 +226,7 @@ async function fetchEdgeVersionsOnce(isMobile: boolean): Promise<EdgeVersionResu
     } catch (fetchError) {
         lastError = fetchError
     }
-    
+
     // Both methods failed
     const errorMsg = lastError instanceof Error ? lastError.message : String(lastError)
     throw new Error(`Failed to fetch Edge versions: ${errorMsg}`)
@@ -237,7 +237,7 @@ async function tryNativeFetchFallback(): Promise<EdgeVersionResult | null> {
     try {
         const controller = new AbortController()
         timeoutHandle = setTimeout(() => controller.abort(), 10000)
-        
+
         const response = await fetch(EDGE_VERSION_URL, {
             headers: {
                 'Content-Type': 'application/json',
@@ -245,20 +245,20 @@ async function tryNativeFetchFallback(): Promise<EdgeVersionResult | null> {
             },
             signal: controller.signal
         })
-        
+
         clearTimeout(timeoutHandle)
         timeoutHandle = undefined
-        
+
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`)
         }
-        
+
         const data = await response.json() as EdgeVersion[]
-        
+
         if (!Array.isArray(data)) {
             throw new Error('Invalid response format')
         }
-        
+
         return mapEdgeVersions(data)
     } catch (error) {
         if (timeoutHandle) clearTimeout(timeoutHandle)
@@ -270,24 +270,24 @@ function mapEdgeVersions(data: EdgeVersion[]): EdgeVersionResult {
     if (!Array.isArray(data) || data.length === 0) {
         throw new Error('Edge API returned empty or invalid data')
     }
-    
+
     const stable = data.find(entry => entry?.Product?.toLowerCase() === 'stable')
         ?? data.find(entry => entry?.Product && /stable/i.test(entry.Product))
-    
+
     if (!stable || !stable.Releases || !Array.isArray(stable.Releases)) {
         throw new Error('Stable Edge channel not found or invalid format')
     }
 
-    const androidRelease = stable.Releases.find(release => 
+    const androidRelease = stable.Releases.find(release =>
         release?.Platform === Platform.Android && release?.ProductVersion
     )
-    
-    const windowsRelease = stable.Releases.find(release => 
-        release?.Platform === Platform.Windows && 
-        release?.Architecture === Architecture.X64 && 
+
+    const windowsRelease = stable.Releases.find(release =>
+        release?.Platform === Platform.Windows &&
+        release?.Architecture === Architecture.X64 &&
         release?.ProductVersion
-    ) ?? stable.Releases.find(release => 
-        release?.Platform === Platform.Windows && 
+    ) ?? stable.Releases.find(release =>
+        release?.Platform === Platform.Windows &&
         release?.ProductVersion
     )
 
@@ -295,7 +295,7 @@ function mapEdgeVersions(data: EdgeVersion[]): EdgeVersionResult {
         android: androidRelease?.ProductVersion,
         windows: windowsRelease?.ProductVersion
     }
-    
+
     // Validate at least one version was found
     if (!result.android && !result.windows) {
         throw new Error('No valid Edge versions found in API response')

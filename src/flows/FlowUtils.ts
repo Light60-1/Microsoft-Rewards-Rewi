@@ -4,7 +4,7 @@
  */
 
 import type { MicrosoftRewardsBot } from '../index'
-import { saveSessionData } from '../util/Load'
+import { saveSessionData } from '../util/state/Load'
 
 /**
  * Handle compromised/security check mode for an account
@@ -27,7 +27,7 @@ export async function handleCompromisedMode(
     isMobile: boolean
 ): Promise<{ keepBrowserOpen: boolean }> {
     const flowContext = isMobile ? 'MOBILE-FLOW' : 'DESKTOP-FLOW'
-    
+
     bot.log(
         isMobile,
         flowContext,
@@ -35,10 +35,10 @@ export async function handleCompromisedMode(
         'warn',
         'yellow'
     )
-    
+
     // Send security alert webhook
     try {
-        const { ConclusionWebhook } = await import('../util/ConclusionWebhook')
+        const { ConclusionWebhook } = await import('../util/notifications/ConclusionWebhook')
         await ConclusionWebhook(
             bot.config,
             isMobile ? '🔐 Security Check (Mobile)' : '🔐 Security Check',
@@ -50,7 +50,7 @@ export async function handleCompromisedMode(
         const errorMsg = error instanceof Error ? error.message : String(error)
         bot.log(isMobile, flowContext, `Failed to send security webhook: ${errorMsg}`, 'warn')
     }
-    
+
     // Save session for convenience (non-critical)
     try {
         await saveSessionData(bot.config.sessionPath, bot.homePage.context(), account, isMobile)
@@ -58,6 +58,6 @@ export async function handleCompromisedMode(
         const errorMsg = error instanceof Error ? error.message : String(error)
         bot.log(isMobile, flowContext, `Failed to save session: ${errorMsg}`, 'warn')
     }
-    
+
     return { keepBrowserOpen: true }
 }

@@ -1,9 +1,9 @@
 import chalk from 'chalk'
 import fs from 'fs'
 import path from 'path'
-import { Account } from '../interface/Account'
-import { Config } from '../interface/Config'
-import { log } from './Logger'
+import { Account } from '../../interface/Account'
+import { Config } from '../../interface/Config'
+import { log } from '../notifications/Logger'
 
 interface ValidationError {
   severity: 'error' | 'warning'
@@ -181,12 +181,12 @@ export class StartupValidator {
   private validateConfig(config: Config): void {
     const maybeSchedule = (config as unknown as { schedule?: unknown }).schedule
     if (maybeSchedule !== undefined) {
-        this.addWarning(
-          'config',
-          'Legacy schedule settings detected in config.jsonc.',
-          'Remove schedule.* entries and use your operating system scheduler.',
-          'docs/schedule.md'
-        )
+      this.addWarning(
+        'config',
+        'Legacy schedule settings detected in config.jsonc.',
+        'Remove schedule.* entries and use your operating system scheduler.',
+        'docs/schedule.md'
+      )
     }
 
     // Headless mode in Docker
@@ -218,10 +218,10 @@ export class StartupValidator {
     }
 
     // Global timeout validation
-    const timeout = typeof config.globalTimeout === 'string' 
-      ? config.globalTimeout 
+    const timeout = typeof config.globalTimeout === 'string'
+      ? config.globalTimeout
       : `${config.globalTimeout}ms`
-    
+
     if (timeout === '0' || timeout === '0ms' || timeout === '0s') {
       this.addError(
         'config',
@@ -271,7 +271,7 @@ export class StartupValidator {
     // Node.js version check
     const nodeVersion = process.version
     const major = parseInt(nodeVersion.split('.')[0]?.replace('v', '') || '0', 10)
-    
+
     if (major < 18) {
       this.addError(
         'environment',
@@ -329,10 +329,10 @@ export class StartupValidator {
 
     // Check job-state directory if enabled
     if (config.jobState?.enabled !== false) {
-      const jobStateDir = config.jobState?.dir 
-        ? config.jobState.dir 
+      const jobStateDir = config.jobState?.dir
+        ? config.jobState.dir
         : path.join(sessionPath, 'job-state')
-      
+
       if (!fs.existsSync(jobStateDir)) {
         try {
           fs.mkdirSync(jobStateDir, { recursive: true })
@@ -428,12 +428,12 @@ export class StartupValidator {
 
   private validateWorkerSettings(config: Config): void {
     const workers = config.workers
-    
+
     // Check if at least one worker is enabled
     const anyEnabled = workers.doDailySet || workers.doMorePromotions || workers.doPunchCards ||
-                       workers.doDesktopSearch || workers.doMobileSearch || workers.doDailyCheckIn ||
-                       workers.doReadToEarn
-    
+      workers.doDesktopSearch || workers.doMobileSearch || workers.doDailyCheckIn ||
+      workers.doReadToEarn
+
     if (!anyEnabled) {
       this.addWarning(
         'workers',
@@ -465,7 +465,7 @@ export class StartupValidator {
   private validateExecutionSettings(config: Config): void {
     // Validate passesPerRun
     const passes = config.passesPerRun ?? 1
-    
+
     if (passes < 1) {
       this.addError(
         'execution',
@@ -595,8 +595,8 @@ export class StartupValidator {
 
     // Action delays
     if (human.actionDelay) {
-      const minMs = typeof human.actionDelay.min === 'string' 
-        ? parseInt(human.actionDelay.min, 10) 
+      const minMs = typeof human.actionDelay.min === 'string'
+        ? parseInt(human.actionDelay.min, 10)
         : human.actionDelay.min
       const maxMs = typeof human.actionDelay.max === 'string'
         ? parseInt(human.actionDelay.max, 10)
@@ -717,7 +717,7 @@ export class StartupValidator {
       const errorLabel = this.errors.length === 1 ? 'error' : 'errors'
       const warningLabel = this.warnings.length === 1 ? 'warning' : 'warnings'
       log('main', 'VALIDATION', `[${this.errors.length > 0 ? 'ERROR' : 'OK'}] Found: ${this.errors.length} ${errorLabel} | ${this.warnings.length} ${warningLabel}`)
-      
+
       if (this.errors.length > 0) {
         log('main', 'VALIDATION', 'Bot will continue, but issues may cause failures', 'warn')
         log('main', 'VALIDATION', 'Full documentation: docs/index.md')

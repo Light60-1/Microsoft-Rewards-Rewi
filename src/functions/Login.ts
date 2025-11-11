@@ -5,11 +5,11 @@ import readline from 'readline'
 
 import { MicrosoftRewardsBot } from '../index'
 import { OAuth } from '../interface/OAuth'
-import { saveSessionData } from '../util/Load'
-import { logError } from '../util/Logger'
-import { LoginState, LoginStateDetector } from '../util/LoginStateDetector'
-import { Retry } from '../util/Retry'
-import { generateTOTP } from '../util/Totp'
+import { Retry } from '../util/core/Retry'
+import { logError } from '../util/notifications/Logger'
+import { generateTOTP } from '../util/security/Totp'
+import { saveSessionData } from '../util/state/Load'
+import { LoginState, LoginStateDetector } from '../util/validation/LoginStateDetector'
 
 // -------------------------------
 // REFACTORING NOTE (1700+ lines)
@@ -100,7 +100,7 @@ export class Login {
   private lastTotpSubmit = 0
   private totpAttempts = 0
 
-  constructor(bot: MicrosoftRewardsBot) { 
+  constructor(bot: MicrosoftRewardsBot) {
     this.bot = bot
     this.cleanupCompromisedInterval()
   }
@@ -110,35 +110,35 @@ export class Login {
    * Eliminates duplicate navigation code throughout the file
    */
   private async navigateWithRetry(
-    page: Page, 
-    url: string, 
+    page: Page,
+    url: string,
     context: string,
     maxAttempts = 3
   ): Promise<{ success: boolean; recoveryUsed: boolean }> {
     const isLinux = process.platform === 'linux'
     const navigationTimeout = isLinux ? DEFAULT_TIMEOUTS.navigationTimeoutLinux : DEFAULT_TIMEOUTS.navigationTimeout
-    
+
     let navigationSucceeded = false
     let recoveryUsed = false
     let attempts = 0
-    
+
     while (!navigationSucceeded && attempts < maxAttempts) {
       attempts++
       try {
-        await page.goto(url, { 
+        await page.goto(url, {
           waitUntil: 'domcontentloaded',
           timeout: navigationTimeout
         })
         navigationSucceeded = true
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error)
-        
+
         // Chrome-error recovery pattern
         if (errorMsg.includes('chrome-error://chromewebdata/')) {
           this.bot.log(this.bot.isMobile, context, `Navigation interrupted by chrome-error (attempt ${attempts}/${maxAttempts}), attempting recovery...`, 'warn')
-          
+
           await this.bot.utils.wait(DEFAULT_TIMEOUTS.long)
-          
+
           try {
             await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationTimeout })
             navigationSucceeded = true
@@ -167,7 +167,7 @@ export class Login {
         }
       }
     }
-    
+
     return { success: navigationSucceeded, recoveryUsed }
   }
 
@@ -175,7 +175,7 @@ export class Login {
   async login(page: Page, email: string, password: string, totpSecret?: string) {
     try {
       this.cleanupCompromisedInterval()
-      
+
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Starting login process')
       this.currentTotpSecret = (totpSecret && totpSecret.trim()) || undefined
       this.lastTotpSubmit = 0
@@ -199,19 +199,19 @@ export class Login {
         'https://www.bing.com/rewards/dashboard',
         'LOGIN'
       )
-      
+
       if (!navigationSucceeded) {
         throw new Error('Failed to navigate to dashboard after multiple attempts')
       }
-      
+
       // Only check for HTTP 400 if recovery was NOT used (to avoid double reload)
       if (!recoveryUsed) {
         await this.bot.utils.wait(DEFAULT_TIMEOUTS.fastPoll)
         const content = await page.content().catch(() => '')
-        const hasHttp400 = content.includes('HTTP ERROR 400') || 
-                          content.includes('This page isn\'t working') ||
-                          content.includes('This page is not working')
-        
+        const hasHttp400 = content.includes('HTTP ERROR 400') ||
+          content.includes('This page isn\'t working') ||
+          content.includes('This page is not working')
+
         if (hasHttp400) {
           this.bot.log(this.bot.isMobile, 'LOGIN', 'HTTP 400 detected in content, reloading...', 'warn')
           const isLinux = process.platform === 'linux'
@@ -220,15 +220,15 @@ export class Login {
           await this.bot.utils.wait(DEFAULT_TIMEOUTS.medium)
         }
       }
-      
+
       await this.disableFido(page)
-      
+
       const [reloadResult, totpResult, portalCheck] = await Promise.allSettled([
         this.bot.browser.utils.reloadBadPage(page),
         this.tryAutoTotp(page, 'initial landing'),
         page.waitForSelector('html[data-role-name="RewardsPortal"]', { timeout: 3000 })
       ])
-      
+
       // Log any failures for debugging (non-critical)
       if (reloadResult.status === 'rejected') {
         this.bot.log(this.bot.isMobile, 'LOGIN', `Reload check failed (non-critical): ${reloadResult.reason}`, 'warn')
@@ -236,7 +236,7 @@ export class Login {
       if (totpResult.status === 'rejected') {
         this.bot.log(this.bot.isMobile, 'LOGIN', `Auto-TOTP check failed (non-critical): ${totpResult.reason}`, 'warn')
       }
-      
+
       await this.checkAccountLocked(page)
 
       const alreadyAuthenticated = portalCheck.status === 'fulfilled'
@@ -250,7 +250,7 @@ export class Login {
       if (needsBingVerification) {
         await this.verifyBingContext(page)
       }
-      
+
       await saveSessionData(this.bot.config.sessionPath, page.context(), email, this.bot.isMobile)
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Login complete')
       this.currentTotpSecret = undefined
@@ -270,7 +270,7 @@ export class Login {
     this.currentTotpSecret = (totpSecret && totpSecret.trim()) || undefined
     this.lastTotpSubmit = 0
     this.totpAttempts = 0
-    
+
     await this.disableFido(page)
     const url = new URL(this.authBaseUrl)
     url.searchParams.set('response_type', 'code')
@@ -287,21 +287,21 @@ export class Login {
       url.href,
       'LOGIN-APP'
     )
-    
+
     if (!navigationSucceeded) {
       throw new Error('Failed to navigate to OAuth page after multiple attempts')
     }
-    
+
     if (!recoveryUsed) {
       await this.bot.utils.wait(DEFAULT_TIMEOUTS.fastPoll)
       const content = await page.content().catch((err) => {
         this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Failed to get page content for HTTP 400 check: ${err}`, 'warn')
         return ''
       })
-      const hasHttp400 = content.includes('HTTP ERROR 400') || 
-                        content.includes('This page isn\'t working') ||
-                        content.includes('This page is not working')
-      
+      const hasHttp400 = content.includes('HTTP ERROR 400') ||
+        content.includes('This page isn\'t working') ||
+        content.includes('This page is not working')
+
       if (hasHttp400) {
         this.bot.log(this.bot.isMobile, 'LOGIN-APP', 'HTTP 400 detected, reloading...', 'warn')
         const isLinux = process.platform === 'linux'
@@ -315,30 +315,30 @@ export class Login {
     let code = ''
     let lastLogTime = start
     let checkCount = 0
-    
+
     while (Date.now() - start < DEFAULT_TIMEOUTS.oauthMaxMs) {
       checkCount++
-      
+
       const u = new URL(page.url())
       if (u.hostname === 'login.live.com' && u.pathname === '/oauth20_desktop.srf') {
         code = u.searchParams.get('code') || ''
         if (code) break
       }
-      
+
       if (checkCount % 3 === 0) {
         await Promise.allSettled([
           this.handlePasskeyPrompts(page, 'oauth'),
           this.tryAutoTotp(page, 'mobile-oauth')
         ])
       }
-      
+
       const now = Date.now()
       if (now - lastLogTime > 30000) {
         const elapsed = Math.round((now - start) / 1000)
         this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Waiting for OAuth code... (${elapsed}s, URL: ${u.hostname}${u.pathname})`, 'warn')
         lastLogTime = now
       }
-      
+
       const pollDelay = Date.now() - start < 30000 ? 800 : 1500
       await this.bot.utils.wait(pollDelay)
     }
@@ -348,7 +348,7 @@ export class Login {
       this.bot.log(this.bot.isMobile, 'LOGIN-APP', `OAuth code not received after ${elapsed}s. Current URL: ${currentUrl}`, 'error')
       throw new Error(`OAuth code not received within ${DEFAULT_TIMEOUTS.oauthMaxMs / 1000}s`)
     }
-    
+
     this.bot.log(this.bot.isMobile, 'LOGIN-APP', `OAuth code received in ${Math.round((Date.now() - start) / 1000)}s`)
 
     const form = new URLSearchParams()
@@ -361,16 +361,16 @@ export class Login {
       if (!e || typeof e !== 'object') return false
       const err = e as { response?: { status?: number }; code?: string }
       const status = err.response?.status
-      return status === 502 || status === 503 || status === 504 || 
-             err.code === 'ECONNRESET' || 
-             err.code === 'ETIMEDOUT'
+      return status === 502 || status === 503 || status === 504 ||
+        err.code === 'ECONNRESET' ||
+        err.code === 'ETIMEDOUT'
     }
 
-    const req: AxiosRequestConfig = { 
-      url: this.tokenUrl, 
-      method: 'POST', 
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, 
-      data: form.toString() 
+    const req: AxiosRequestConfig = {
+      url: this.tokenUrl,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      data: form.toString()
     }
 
     const retry = new Retry(this.bot.config.retryPolicy)
@@ -380,7 +380,7 @@ export class Login {
         isRetryable
       )
       const data: OAuth = resp.data
-      this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Authorized in ${Math.round((Date.now()-start)/1000)}s`)
+      this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Authorized in ${Math.round((Date.now() - start) / 1000)}s`)
       this.currentTotpSecret = undefined
       return data.access_token
     } catch (error) {
@@ -410,19 +410,19 @@ export class Login {
         homeUrl,
         'LOGIN'
       )
-      
+
       if (!navigationSucceeded) return false
-      
+
       await page.waitForLoadState('domcontentloaded').catch(logError('LOGIN', 'DOMContentLoaded timeout', this.bot.isMobile))
-      
+
       // Only check HTTP 400 if recovery was NOT used
       if (!recoveryUsed) {
         await this.bot.utils.wait(DEFAULT_TIMEOUTS.fastPoll)
         const content = await page.content().catch(() => '')
-        const hasHttp400 = content.includes('HTTP ERROR 400') || 
-                          content.includes('This page isn\'t working') ||
-                          content.includes('This page is not working')
-        
+        const hasHttp400 = content.includes('HTTP ERROR 400') ||
+          content.includes('This page isn\'t working') ||
+          content.includes('This page is not working')
+
         if (hasHttp400) {
           this.bot.log(this.bot.isMobile, 'LOGIN', 'HTTP 400 on session check, reloading...', 'warn')
           const isLinux = process.platform === 'linux'
@@ -436,7 +436,7 @@ export class Login {
 
       // IMPROVED: Increased timeout from 3.5s to 8s for slow connections
       let portalSelector = await this.waitForRewardsRoot(page, 8000)
-      
+
       // IMPROVED: Retry once if initial check failed
       if (!portalSelector) {
         this.bot.log(this.bot.isMobile, 'LOGIN', 'Portal not detected (8s), retrying once...', 'warn')
@@ -444,7 +444,7 @@ export class Login {
         await this.bot.browser.utils.reloadBadPage(page)
         portalSelector = await this.waitForRewardsRoot(page, 5000)
       }
-      
+
       if (portalSelector) {
         // Additional validation: make sure we're not just on the page but actually logged in
         // Check if we're redirected to login
@@ -453,7 +453,7 @@ export class Login {
           this.bot.log(this.bot.isMobile, 'LOGIN', 'Detected redirect to login page - session not valid', 'warn')
           return false
         }
-        
+
         this.bot.log(this.bot.isMobile, 'LOGIN', `✅ Existing session still valid (${portalSelector}) — saved 2-3 minutes!`)
         await this.checkAccountLocked(page)
         return true
@@ -473,14 +473,14 @@ export class Login {
       if (currentUrl.includes('login.live.com') || currentUrl.includes('login.microsoftonline.com')) {
         await this.handlePasskeyPrompts(page, 'main')
       }
-    } catch {/* ignore reuse errors and continue with full login */}
+    } catch {/* ignore reuse errors and continue with full login */ }
     return false
   }
 
   private async performLoginFlow(page: Page, email: string, password: string) {
     // Step 1: Input email
     await this.inputEmail(page, email)
-    
+
     // Step 2: Wait for transition to password page (VALIDATION PROGRESSIVE)
     this.bot.log(this.bot.isMobile, 'LOGIN', 'Waiting for password page transition...')
     const passwordPageReached = await LoginStateDetector.waitForAnyState(
@@ -488,14 +488,14 @@ export class Login {
       [LoginState.PasswordPage, LoginState.TwoFactorRequired, LoginState.LoggedIn],
       8000
     )
-    
+
     if (passwordPageReached === LoginState.LoggedIn) {
       // Double-check: verify we're actually on rewards portal with activities
       const actuallyLoggedIn = await page.locator('#more-activities, html[data-role-name*="RewardsPortal"]')
         .first()
         .isVisible({ timeout: 2000 })
         .catch(() => false)
-      
+
       if (actuallyLoggedIn) {
         this.bot.log(this.bot.isMobile, 'LOGIN', 'Already authenticated after email (fast path)')
         return
@@ -504,33 +504,33 @@ export class Login {
         // Continue to password entry
       }
     }
-    
+
     if (!passwordPageReached) {
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Password page not reached after 8s, continuing anyway...', 'warn')
     } else if (passwordPageReached !== LoginState.LoggedIn) {
       this.bot.log(this.bot.isMobile, 'LOGIN', `Transitioned to state: ${passwordPageReached}`)
     }
-    
+
     await this.bot.utils.wait(500)
     await this.bot.browser.utils.reloadBadPage(page)
-    
+
     // Step 3: Recovery mismatch check
     await this.tryRecoveryMismatchCheck(page, email)
     if (this.bot.compromisedModeActive && this.bot.compromisedReason === 'recovery-mismatch') {
-      this.bot.log(this.bot.isMobile,'LOGIN','Recovery mismatch detected – stopping before password entry','warn')
+      this.bot.log(this.bot.isMobile, 'LOGIN', 'Recovery mismatch detected – stopping before password entry', 'warn')
       return
     }
-    
+
     // Step 4: Try switching to password if needed
     await this.switchToPasswordLink(page)
-    
+
     // Step 5: Input password or handle 2FA
     await this.inputPasswordOr2FA(page, password)
     if (this.bot.compromisedModeActive && this.bot.compromisedReason === 'sign-in-blocked') {
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Blocked sign-in detected — halting.', 'warn')
       return
     }
-    
+
     // Step 6: Final checks
     await this.checkAccountLocked(page)
     await this.awaitRewardsPortal(page)
@@ -541,25 +541,25 @@ export class Login {
     // Check for passkey prompts first
     await this.handlePasskeyPrompts(page, 'main')
     await this.bot.utils.wait(500) // Increased from 250ms
-    
+
     // IMPROVEMENT: Wait for page to be fully ready before looking for email field
     // Silent catch justified: DOMContentLoaded may already be complete, which is fine
-    await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {})
+    await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => { })
     await this.bot.utils.wait(300) // Extra settling time
 
     if (await this.tryAutoTotp(page, 'pre-email check')) {
       await this.bot.utils.wait(1000) // Increased from 800ms
     }
-    
+
     // IMPROVEMENT: More retries with better timing
-    let field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 8000 }).catch(()=>null) // Increased from 5000ms
+    let field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 8000 }).catch(() => null) // Increased from 5000ms
     if (!field) {
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Email field not found (first attempt), retrying...', 'warn')
-      
+
       const totpHandled = await this.tryAutoTotp(page, 'pre-email challenge')
       if (totpHandled) {
         await this.bot.utils.wait(1200) // Increased from 800ms
-        field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 8000 }).catch(()=>null)
+        field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 8000 }).catch(() => null)
       }
     }
 
@@ -568,43 +568,43 @@ export class Login {
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Email field not found (second attempt), trying passkey/reload...', 'warn')
       await this.handlePasskeyPrompts(page, 'main')
       await this.bot.utils.wait(800) // Increased from 500ms
-      
+
       // IMPROVEMENT: Try page reload if field still missing (common issue on first load)
       const content = await page.content().catch(() => '')
       if (content.length < 1000) {
         this.bot.log(this.bot.isMobile, 'LOGIN', 'Page content too small, reloading...', 'warn')
         // Silent catch justified: Reload may timeout if page is slow, but we continue anyway
-        await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {})
+        await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => { })
         await this.bot.utils.wait(1500)
       }
-      
+
       const totpRetry = await this.tryAutoTotp(page, 'pre-email retry')
       if (totpRetry) {
         await this.bot.utils.wait(1200) // Increased from 800ms
       }
-      
-      field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 5000 }).catch(()=>null)
+
+      field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 5000 }).catch(() => null)
       if (!field && this.totpAttempts > 0) {
         await this.bot.utils.wait(2500) // Increased from 2000ms
-        field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 5000 }).catch(()=>null) // Increased from 3000ms
+        field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 5000 }).catch(() => null) // Increased from 3000ms
       }
       if (!field) {
         this.bot.log(this.bot.isMobile, 'LOGIN', 'Email field not present after all retries', 'error')
         throw new Error('Login form email field not found after multiple attempts')
       }
     }
-    
-    const prefilled = await page.waitForSelector('#userDisplayName', { timeout: 1500 }).catch(()=>null)
+
+    const prefilled = await page.waitForSelector('#userDisplayName', { timeout: 1500 }).catch(() => null)
     if (!prefilled) {
       await page.fill(SELECTORS.emailInput, '')
       await page.fill(SELECTORS.emailInput, email)
     } else {
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Email prefilled')
     }
-    const next = await page.waitForSelector(SELECTORS.submitBtn, { timeout: 2000 }).catch(()=>null)
-    if (next) { 
+    const next = await page.waitForSelector(SELECTORS.submitBtn, { timeout: 2000 }).catch(() => null)
+    if (next) {
       await next.click().catch(e => this.bot.log(this.bot.isMobile, 'LOGIN', `Email submit click failed: ${e}`, 'warn'))
-      this.bot.log(this.bot.isMobile, 'LOGIN', 'Submitted email') 
+      this.bot.log(this.bot.isMobile, 'LOGIN', 'Submitted email')
     }
   }
 
@@ -612,12 +612,12 @@ export class Login {
     // Check for passkey prompts that might be blocking the password field
     await this.handlePasskeyPrompts(page, 'main')
     await this.bot.utils.wait(500)
-    
+
     // Some flows require switching to password first
-    const switchBtn = await page.waitForSelector('#idA_PWD_SwitchToPassword', { timeout: 1500 }).catch(()=>null)
-    if (switchBtn) { 
+    const switchBtn = await page.waitForSelector('#idA_PWD_SwitchToPassword', { timeout: 1500 }).catch(() => null)
+    if (switchBtn) {
       await switchBtn.click().catch(e => this.bot.log(this.bot.isMobile, 'LOGIN', `Switch to password failed: ${e}`, 'warn'))
-      await this.bot.utils.wait(1000) 
+      await this.bot.utils.wait(1000)
     }
 
     // Early TOTP check - if totpSecret is configured, check for TOTP challenge before password
@@ -630,14 +630,14 @@ export class Login {
     }
 
     // Rare flow: list of methods -> choose password
-    let passwordField = await page.waitForSelector(SELECTORS.passwordInput, { timeout: 4000 }).catch(()=>null)
+    let passwordField = await page.waitForSelector(SELECTORS.passwordInput, { timeout: 4000 }).catch(() => null)
     if (!passwordField) {
       // Maybe passkey prompt appeared - try handling it again
       await this.handlePasskeyPrompts(page, 'main')
       await this.bot.utils.wait(800)
-      passwordField = await page.waitForSelector(SELECTORS.passwordInput, { timeout: 3000 }).catch(()=>null)
+      passwordField = await page.waitForSelector(SELECTORS.passwordInput, { timeout: 3000 }).catch(() => null)
     }
-    
+
     if (!passwordField) {
       const blocked = await this.detectSignInBlocked(page)
       if (blocked) return
@@ -652,10 +652,10 @@ export class Login {
 
     await page.fill(SELECTORS.passwordInput, '')
     await page.fill(SELECTORS.passwordInput, password)
-    const submit = await page.waitForSelector(SELECTORS.submitBtn, { timeout: 2000 }).catch(()=>null)
-    if (submit) { 
+    const submit = await page.waitForSelector(SELECTORS.submitBtn, { timeout: 2000 }).catch(() => null)
+    if (submit) {
       await submit.click().catch(e => this.bot.log(this.bot.isMobile, 'LOGIN', `Password submit failed: ${e}`, 'warn'))
-      this.bot.log(this.bot.isMobile, 'LOGIN', 'Password submitted') 
+      this.bot.log(this.bot.isMobile, 'LOGIN', 'Password submitted')
     }
   }
 
@@ -666,10 +666,10 @@ export class Login {
       await this.bot.browser.utils.tryDismissAllMessages(page)
       await this.bot.utils.wait(500)
 
-  const usedTotp = await this.tryAutoTotp(page, '2FA initial step')
+      const usedTotp = await this.tryAutoTotp(page, '2FA initial step')
       if (usedTotp) return
 
-  const number = await this.fetchAuthenticatorNumber(page)
+      const number = await this.fetchAuthenticatorNumber(page)
       if (number) { await this.approveAuthenticator(page, number); return }
       await this.handleSMSOrTotp(page)
     } catch (e) {
@@ -686,7 +686,7 @@ export class Login {
       if (this.bot.config.parallel) {
         this.bot.log(this.bot.isMobile, 'LOGIN', 'Parallel mode: throttling authenticator push requests', 'log', 'yellow')
         for (let attempts = 0; attempts < 6; attempts++) { // max 6 minutes retry window
-          const resend = await page.waitForSelector('button[aria-describedby="pushNotificationsTitle errorDescription"]', { timeout: 1500 }).catch(()=>null)
+          const resend = await page.waitForSelector('button[aria-describedby="pushNotificationsTitle errorDescription"]', { timeout: 1500 }).catch(() => null)
           if (!resend) break
           await this.bot.utils.wait(60000)
           await resend.click().catch(logError('LOGIN', 'Resend click failed', this.bot.isMobile))
@@ -710,14 +710,14 @@ export class Login {
         return
       } catch {
         this.bot.log(this.bot.isMobile, 'LOGIN', 'Authenticator code expired – refreshing')
-        const retryBtn = await page.waitForSelector(SELECTORS.passkeyPrimary, { timeout: 3000 }).catch(()=>null)
+        const retryBtn = await page.waitForSelector(SELECTORS.passkeyPrimary, { timeout: 3000 }).catch(() => null)
         if (retryBtn) await retryBtn.click().catch(logError('LOGIN-AUTH', 'Refresh button click failed', this.bot.isMobile))
         const refreshed = await this.fetchAuthenticatorNumber(page)
         if (!refreshed) { this.bot.log(this.bot.isMobile, 'LOGIN', 'Could not refresh authenticator code', 'warn'); return }
         numberToPress = refreshed
       }
     }
-    this.bot.log(this.bot.isMobile,'LOGIN','Authenticator approval loop exited (max cycles reached)','warn')
+    this.bot.log(this.bot.isMobile, 'LOGIN', 'Authenticator approval loop exited (max cycles reached)', 'warn')
   }
 
   private async handleSMSOrTotp(page: Page) {
@@ -728,7 +728,7 @@ export class Login {
     // Manual prompt with 120s timeout
     this.bot.log(this.bot.isMobile, 'LOGIN', 'Waiting for user 2FA code (SMS / Email / App fallback)')
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-    
+
     try {
       // FIXED: Add 120s timeout with proper cleanup to prevent memory leak
       let timeoutHandle: NodeJS.Timeout | undefined
@@ -767,8 +767,8 @@ export class Login {
       // Other errors, just log and continue
       this.bot.log(this.bot.isMobile, 'LOGIN', '2FA code entry error: ' + error, 'warn')
     } finally {
-      try { 
-        rl.close() 
+      try {
+        rl.close()
       } catch {
         // Intentionally silent: readline interface already closed or error during cleanup
         // This is a cleanup operation that shouldn't throw
@@ -777,7 +777,7 @@ export class Login {
   }
 
   private async ensureTotpInput(page: Page): Promise<string | null> {
-  const selector = await this.findFirstTotpInput(page)
+    const selector = await this.findFirstTotpInput(page)
     if (selector) return selector
 
     const attempts = 4
@@ -809,7 +809,7 @@ export class Login {
     try {
       const code = generateTOTP(this.currentTotpSecret!.trim())
       const input = page.locator(selector).first()
-      if (!await input.isVisible().catch(()=>false)) {
+      if (!await input.isVisible().catch(() => false)) {
         this.bot.log(this.bot.isMobile, 'LOGIN', 'TOTP input unexpectedly hidden', 'warn')
         return
       }
@@ -899,14 +899,14 @@ export class Login {
 
       const attr = async (name: string) => (await locator.getAttribute(name) || '').toLowerCase()
       const type = await attr('type')
-      
+
       // Explicit exclusions: never treat email or password fields as TOTP
       if (type === 'email' || type === 'password') return false
 
       const nameAttr = await attr('name')
       // Explicit exclusions: login/email/password field names
       if (nameAttr.includes('loginfmt') || nameAttr.includes('passwd') || nameAttr.includes('email') || nameAttr.includes('login')) return false
-      
+
       // Strong positive signals for TOTP
       if (nameAttr.includes('otc') || nameAttr.includes('otp') || nameAttr.includes('code')) return true
 
@@ -953,21 +953,21 @@ export class Login {
           if (el && el.textContent) texts.push(el.textContent)
         })
         return texts.join(' ')
-      }).catch(()=>'')
+      }).catch(() => '')
 
       if (labelText && /code|otp|authenticator|sécurité|securité|security/i.test(labelText)) return true
       if (headingHint && /code|otp|authenticator/i.test(headingHint.toLowerCase())) return true
-    } catch {/* fall through to false */}
+    } catch {/* fall through to false */ }
 
     return false
   }
 
   private async detectTotpHeading(page: Page): Promise<string | null> {
     const headings = page.locator('[data-testid="title"], h1, h2, div[role="heading"]')
-    const count = await headings.count().catch(()=>0)
+    const count = await headings.count().catch(() => 0)
     const max = Math.min(count, 6)
     for (let i = 0; i < max; i++) {
-      const text = (await headings.nth(i).textContent().catch(()=>null))?.trim()
+      const text = (await headings.nth(i).textContent().catch(() => null))?.trim()
       if (!text) continue
       const lowered = text.toLowerCase()
       if (/authenticator/.test(lowered) && /code/.test(lowered)) return text
@@ -1019,14 +1019,14 @@ export class Login {
     const start = Date.now()
     let lastLogTime = start
     let checkCount = 0
-    
+
     while (Date.now() - start < timeoutMs) {
       checkCount++
-      
+
       // OPTIMIZATION: Fast URL check first (no DOM query needed)
       const url = page.url()
       const isRewardsDomain = url.includes('rewards.bing.com') || url.includes('rewards.microsoft.com')
-      
+
       if (isRewardsDomain) {
         // OPTIMIZATION: Parallel checks for authenticated state
         const [hasContent, notLoggedIn, hasAuthIndicators] = await Promise.all([
@@ -1042,7 +1042,7 @@ export class Login {
                     return true
                   }
                 }
-              } catch {/* ignore */}
+              } catch {/* ignore */ }
             }
             return false
           }).catch(() => false),
@@ -1052,32 +1052,32 @@ export class Login {
               try {
                 const el = document.querySelector(sel)
                 if (el && (el as HTMLElement).offsetParent !== null) return true
-              } catch {/* ignore */}
+              } catch {/* ignore */ }
             }
             return false
           }).catch(() => false)
         ])
-        
+
         if (hasContent && !notLoggedIn && hasAuthIndicators) {
           this.bot.log(this.bot.isMobile, 'LOGIN', 'Rewards page detected (authenticated)')
           return 'rewards-url-authenticated'
         }
-        
+
         if (hasContent && notLoggedIn) {
           this.bot.log(this.bot.isMobile, 'LOGIN', 'On rewards page but not authenticated yet', 'warn')
         }
       }
-      
+
       // OPTIMIZATION: Check selectors in batches for speed
       if (checkCount % 2 === 0) { // Every other iteration
         for (const sel of selectors) {
           const loc = page.locator(sel).first()
-          if (await loc.isVisible().catch(()=>false)) {
+          if (await loc.isVisible().catch(() => false)) {
             return sel
           }
         }
       }
-      
+
       // Progress logging
       const now = Date.now()
       if (now - lastLogTime > 5000) {
@@ -1085,7 +1085,7 @@ export class Login {
         this.bot.log(this.bot.isMobile, 'LOGIN', `Still waiting for portal... (${elapsed}s, URL: ${url})`, 'warn')
         lastLogTime = now
       }
-      
+
       // OPTIMIZATION: Adaptive polling
       const pollDelay = Date.now() - start < 5000 ? DEFAULT_TIMEOUTS.elementCheck : DEFAULT_TIMEOUTS.short
       await this.bot.utils.wait(pollDelay)
@@ -1098,23 +1098,23 @@ export class Login {
     const start = Date.now()
     let lastUrl = ''
     let checkCount = 0
-    
+
     // EARLY EXIT: Check if already logged in immediately
     const initialState = await LoginStateDetector.detectState(page)
     if (initialState.state === LoginState.LoggedIn) {
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Already on rewards portal (early exit)')
       return
     }
-    
+
     while (Date.now() - start < DEFAULT_TIMEOUTS.loginMaxMs) {
       checkCount++
-      
+
       const currentUrl = page.url()
       if (currentUrl !== lastUrl) {
         this.bot.log(this.bot.isMobile, 'LOGIN', `Navigation: ${currentUrl}`)
         lastUrl = currentUrl
       }
-      
+
       // SMART CHECK: Use LoginStateDetector every 5 iterations for fast detection
       if (checkCount % 5 === 0) {
         const state = await LoginStateDetector.detectState(page)
@@ -1127,7 +1127,7 @@ export class Login {
           throw new Error('Account blocked during login')
         }
       }
-      
+
       // OPTIMIZATION: Quick URL check first
       const u = new URL(currentUrl)
       const isRewardsHost = u.hostname === LOGIN_TARGET.host
@@ -1136,7 +1136,7 @@ export class Login {
         || u.pathname === '/rewardsapp/dashboard'
         || u.pathname.startsWith('/?')
       if (isRewardsHost && isKnownPath) break
-      
+
       // OPTIMIZATION: Handle prompts only every 3rd check
       if (checkCount % 3 === 0) {
         await Promise.allSettled([
@@ -1146,7 +1146,7 @@ export class Login {
       } else {
         await this.handlePasskeyPrompts(page, 'main')
       }
-      
+
       // OPTIMIZATION: Adaptive wait
       const waitTime = Date.now() - start < 10000 ? DEFAULT_TIMEOUTS.fastPoll : 1000
       await this.bot.utils.wait(waitTime)
@@ -1154,10 +1154,10 @@ export class Login {
 
     this.bot.log(this.bot.isMobile, 'LOGIN', 'Checking for portal elements...')
     const portalSelector = await this.waitForRewardsRoot(page, DEFAULT_TIMEOUTS.portalWaitMs)
-    
+
     if (!portalSelector) {
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Portal not found, trying goHome() fallback...', 'warn')
-      
+
       try {
         await this.bot.browser.func.goHome(page)
         await this.bot.utils.wait(1500) // Reduced from 2000ms
@@ -1167,11 +1167,11 @@ export class Login {
 
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Retry: checking for portal elements...')
       const fallbackSelector = await this.waitForRewardsRoot(page, DEFAULT_TIMEOUTS.portalWaitMs)
-      
+
       if (!fallbackSelector) {
         const currentUrl = page.url()
         this.bot.log(this.bot.isMobile, 'LOGIN', `Current URL: ${currentUrl}`, 'error')
-        
+
         // OPTIMIZATION: Get page info in one evaluation
         const pageContent = await page.evaluate(() => {
           return {
@@ -1181,9 +1181,9 @@ export class Login {
             visibleElements: document.querySelectorAll('*[data-role-name], *[data-bi-name], main, #dashboard').length
           }
         }).catch(() => ({ title: 'unknown', bodyLength: 0, hasRewardsText: false, visibleElements: 0 }))
-        
-  this.bot.log(this.bot.isMobile, 'LOGIN', `Page info: ${JSON.stringify(pageContent)}`, 'error')
-  this.bot.log(this.bot.isMobile, 'LOGIN', 'Portal element missing', 'error')
+
+        this.bot.log(this.bot.isMobile, 'LOGIN', `Page info: ${JSON.stringify(pageContent)}`, 'error')
+        this.bot.log(this.bot.isMobile, 'LOGIN', 'Portal element missing', 'error')
         throw new Error(`Rewards portal not detected. URL: ${currentUrl}. Check reports/ folder`)
       }
       this.bot.log(this.bot.isMobile, 'LOGIN', `Portal found via fallback (${fallbackSelector})`)
@@ -1218,27 +1218,27 @@ export class Login {
   private async verifyBingContext(page: Page) {
     try {
       this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Verifying Bing auth context')
-      
+
       const verificationUrl = 'https://www.bing.com/fd/auth/signin?action=interactive&provider=windows_live_id&return_url=https%3A%2F%2Fwww.bing.com%2F'
-      
+
       // Use centralized navigation retry logic
       const { success: navigationSucceeded } = await this.navigateWithRetry(
         page,
         verificationUrl,
         'LOGIN-BING'
       )
-      
+
       if (!navigationSucceeded) {
         this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Bing verification navigation failed after multiple attempts', 'warn')
         return
       }
-      
+
       await this.bot.utils.wait(DEFAULT_TIMEOUTS.medium)
       const content = await page.content().catch(() => '')
-      const hasHttp400 = content.includes('HTTP ERROR 400') || 
-                        content.includes('This page isn\'t working') ||
-                        content.includes('This page is not working')
-      
+      const hasHttp400 = content.includes('HTTP ERROR 400') ||
+        content.includes('This page isn\'t working') ||
+        content.includes('This page is not working')
+
       if (hasHttp400) {
         this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'HTTP 400 detected during Bing verification, reloading...', 'warn')
         const isLinux = process.platform === 'linux'
@@ -1246,46 +1246,46 @@ export class Login {
         await page.reload({ waitUntil: 'domcontentloaded', timeout }).catch(logError('LOGIN-BING', 'Reload after HTTP 400 failed', this.bot.isMobile))
         await this.bot.utils.wait(DEFAULT_TIMEOUTS.medium)
       }
-      
+
       const maxIterations = this.bot.isMobile ? DEFAULT_TIMEOUTS.bingVerificationMaxIterationsMobile : DEFAULT_TIMEOUTS.bingVerificationMaxIterations
       for (let i = 0; i < maxIterations; i++) {
         const u = new URL(page.url())
-        
+
         if (u.hostname === 'www.bing.com' && u.pathname === '/') {
           await this.bot.browser.utils.tryDismissAllMessages(page)
-          
+
           const ok = await page.waitForSelector('#id_n', { timeout: 3000 }).then(() => true).catch(() => false)
           if (ok) {
             this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Bing verification passed (user profile detected)')
             return
           }
-          
+
           if (this.bot.isMobile) {
             this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Bing verification passed (mobile mode - profile check skipped)')
             return
           }
         }
-        
+
         if (u.hostname.includes('login.live.com') || u.hostname.includes('login.microsoftonline.com')) {
           await this.handlePasskeyPrompts(page, 'main')
           await this.tryAutoTotp(page, 'bing-verification')
         }
-        
+
         const waitTime = i < 3 ? 1000 : 1500
         await this.bot.utils.wait(waitTime)
       }
-      
+
       const finalUrl = page.url()
       if (finalUrl.includes('www.bing.com')) {
         this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Bing verification completed (on Bing domain, assuming success)')
       } else {
         this.bot.log(this.bot.isMobile, 'LOGIN-BING', `Bing verification uncertain - final URL: ${finalUrl}`, 'warn')
       }
-      
+
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e)
       this.bot.log(this.bot.isMobile, 'LOGIN-BING', `Bing verification error: ${errorMsg}`, 'warn')
-      
+
       if (errorMsg.includes('Proxy connection failed')) {
         this.bot.log(this.bot.isMobile, 'LOGIN-BING', 'Skipping Bing verification due to proxy issues - continuing anyway', 'warn')
       } else {
@@ -1295,9 +1295,9 @@ export class Login {
   }
 
   private async checkAccountLocked(page: Page) {
-    const locked = await page.waitForSelector('#serviceAbuseLandingTitle', { timeout: 1200 }).then(()=>true).catch(()=>false)
+    const locked = await page.waitForSelector('#serviceAbuseLandingTitle', { timeout: 1200 }).then(() => true).catch(() => false)
     if (locked) {
-      this.bot.log(this.bot.isMobile,'CHECK-LOCKED','Account locked by Microsoft (serviceAbuseLandingTitle)','error')
+      this.bot.log(this.bot.isMobile, 'CHECK-LOCKED', 'Account locked by Microsoft (serviceAbuseLandingTitle)', 'error')
       throw new Error('Account locked by Microsoft - please review account status')
     }
   }
@@ -1305,9 +1305,9 @@ export class Login {
   // --------------- Passkey / Dialog Handling ---------------
   private async handlePasskeyPrompts(page: Page, context: 'main' | 'oauth') {
     let did = false
-    
+
     // Priority 1: Direct detection of "Skip for now" button by data-testid
-    const skipBtn = await page.waitForSelector('button[data-testid="secondaryButton"]', { timeout: 500 }).catch(()=>null)
+    const skipBtn = await page.waitForSelector('button[data-testid="secondaryButton"]', { timeout: 500 }).catch(() => null)
     if (skipBtn) {
       const text = (await skipBtn.textContent() || '').trim()
       // Check if it's actually a skip button (could be other secondary buttons)
@@ -1317,52 +1317,52 @@ export class Login {
         this.logPasskeyOnce('data-testid secondaryButton')
       }
     }
-    
+
     // Priority 2: Video heuristic (biometric prompt)
     if (!did) {
-      const biometric = await page.waitForSelector(SELECTORS.biometricVideo, { timeout: 500 }).catch(()=>null)
+      const biometric = await page.waitForSelector(SELECTORS.biometricVideo, { timeout: 500 }).catch(() => null)
       if (biometric) {
         const btn = await page.$(SELECTORS.passkeySecondary)
-        if (btn) { 
+        if (btn) {
           await btn.click().catch(logError('LOGIN-PASSKEY', 'Video heuristic click failed', this.bot.isMobile))
           did = true
-          this.logPasskeyOnce('video heuristic') 
+          this.logPasskeyOnce('video heuristic')
         }
       }
     }
-    
+
     // Priority 3: Title + secondary button detection
     if (!did) {
-      const titleEl = await page.waitForSelector(SELECTORS.passkeyTitle, { timeout: 500 }).catch(()=>null)
-      const secBtn = await page.waitForSelector(SELECTORS.passkeySecondary, { timeout: 500 }).catch(()=>null)
-      const primBtn = await page.waitForSelector(SELECTORS.passkeyPrimary, { timeout: 500 }).catch(()=>null)
+      const titleEl = await page.waitForSelector(SELECTORS.passkeyTitle, { timeout: 500 }).catch(() => null)
+      const secBtn = await page.waitForSelector(SELECTORS.passkeySecondary, { timeout: 500 }).catch(() => null)
+      const primBtn = await page.waitForSelector(SELECTORS.passkeyPrimary, { timeout: 500 }).catch(() => null)
       const title = (titleEl ? (await titleEl.textContent()) : '')?.trim() || ''
       const looksLike = /sign in faster|passkey|fingerprint|face|pin|empreinte|visage|windows hello|hello/i.test(title)
-      if (looksLike && secBtn) { 
+      if (looksLike && secBtn) {
         await secBtn.click().catch(logError('LOGIN-PASSKEY', 'Title heuristic click failed', this.bot.isMobile))
         did = true
-        this.logPasskeyOnce('title heuristic '+title) 
+        this.logPasskeyOnce('title heuristic ' + title)
       }
       else if (!did && secBtn && primBtn) {
-        const text = (await secBtn.textContent()||'').trim()
-        if (/skip for now|not now|later|passer|plus tard/i.test(text)) { 
+        const text = (await secBtn.textContent() || '').trim()
+        if (/skip for now|not now|later|passer|plus tard/i.test(text)) {
           await secBtn.click().catch(logError('LOGIN-PASSKEY', 'Secondary button text click failed', this.bot.isMobile))
           did = true
-          this.logPasskeyOnce('secondary button text') 
+          this.logPasskeyOnce('secondary button text')
         }
       }
     }
-    
+
     // Priority 4: XPath fallback (includes Windows Hello specific patterns)
     if (!did) {
       const textBtn = await page.locator('xpath=//button[contains(normalize-space(.),"Skip for now") or contains(normalize-space(.),"Not now") or contains(normalize-space(.),"Passer") or contains(normalize-space(.),"No thanks")]').first()
-      if (await textBtn.isVisible().catch(()=>false)) { 
+      if (await textBtn.isVisible().catch(() => false)) {
         await textBtn.click().catch(logError('LOGIN-PASSKEY', 'XPath fallback click failed', this.bot.isMobile))
         did = true
-        this.logPasskeyOnce('xpath fallback') 
+        this.logPasskeyOnce('xpath fallback')
       }
     }
-    
+
     // Priority 4.5: Windows Hello specific detection
     if (!did) {
       const windowsHelloTitle = await page.locator('text=/windows hello/i').first().isVisible().catch(() => false)
@@ -1387,25 +1387,25 @@ export class Login {
         }
       }
     }
-    
+
     // Priority 5: Close button fallback
     if (!did) {
       const close = await page.$('#close-button')
-      if (close) { 
+      if (close) {
         await close.click().catch(logError('LOGIN-PASSKEY', 'Close button fallback failed', this.bot.isMobile))
         did = true
-        this.logPasskeyOnce('close button') 
+        this.logPasskeyOnce('close button')
       }
     }
 
     // KMSI prompt
-    const kmsi = await page.waitForSelector(SELECTORS.kmsiVideo, { timeout: 400 }).catch(()=>null)
+    const kmsi = await page.waitForSelector(SELECTORS.kmsiVideo, { timeout: 400 }).catch(() => null)
     if (kmsi) {
       const yes = await page.$(SELECTORS.passkeyPrimary)
-      if (yes) { 
+      if (yes) {
         await yes.click().catch(logError('LOGIN-KMSI', 'KMSI accept click failed', this.bot.isMobile))
         did = true
-        this.bot.log(this.bot.isMobile,'LOGIN-KMSI','Accepted KMSI prompt') 
+        this.bot.log(this.bot.isMobile, 'LOGIN-KMSI', 'Accepted KMSI prompt')
       }
     }
 
@@ -1414,7 +1414,7 @@ export class Login {
       const now = Date.now()
       if (this.noPromptIterations === 1 || now - this.lastNoPromptLog > 10000) {
         this.lastNoPromptLog = now
-        this.bot.log(this.bot.isMobile,'LOGIN-NO-PROMPT',`No dialogs (x${this.noPromptIterations})`)
+        this.bot.log(this.bot.isMobile, 'LOGIN-NO-PROMPT', `No dialogs (x${this.noPromptIterations})`)
         if (this.noPromptIterations > 50) this.noPromptIterations = 0
       }
     } else if (did) {
@@ -1425,7 +1425,7 @@ export class Login {
   private logPasskeyOnce(reason: string) {
     if (this.passkeyHandled) return
     this.passkeyHandled = true
-    this.bot.log(this.bot.isMobile,'LOGIN-PASSKEY',`Dismissed passkey prompt (${reason})`)
+    this.bot.log(this.bot.isMobile, 'LOGIN-PASSKEY', `Dismissed passkey prompt (${reason})`)
   }
 
   // --------------- Security Detection ---------------
@@ -1433,11 +1433,11 @@ export class Login {
     if (this.bot.compromisedModeActive && this.bot.compromisedReason === 'sign-in-blocked') return true
     try {
       let text = ''
-      for (const sel of ['[data-testid="title"]','h1','div[role="heading"]','div.text-title']) {
-        const el = await page.waitForSelector(sel, { timeout: 600 }).catch(()=>null)
+      for (const sel of ['[data-testid="title"]', 'h1', 'div[role="heading"]', 'div.text-title']) {
+        const el = await page.waitForSelector(sel, { timeout: 600 }).catch(() => null)
         if (el) {
-          const t = (await el.textContent()||'').trim()
-          if (t && t.length < 300) text += ' '+t
+          const t = (await el.textContent() || '').trim()
+          if (t && t.length < 300) text += ' ' + t
         }
       }
       const lower = text.toLowerCase()
@@ -1453,7 +1453,7 @@ export class Login {
         next: ['Manual recovery required before continuing'],
         docsUrl
       }
-      await this.sendIncidentAlert(incident,'warn')
+      await this.sendIncidentAlert(incident, 'warn')
       this.bot.compromisedModeActive = true
       this.bot.compromisedReason = 'sign-in-blocked'
       this.startCompromisedInterval()
@@ -1464,45 +1464,45 @@ export class Login {
     } catch { return false }
   }
 
-  private async tryRecoveryMismatchCheck(page: Page, email: string) { 
-    try { 
-      await this.detectAndHandleRecoveryMismatch(page, email) 
+  private async tryRecoveryMismatchCheck(page: Page, email: string) {
+    try {
+      await this.detectAndHandleRecoveryMismatch(page, email)
     } catch {
       // Intentionally silent: Recovery mismatch check is a best-effort security check
       // Failure here should not break the login flow as the page may simply not have recovery info
-    } 
+    }
   }
   private async detectAndHandleRecoveryMismatch(page: Page, email: string) {
     try {
       const recoveryEmail: string | undefined = this.bot.currentAccountRecoveryEmail
       if (!recoveryEmail || !/@/.test(recoveryEmail)) return
       const accountEmail = email
-      const parseRef = (val: string) => { const [l,d] = val.split('@'); return { local: l||'', domain:(d||'').toLowerCase(), prefix2:(l||'').slice(0,2).toLowerCase() } }
-      const refs = [parseRef(recoveryEmail), parseRef(accountEmail)].filter(r=>r.domain && r.prefix2)
+      const parseRef = (val: string) => { const [l, d] = val.split('@'); return { local: l || '', domain: (d || '').toLowerCase(), prefix2: (l || '').slice(0, 2).toLowerCase() } }
+      const refs = [parseRef(recoveryEmail), parseRef(accountEmail)].filter(r => r.domain && r.prefix2)
       if (refs.length === 0) return
 
       const candidates: string[] = []
       // Direct selectors (Microsoft variants + French spans)
       const sel = '[data-testid="recoveryEmailHint"], #recoveryEmail, [id*="ProofEmail"], [id*="EmailProof"], [data-testid*="Email"], span:has(span.fui-Text)'
-      const el = await page.waitForSelector(sel, { timeout: 1500 }).catch(()=>null)
-      if (el) { const t = (await el.textContent()||'').trim(); if (t) candidates.push(t) }
+      const el = await page.waitForSelector(sel, { timeout: 1500 }).catch(() => null)
+      if (el) { const t = (await el.textContent() || '').trim(); if (t) candidates.push(t) }
 
       // List items
       const li = page.locator('[role="listitem"], li')
-      const liCount = await li.count().catch(()=>0)
-      for (let i=0;i<liCount && i<12;i++) { const t = (await li.nth(i).textContent().catch(()=>''))?.trim()||''; if (t && /@/.test(t)) candidates.push(t) }
+      const liCount = await li.count().catch(() => 0)
+      for (let i = 0; i < liCount && i < 12; i++) { const t = (await li.nth(i).textContent().catch(() => ''))?.trim() || ''; if (t && /@/.test(t)) candidates.push(t) }
 
       // XPath generic masked patterns
       const xp = page.locator('xpath=//*[contains(normalize-space(.), "@") and (contains(normalize-space(.), "*") or contains(normalize-space(.), "•"))]')
-      const xpCount = await xp.count().catch(()=>0)
-      for (let i=0;i<xpCount && i<12;i++) { const t = (await xp.nth(i).textContent().catch(()=>''))?.trim()||''; if (t && t.length<300) candidates.push(t) }
+      const xpCount = await xp.count().catch(() => 0)
+      for (let i = 0; i < xpCount && i < 12; i++) { const t = (await xp.nth(i).textContent().catch(() => ''))?.trim() || ''; if (t && t.length < 300) candidates.push(t) }
 
       // Normalize
       const seen = new Set<string>()
-      const norm = (s:string)=>s.replace(/\s+/g,' ').trim()
-  const uniq = candidates.map(norm).filter(t=>t && !seen.has(t) && seen.add(t))
+      const norm = (s: string) => s.replace(/\s+/g, ' ').trim()
+      const uniq = candidates.map(norm).filter(t => t && !seen.has(t) && seen.add(t))
       // Masked filter
-      let masked = uniq.filter(t=>/@/.test(t) && /[*•]/.test(t))
+      let masked = uniq.filter(t => /@/.test(t) && /[*•]/.test(t))
 
       if (masked.length === 0) {
         // Fallback full HTML scan
@@ -1513,14 +1513,14 @@ export class Login {
           const found = new Set<string>()
           let m: RegExpExecArray | null
           while ((m = generic.exec(html)) !== null) found.add(m[0])
-          while ((m = frPhrase.exec(html)) !== null) { const raw = m[1]?.replace(/<[^>]+>/g,'').trim(); if (raw) found.add(raw) }
+          while ((m = frPhrase.exec(html)) !== null) { const raw = m[1]?.replace(/<[^>]+>/g, '').trim(); if (raw) found.add(raw) }
           if (found.size > 0) masked = Array.from(found)
-        } catch {/* ignore */}
+        } catch {/* ignore */ }
       }
       if (masked.length === 0) return
 
       // Prefer one mentioning email/adresse
-      const preferred = masked.find(t=>/email|courriel|adresse|mail/i.test(t)) || masked[0]!
+      const preferred = masked.find(t => /email|courriel|adresse|mail/i.test(t)) || masked[0]!
       // Extract the masked email: Microsoft sometimes shows only first 1 char (k*****@domain) or 2 chars (ko*****@domain).
       // We ONLY compare (1 or 2) leading visible alphanumeric chars + full domain (case-insensitive).
       // This avoids false positives when the displayed mask hides the 2nd char.
@@ -1531,15 +1531,15 @@ export class Login {
       const use = m || loose
       const extracted = use ? use[0] : preferred
       const extractedLower = extracted.toLowerCase()
-  let observedPrefix = ((use && use[1]) ? use[1] : '').toLowerCase()
-  let observedDomain = ((use && use[2]) ? use[2] : '').toLowerCase()
+      let observedPrefix = ((use && use[1]) ? use[1] : '').toLowerCase()
+      let observedDomain = ((use && use[2]) ? use[2] : '').toLowerCase()
       if (!observedDomain && extractedLower.includes('@')) {
         const parts = extractedLower.split('@')
         observedDomain = parts[1] || ''
       }
       if (!observedPrefix && extractedLower.includes('@')) {
         const parts = extractedLower.split('@')
-        observedPrefix = (parts[0] || '').replace(/[^a-z0-9]/gi,'').slice(0,2)
+        observedPrefix = (parts[0] || '').replace(/[^a-z0-9]/gi, '').slice(0, 2)
       }
 
       // Determine if any reference (recoveryEmail or accountEmail) matches observed mask logic
@@ -1555,22 +1555,22 @@ export class Login {
       if (!matchRef) {
         const docsUrl = this.getDocsUrl('recovery-email-mismatch')
         const incident: SecurityIncident = {
-          kind:'Recovery email mismatch',
+          kind: 'Recovery email mismatch',
           account: email,
-          details:[
+          details: [
             `MaskedShown: ${preferred}`,
             `Extracted: ${extracted}`,
             `Observed => ${observedPrefix || '??'}**@${observedDomain || '??'}`,
-            `Expected => ${refs.map(r=>`${r.prefix2}**@${r.domain}`).join(' OR ')}`
+            `Expected => ${refs.map(r => `${r.prefix2}**@${r.domain}`).join(' OR ')}`
           ],
-          next:[
+          next: [
             'Automation halted globally (standby engaged).',
             'Verify account security & recovery email in Microsoft settings.',
             'Update accounts.json if the change was legitimate before restart.'
           ],
           docsUrl
         }
-        await this.sendIncidentAlert(incident,'critical')
+        await this.sendIncidentAlert(incident, 'critical')
         this.bot.compromisedModeActive = true
         this.bot.compromisedReason = 'recovery-mismatch'
         this.startCompromisedInterval()
@@ -1578,32 +1578,32 @@ export class Login {
         await this.openDocsTab(page, docsUrl).catch(logError('LOGIN-RECOVERY', 'Failed to open docs tab', this.bot.isMobile))
       } else {
         const mode = observedPrefix.length === 1 ? 'lenient' : 'strict'
-        this.bot.log(this.bot.isMobile,'LOGIN-RECOVERY',`Recovery OK (${mode}): ${extracted} matches ${matchRef.prefix2}**@${matchRef.domain}`)
+        this.bot.log(this.bot.isMobile, 'LOGIN-RECOVERY', `Recovery OK (${mode}): ${extracted} matches ${matchRef.prefix2}**@${matchRef.domain}`)
       }
-    } catch {/* non-fatal */}
+    } catch {/* non-fatal */ }
   }
 
   private async switchToPasswordLink(page: Page) {
     try {
       const link = await page.locator('xpath=//span[@role="button" and (contains(translate(normalize-space(.),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"use your password") or contains(translate(normalize-space(.),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"utilisez votre mot de passe"))]').first()
-      if (await link.isVisible().catch(()=>false)) {
+      if (await link.isVisible().catch(() => false)) {
         await link.click().catch(logError('LOGIN', 'Use password link click failed', this.bot.isMobile))
         await this.bot.utils.wait(800)
-        this.bot.log(this.bot.isMobile,'LOGIN','Clicked "Use your password" link')
+        this.bot.log(this.bot.isMobile, 'LOGIN', 'Clicked "Use your password" link')
       }
-    } catch {/* ignore */}
+    } catch {/* ignore */ }
   }
 
   // --------------- Incident Helpers ---------------
-  private async sendIncidentAlert(incident: SecurityIncident, severity: 'warn'|'critical'='warn') {
-    const lines = [ `[Incident] ${incident.kind}`, `Account: ${incident.account}` ]
+  private async sendIncidentAlert(incident: SecurityIncident, severity: 'warn' | 'critical' = 'warn') {
+    const lines = [`[Incident] ${incident.kind}`, `Account: ${incident.account}`]
     if (incident.details?.length) lines.push(`Details: ${incident.details.join(' | ')}`)
     if (incident.next?.length) lines.push(`Next: ${incident.next.join(' -> ')}`)
     if (incident.docsUrl) lines.push(`Docs: ${incident.docsUrl}`)
-    const level: 'warn'|'error' = severity === 'critical' ? 'error' : 'warn'
-    this.bot.log(this.bot.isMobile,'SECURITY',lines.join(' | '), level)
+    const level: 'warn' | 'error' = severity === 'critical' ? 'error' : 'warn'
+    this.bot.log(this.bot.isMobile, 'SECURITY', lines.join(' | '), level)
     try {
-      const { ConclusionWebhook } = await import('../util/ConclusionWebhook')
+      const { ConclusionWebhook } = await import('../util/notifications/ConclusionWebhook')
       const fields = [
         { name: 'Account', value: incident.account },
         ...(incident.details?.length ? [{ name: 'Details', value: incident.details.join('\n') }] : []),
@@ -1617,14 +1617,14 @@ export class Login {
         fields,
         severity === 'critical' ? 0xFF0000 : 0xFFAA00
       )
-    } catch {/* ignore */}
+    } catch {/* ignore */ }
   }
 
   private getDocsUrl(anchor?: string) {
     const base = process.env.DOCS_BASE?.trim() || 'https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/blob/main/docs/security.md'
-    const map: Record<string,string> = {
-      'recovery-email-mismatch':'#recovery-email-mismatch',
-      'we-cant-sign-you-in':'#we-cant-sign-you-in-blocked'
+    const map: Record<string, string> = {
+      'recovery-email-mismatch': '#recovery-email-mismatch',
+      'we-cant-sign-you-in': '#we-cant-sign-you-in-blocked'
     }
     return anchor && map[anchor] ? `${base}${map[anchor]}` : base
   }
@@ -1635,9 +1635,9 @@ export class Login {
       clearInterval(this.compromisedInterval)
       this.compromisedInterval = undefined
     }
-    this.compromisedInterval = setInterval(()=>{
-      try { 
-        this.bot.log(this.bot.isMobile,'SECURITY','Security standby active. Manual review required before proceeding.','warn') 
+    this.compromisedInterval = setInterval(() => {
+      try {
+        this.bot.log(this.bot.isMobile, 'SECURITY', 'Security standby active. Manual review required before proceeding.', 'warn')
       } catch {
         // Intentionally silent: If logging fails in interval, don't crash the timer
         // The interval will try again in 5 minutes
@@ -1657,7 +1657,7 @@ export class Login {
       const ctx = page.context()
       const tab = await ctx.newPage()
       await tab.goto(url, { waitUntil: 'domcontentloaded' })
-    } catch {/* ignore */}
+    } catch {/* ignore */ }
   }
 
   // --------------- Infrastructure ---------------

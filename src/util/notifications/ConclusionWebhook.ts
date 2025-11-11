@@ -1,8 +1,8 @@
 import axios from 'axios'
-import { Config } from '../interface/Config'
-import { Ntfy } from './Ntfy'
+import { DISCORD } from '../../constants'
+import { Config } from '../../interface/Config'
 import { log } from './Logger'
-import { DISCORD } from '../constants'
+import { Ntfy } from './Ntfy'
 
 interface DiscordField {
     name: string

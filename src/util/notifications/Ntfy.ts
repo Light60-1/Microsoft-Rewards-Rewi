@@ -1,5 +1,5 @@
-import { loadConfig } from './Load'
 import axios from 'axios'
+import { loadConfig } from '../state/Load'
 
 const NOTIFICATION_TYPES = {
     error: { priority: 'max', tags: 'rotating_light' }, // Customize the ERROR icon here, see: https://docs.ntfy.sh/emojis/

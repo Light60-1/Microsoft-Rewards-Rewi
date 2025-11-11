@@ -1,6 +1,6 @@
 import axios from 'axios'
-import { DISCORD } from '../constants'
-import { Config } from '../interface/Config'
+import { DISCORD } from '../../constants'
+import { Config } from '../../interface/Config'
 
 interface ErrorReportPayload {
     error: string
@@ -35,7 +35,7 @@ export function deobfuscateWebhookUrl(encoded: string): string {
  */
 function shouldReportError(errorMessage: string): boolean {
     const lowerMessage = errorMessage.toLowerCase()
-    
+
     // List of patterns that indicate user configuration errors (not reportable bugs)
     const userConfigPatterns = [
         /accounts\.jsonc.*not found/i,
@@ -59,14 +59,14 @@ function shouldReportError(errorMessage: string): boolean {
         /session closed.*rebrowser/i,
         /addScriptToEvaluateOnNewDocument.*session closed/i
     ]
-    
+
     // Don't report user configuration errors
     for (const pattern of userConfigPatterns) {
         if (pattern.test(lowerMessage)) {
             return false
         }
     }
-    
+
     // List of patterns that indicate expected/handled errors (not bugs)
     const expectedErrorPatterns = [
         /no.*points.*to.*earn/i,
@@ -76,14 +76,14 @@ function shouldReportError(errorMessage: string): boolean {
         /quest.*not.*found/i,
         /promotion.*expired/i
     ]
-    
+
     // Don't report expected/handled errors
     for (const pattern of expectedErrorPatterns) {
         if (pattern.test(lowerMessage)) {
             return false
         }
     }
-    
+
     // Report everything else (genuine bugs)
     return true
 }
@@ -111,7 +111,7 @@ export async function sendErrorReport(
         }
 
         const errorMessage = error instanceof Error ? error.message : String(error)
-        
+
         // Filter out false positives and user configuration errors
         if (!shouldReportError(errorMessage)) {
             return

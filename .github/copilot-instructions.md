@@ -44,17 +44,33 @@ src/
 │       ├── Poll.ts             # Poll completion
 │       ├── ThisOrThat.ts       # This or That game
 │       └── ...
-├── util/                       # Shared utilities + infrastructure
-│   ├── Axios.ts                # HTTP client with proxy support
-│   ├── BrowserFactory.ts       # Centralized browser creation
-│   ├── Humanizer.ts            # Random delays, mouse gestures
-│   ├── BanDetector.ts          # Heuristic ban detection
-│   ├── QueryDiversityEngine.ts # Multi-source search query generation
-│   ├── JobState.ts             # Persistent job state tracking
-│   ├── Logger.ts               # Centralized logging with redaction
-│   ├── Retry.ts                # Exponential backoff retry logic
-│   ├── Utils.ts                # General-purpose helpers
-│   └── ...
+├── util/                       # Shared utilities (ORGANIZED BY CATEGORY)
+│   ├── core/                   # Core utilities
+│   │   ├── Utils.ts            # General-purpose helpers
+│   │   └── Retry.ts            # Exponential backoff retry logic
+│   ├── network/                # HTTP & API utilities
+│   │   ├── Axios.ts            # HTTP client with proxy support
+│   │   └── QueryDiversityEngine.ts # Multi-source search query generation
+│   ├── browser/                # Browser automation utilities
+│   │   ├── BrowserFactory.ts   # Centralized browser creation
+│   │   ├── Humanizer.ts        # Random delays, mouse gestures
+│   │   └── UserAgent.ts        # User agent generation
+│   ├── state/                  # State & persistence
+│   │   ├── JobState.ts         # Persistent job state tracking
+│   │   ├── Load.ts             # Configuration & session loading
+│   │   └── MobileRetryTracker.ts # Mobile search retry tracking
+│   ├── validation/             # Validation & detection
+│   │   ├── StartupValidator.ts # Comprehensive startup validation
+│   │   ├── BanDetector.ts      # Heuristic ban detection
+│   │   └── LoginStateDetector.ts # Login state detection
+│   ├── security/               # Authentication & security
+│   │   └── Totp.ts             # TOTP generation for 2FA
+│   └── notifications/          # Logging & notifications
+│       ├── Logger.ts           # Centralized logging with redaction
+│       ├── ConclusionWebhook.ts # Summary webhook notifications
+│       ├── ErrorReportingWebhook.ts # Error reporting
+│       ├── Ntfy.ts             # Push notifications
+│       └── AdaptiveThrottler.ts # Adaptive delay management
 ├── dashboard/                  # Real-time web dashboard (Express + WebSocket)
 │   ├── server.ts               # Express server + routes
 │   ├── routes.ts               # API endpoints
@@ -73,9 +89,20 @@ src/
     ├── nameDatabase.ts         # First/last name pool
     ├── types.ts                # Account creation interfaces
     └── README.md               # Account creation guide
+docker/                         # Docker deployment files
+├── Dockerfile                  # Multi-stage Docker build
+├── compose.yaml                # Docker Compose configuration
+├── entrypoint.sh               # Container initialization script
+├── run_daily.sh                # Daily execution wrapper (cron)
+└── crontab.template            # Cron schedule template
+scripts/                        # Utility scripts
+└── run.sh                      # Nix development environment launcher
 setup/
 ├── setup.bat                   # Windows setup script
 ├── setup.sh                    # Linux/Mac setup script
+├── nix/                        # NixOS configuration
+│   ├── flake.nix               # Nix flake definition
+│   └── flake.lock              # Nix flake lock file
 └── update/
     ├── setup.mjs               # Initial setup automation
     └── update.mjs              # GitHub ZIP-based auto-updater (NO GIT REQUIRED!)
@@ -986,8 +1013,8 @@ private combinedDeduplication(queries: string[], threshold = 0.65): string[] {
 
 ### Docker & Scheduling Context
 
-**entrypoint.sh:**
-- **Purpose:** Docker container initialization script
+**docker/entrypoint.sh:**
+- **Purpose:** Docker container initialization script (located in `docker/` directory)
 - **Key Features:**
   - Timezone configuration (env: `TZ`, default UTC)
   - Initial run on start (env: `RUN_ON_START=true`)
@@ -995,8 +1022,8 @@ private combinedDeduplication(queries: string[], threshold = 0.65): string[] {
   - Playwright browser preinstallation (`PLAYWRIGHT_BROWSERS_PATH=0`)
 - **Usage:** Docker Compose sets `CRON_SCHEDULE`, container runs cron in foreground
 
-**run_daily.sh:**
-- **Purpose:** Daily execution wrapper for cron jobs
+**docker/run_daily.sh:**
+- **Purpose:** Daily execution wrapper for cron jobs (located in `docker/` directory)
 - **Key Features:**
   - Random sleep delay (0-30min) to avoid simultaneous runs across containers
   - Environment variable: `SKIP_RANDOM_SLEEP=true` to disable delay
