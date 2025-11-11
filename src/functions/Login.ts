@@ -5,6 +5,7 @@ import readline from 'readline'
 
 import { MicrosoftRewardsBot } from '../index'
 import { OAuth } from '../interface/OAuth'
+import { waitForElementSmart, waitForPageReady } from '../util/browser/SmartWait'
 import { Retry } from '../util/core/Retry'
 import { logError } from '../util/notifications/Logger'
 import { generateTOTP } from '../util/security/Totp'
@@ -469,6 +470,7 @@ export class Login {
         }
       }
 
+      // Check for passkeys AFTER TOTP attempt (correct order)
       const currentUrl = page.url()
       if (currentUrl.includes('login.live.com') || currentUrl.includes('login.microsoftonline.com')) {
         await this.handlePasskeyPrompts(page, 'main')
@@ -481,8 +483,11 @@ export class Login {
     // Step 1: Input email
     await this.inputEmail(page, email)
 
-    // Step 2: Wait for transition to password page (VALIDATION PROGRESSIVE)
-    this.bot.log(this.bot.isMobile, 'LOGIN', 'Waiting for password page transition...')
+    // Step 2: Wait for transition to password page (silent - no spam)
+    await waitForPageReady(page, {
+      networkIdleMs: 500
+    })
+
     const passwordPageReached = await LoginStateDetector.waitForAnyState(
       page,
       [LoginState.PasswordPage, LoginState.TwoFactorRequired, LoginState.LoggedIn],
@@ -506,12 +511,12 @@ export class Login {
     }
 
     if (!passwordPageReached) {
-      this.bot.log(this.bot.isMobile, 'LOGIN', 'Password page not reached after 8s, continuing anyway...', 'warn')
+      this.bot.log(this.bot.isMobile, 'LOGIN', 'Password page not reached, continuing...', 'warn')
     } else if (passwordPageReached !== LoginState.LoggedIn) {
-      this.bot.log(this.bot.isMobile, 'LOGIN', `Transitioned to state: ${passwordPageReached}`)
+      this.bot.log(this.bot.isMobile, 'LOGIN', `State: ${passwordPageReached}`)
     }
 
-    await this.bot.utils.wait(500)
+    // OPTIMIZED: Remove unnecessary wait, reloadBadPage is already slow
     await this.bot.browser.utils.reloadBadPage(page)
 
     // Step 3: Recovery mismatch check
@@ -538,86 +543,107 @@ export class Login {
 
   // --------------- Input Steps ---------------
   private async inputEmail(page: Page, email: string) {
-    // Check for passkey prompts first
-    await this.handlePasskeyPrompts(page, 'main')
-    await this.bot.utils.wait(500) // Increased from 250ms
+    // IMPROVED: Smart page readiness check (silent - no spam logs)
+    const readyResult = await waitForPageReady(page)
 
-    // IMPROVEMENT: Wait for page to be fully ready before looking for email field
-    // Silent catch justified: DOMContentLoaded may already be complete, which is fine
-    await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => { })
-    await this.bot.utils.wait(300) // Extra settling time
-
-    if (await this.tryAutoTotp(page, 'pre-email check')) {
-      await this.bot.utils.wait(1000) // Increased from 800ms
+    // Only log if REALLY slow (>5s indicates a problem)
+    if (readyResult.timeMs > 5000) {
+      this.bot.log(this.bot.isMobile, 'LOGIN', `Page load slow: ${readyResult.timeMs}ms`, 'warn')
     }
 
-    // IMPROVEMENT: More retries with better timing
-    let field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 8000 }).catch(() => null) // Increased from 5000ms
-    if (!field) {
-      this.bot.log(this.bot.isMobile, 'LOGIN', 'Email field not found (first attempt), retrying...', 'warn')
+    if (await this.tryAutoTotp(page, 'pre-email check')) {
+      await this.bot.utils.wait(500)
+    }
+
+    // IMPROVED: Smart element waiting (silent)
+    let emailResult = await waitForElementSmart(page, SELECTORS.emailInput, {
+      initialTimeoutMs: 2000,
+      extendedTimeoutMs: 5000,
+      state: 'visible'
+    })
+
+    if (!emailResult.found) {
+      this.bot.log(this.bot.isMobile, 'LOGIN', 'Email field not found, retrying...', 'warn')
 
       const totpHandled = await this.tryAutoTotp(page, 'pre-email challenge')
       if (totpHandled) {
-        await this.bot.utils.wait(1200) // Increased from 800ms
-        field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 8000 }).catch(() => null)
+        await this.bot.utils.wait(500) // REDUCED: 800ms → 500ms
+        emailResult = await waitForElementSmart(page, SELECTORS.emailInput, {
+          initialTimeoutMs: 2000,
+          extendedTimeoutMs: 5000,
+          state: 'visible'
+        })
       }
     }
 
-    if (!field) {
-      // Try one more time after handling possible passkey prompts
-      this.bot.log(this.bot.isMobile, 'LOGIN', 'Email field not found (second attempt), trying passkey/reload...', 'warn')
-      await this.handlePasskeyPrompts(page, 'main')
-      await this.bot.utils.wait(800) // Increased from 500ms
+    if (!emailResult.found) {
+      // Try one more time with page reload if needed
+      this.bot.log(this.bot.isMobile, 'LOGIN', 'Email field missing, checking page state...', 'warn')
+      await this.bot.utils.wait(100)
 
-      // IMPROVEMENT: Try page reload if field still missing (common issue on first load)
+      // IMPROVED: Smart page content check and conditional reload
       const content = await page.content().catch(() => '')
       if (content.length < 1000) {
-        this.bot.log(this.bot.isMobile, 'LOGIN', 'Page content too small, reloading...', 'warn')
-        // Silent catch justified: Reload may timeout if page is slow, but we continue anyway
-        await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => { })
-        await this.bot.utils.wait(1500)
+        this.bot.log(this.bot.isMobile, 'LOGIN', 'Reloading page...', 'warn')
+        await page.reload({ waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => { })
+        await waitForPageReady(page) // Silent
       }
 
       const totpRetry = await this.tryAutoTotp(page, 'pre-email retry')
       if (totpRetry) {
-        await this.bot.utils.wait(1200) // Increased from 800ms
+        await this.bot.utils.wait(500) // REDUCED: 800ms → 500ms
       }
 
-      field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 5000 }).catch(() => null)
-      if (!field && this.totpAttempts > 0) {
-        await this.bot.utils.wait(2500) // Increased from 2000ms
-        field = await page.waitForSelector(SELECTORS.emailInput, { timeout: 5000 }).catch(() => null) // Increased from 3000ms
-      }
-      if (!field) {
+      emailResult = await waitForElementSmart(page, SELECTORS.emailInput, {
+        initialTimeoutMs: 2000,
+        extendedTimeoutMs: 5000,
+        state: 'visible'
+      })
+
+      if (!emailResult.found) {
         this.bot.log(this.bot.isMobile, 'LOGIN', 'Email field not present after all retries', 'error')
         throw new Error('Login form email field not found after multiple attempts')
       }
     }
 
-    const prefilled = await page.waitForSelector('#userDisplayName', { timeout: 1500 }).catch(() => null)
-    if (!prefilled) {
+    // IMPROVED: Smart check for prefilled email
+    const prefilledResult = await waitForElementSmart(page, '#userDisplayName', {
+      initialTimeoutMs: 500,
+      extendedTimeoutMs: 1000,
+      state: 'visible'
+    })
+
+    if (!prefilledResult.found) {
       await page.fill(SELECTORS.emailInput, '')
       await page.fill(SELECTORS.emailInput, email)
     } else {
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Email prefilled')
     }
-    const next = await page.waitForSelector(SELECTORS.submitBtn, { timeout: 2000 }).catch(() => null)
-    if (next) {
-      await next.click().catch(e => this.bot.log(this.bot.isMobile, 'LOGIN', `Email submit click failed: ${e}`, 'warn'))
+
+    // IMPROVED: Smart submit button wait
+    const submitResult = await waitForElementSmart(page, SELECTORS.submitBtn, {
+      initialTimeoutMs: 500,
+      extendedTimeoutMs: 1500,
+      state: 'visible'
+    })
+
+    if (submitResult.found && submitResult.element) {
+      await submitResult.element.click().catch(e => this.bot.log(this.bot.isMobile, 'LOGIN', `Email submit click failed: ${e}`, 'warn'))
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Submitted email')
     }
   }
 
   private async inputPasswordOr2FA(page: Page, password: string) {
-    // Check for passkey prompts that might be blocking the password field
-    await this.handlePasskeyPrompts(page, 'main')
-    await this.bot.utils.wait(500)
+    // IMPROVED: Smart check for password switch button
+    const switchResult = await waitForElementSmart(page, '#idA_PWD_SwitchToPassword', {
+      initialTimeoutMs: 500,
+      extendedTimeoutMs: 1000,
+      state: 'visible'
+    })
 
-    // Some flows require switching to password first
-    const switchBtn = await page.waitForSelector('#idA_PWD_SwitchToPassword', { timeout: 1500 }).catch(() => null)
-    if (switchBtn) {
-      await switchBtn.click().catch(e => this.bot.log(this.bot.isMobile, 'LOGIN', `Switch to password failed: ${e}`, 'warn'))
-      await this.bot.utils.wait(1000)
+    if (switchResult.found && switchResult.element) {
+      await switchResult.element.click().catch(e => this.bot.log(this.bot.isMobile, 'LOGIN', `Switch to password failed: ${e}`, 'warn'))
+      await this.bot.utils.wait(300) // REDUCED: 500ms → 300ms
     }
 
     // Early TOTP check - if totpSecret is configured, check for TOTP challenge before password
@@ -629,16 +655,24 @@ export class Login {
       }
     }
 
-    // Rare flow: list of methods -> choose password
-    let passwordField = await page.waitForSelector(SELECTORS.passwordInput, { timeout: 4000 }).catch(() => null)
-    if (!passwordField) {
-      // Maybe passkey prompt appeared - try handling it again
-      await this.handlePasskeyPrompts(page, 'main')
-      await this.bot.utils.wait(800)
-      passwordField = await page.waitForSelector(SELECTORS.passwordInput, { timeout: 3000 }).catch(() => null)
+    // IMPROVED: Smart password field waiting
+    let passwordResult = await waitForElementSmart(page, SELECTORS.passwordInput, {
+      initialTimeoutMs: 1500,
+      extendedTimeoutMs: 3000,
+      state: 'visible'
+    })
+
+    if (!passwordResult.found) {
+      // Wait a bit and retry (page might still be loading)
+      await this.bot.utils.wait(500)
+      passwordResult = await waitForElementSmart(page, SELECTORS.passwordInput, {
+        initialTimeoutMs: 1500,
+        extendedTimeoutMs: 2500,
+        state: 'visible'
+      })
     }
 
-    if (!passwordField) {
+    if (!passwordResult.found) {
       const blocked = await this.detectSignInBlocked(page)
       if (blocked) return
       // If still no password field -> likely 2FA (approvals) first
@@ -652,9 +686,16 @@ export class Login {
 
     await page.fill(SELECTORS.passwordInput, '')
     await page.fill(SELECTORS.passwordInput, password)
-    const submit = await page.waitForSelector(SELECTORS.submitBtn, { timeout: 2000 }).catch(() => null)
-    if (submit) {
-      await submit.click().catch(e => this.bot.log(this.bot.isMobile, 'LOGIN', `Password submit failed: ${e}`, 'warn'))
+
+    // IMPROVED: Smart submit button wait
+    const submitResult = await waitForElementSmart(page, SELECTORS.submitBtn, {
+      initialTimeoutMs: 500,
+      extendedTimeoutMs: 1500,
+      state: 'visible'
+    })
+
+    if (submitResult.found && submitResult.element) {
+      await submitResult.element.click().catch(e => this.bot.log(this.bot.isMobile, 'LOGIN', `Password submit failed: ${e}`, 'warn'))
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Password submitted')
     }
   }
@@ -1111,7 +1152,10 @@ export class Login {
 
       const currentUrl = page.url()
       if (currentUrl !== lastUrl) {
-        this.bot.log(this.bot.isMobile, 'LOGIN', `Navigation: ${currentUrl}`)
+        // REMOVED: Navigation logs are spam, only log if debug mode
+        if (process.env.DEBUG_REWARDS_VERBOSE === '1') {
+          this.bot.log(this.bot.isMobile, 'LOGIN', `Navigation: ${currentUrl}`)
+        }
         lastUrl = currentUrl
       }
 
@@ -1306,13 +1350,19 @@ export class Login {
   private async handlePasskeyPrompts(page: Page, context: 'main' | 'oauth') {
     let did = false
 
+    // IMPROVED: Use smart element detection with very short timeouts (passkey prompts are rare)
     // Priority 1: Direct detection of "Skip for now" button by data-testid
-    const skipBtn = await page.waitForSelector('button[data-testid="secondaryButton"]', { timeout: 500 }).catch(() => null)
-    if (skipBtn) {
-      const text = (await skipBtn.textContent() || '').trim()
+    const skipBtnResult = await waitForElementSmart(page, 'button[data-testid="secondaryButton"]', {
+      initialTimeoutMs: 300,
+      extendedTimeoutMs: 500,
+      state: 'visible'
+    })
+
+    if (skipBtnResult.found && skipBtnResult.element) {
+      const text = (await skipBtnResult.element.textContent() || '').trim()
       // Check if it's actually a skip button (could be other secondary buttons)
       if (/skip|later|not now|non merci|pas maintenant/i.test(text)) {
-        await skipBtn.click().catch(logError('LOGIN-PASSKEY', 'Skip button click failed', this.bot.isMobile))
+        await skipBtnResult.element.click().catch(logError('LOGIN-PASSKEY', 'Skip button click failed', this.bot.isMobile))
         did = true
         this.logPasskeyOnce('data-testid secondaryButton')
       }
@@ -1320,11 +1370,20 @@ export class Login {
 
     // Priority 2: Video heuristic (biometric prompt)
     if (!did) {
-      const biometric = await page.waitForSelector(SELECTORS.biometricVideo, { timeout: 500 }).catch(() => null)
-      if (biometric) {
-        const btn = await page.$(SELECTORS.passkeySecondary)
-        if (btn) {
-          await btn.click().catch(logError('LOGIN-PASSKEY', 'Video heuristic click failed', this.bot.isMobile))
+      const biometricResult = await waitForElementSmart(page, SELECTORS.biometricVideo, {
+        initialTimeoutMs: 300,
+        extendedTimeoutMs: 500,
+        state: 'visible'
+      })
+
+      if (biometricResult.found) {
+        const btnResult = await waitForElementSmart(page, SELECTORS.passkeySecondary, {
+          initialTimeoutMs: 200,
+          extendedTimeoutMs: 300,
+          state: 'visible'
+        })
+        if (btnResult.found && btnResult.element) {
+          await btnResult.element.click().catch(logError('LOGIN-PASSKEY', 'Video heuristic click failed', this.bot.isMobile))
           did = true
           this.logPasskeyOnce('video heuristic')
         }
@@ -1333,22 +1392,46 @@ export class Login {
 
     // Priority 3: Title + secondary button detection
     if (!did) {
-      const titleEl = await page.waitForSelector(SELECTORS.passkeyTitle, { timeout: 500 }).catch(() => null)
-      const secBtn = await page.waitForSelector(SELECTORS.passkeySecondary, { timeout: 500 }).catch(() => null)
-      const primBtn = await page.waitForSelector(SELECTORS.passkeyPrimary, { timeout: 500 }).catch(() => null)
-      const title = (titleEl ? (await titleEl.textContent()) : '')?.trim() || ''
-      const looksLike = /sign in faster|passkey|fingerprint|face|pin|empreinte|visage|windows hello|hello/i.test(title)
-      if (looksLike && secBtn) {
-        await secBtn.click().catch(logError('LOGIN-PASSKEY', 'Title heuristic click failed', this.bot.isMobile))
-        did = true
-        this.logPasskeyOnce('title heuristic ' + title)
+      const titleResult = await waitForElementSmart(page, SELECTORS.passkeyTitle, {
+        initialTimeoutMs: 300,
+        extendedTimeoutMs: 500,
+        state: 'attached'
+      })
+
+      if (titleResult.found && titleResult.element) {
+        const title = (await titleResult.element.textContent() || '').trim()
+        const looksLike = /sign in faster|passkey|fingerprint|face|pin|empreinte|visage|windows hello|hello/i.test(title)
+
+        if (looksLike) {
+          const secBtnResult = await waitForElementSmart(page, SELECTORS.passkeySecondary, {
+            initialTimeoutMs: 200,
+            extendedTimeoutMs: 300,
+            state: 'visible'
+          })
+
+          if (secBtnResult.found && secBtnResult.element) {
+            await secBtnResult.element.click().catch(logError('LOGIN-PASSKEY', 'Title heuristic click failed', this.bot.isMobile))
+            did = true
+            this.logPasskeyOnce('title heuristic ' + title)
+          }
+        }
       }
-      else if (!did && secBtn && primBtn) {
-        const text = (await secBtn.textContent() || '').trim()
-        if (/skip for now|not now|later|passer|plus tard/i.test(text)) {
-          await secBtn.click().catch(logError('LOGIN-PASSKEY', 'Secondary button text click failed', this.bot.isMobile))
-          did = true
-          this.logPasskeyOnce('secondary button text')
+
+      // Check secondary button text if title heuristic didn't work
+      if (!did) {
+        const secBtnResult = await waitForElementSmart(page, SELECTORS.passkeySecondary, {
+          initialTimeoutMs: 200,
+          extendedTimeoutMs: 300,
+          state: 'visible'
+        })
+
+        if (secBtnResult.found && secBtnResult.element) {
+          const text = (await secBtnResult.element.textContent() || '').trim()
+          if (/skip for now|not now|later|passer|plus tard/i.test(text)) {
+            await secBtnResult.element.click().catch(logError('LOGIN-PASSKEY', 'Secondary button text click failed', this.bot.isMobile))
+            did = true
+            this.logPasskeyOnce('secondary button text')
+          }
         }
       }
     }
@@ -1356,7 +1439,8 @@ export class Login {
     // Priority 4: XPath fallback (includes Windows Hello specific patterns)
     if (!did) {
       const textBtn = await page.locator('xpath=//button[contains(normalize-space(.),"Skip for now") or contains(normalize-space(.),"Not now") or contains(normalize-space(.),"Passer") or contains(normalize-space(.),"No thanks")]').first()
-      if (await textBtn.isVisible().catch(() => false)) {
+      // FIXED: Add explicit timeout to isVisible
+      if (await textBtn.isVisible({ timeout: 500 }).catch(() => false)) {
         await textBtn.click().catch(logError('LOGIN-PASSKEY', 'XPath fallback click failed', this.bot.isMobile))
         did = true
         this.logPasskeyOnce('xpath fallback')
@@ -1365,7 +1449,8 @@ export class Login {
 
     // Priority 4.5: Windows Hello specific detection
     if (!did) {
-      const windowsHelloTitle = await page.locator('text=/windows hello/i').first().isVisible().catch(() => false)
+      // FIXED: Add explicit timeout
+      const windowsHelloTitle = await page.locator('text=/windows hello/i').first().isVisible({ timeout: 500 }).catch(() => false)
       if (windowsHelloTitle) {
         // Try common Windows Hello skip patterns
         const skipPatterns = [
@@ -1378,7 +1463,8 @@ export class Login {
         ]
         for (const pattern of skipPatterns) {
           const btn = await page.locator(pattern).first()
-          if (await btn.isVisible().catch(() => false)) {
+          // FIXED: Add explicit timeout
+          if (await btn.isVisible({ timeout: 300 }).catch(() => false)) {
             await btn.click().catch(logError('LOGIN-PASSKEY', 'Windows Hello skip failed', this.bot.isMobile))
             did = true
             this.logPasskeyOnce('Windows Hello skip')
@@ -1388,11 +1474,16 @@ export class Login {
       }
     }
 
-    // Priority 5: Close button fallback
+    // Priority 5: Close button fallback (FIXED: Add explicit timeout instead of using page.$)
     if (!did) {
-      const close = await page.$('#close-button')
-      if (close) {
-        await close.click().catch(logError('LOGIN-PASSKEY', 'Close button fallback failed', this.bot.isMobile))
+      const closeResult = await waitForElementSmart(page, '#close-button', {
+        initialTimeoutMs: 300,
+        extendedTimeoutMs: 500,
+        state: 'visible'
+      })
+
+      if (closeResult.found && closeResult.element) {
+        await closeResult.element.click().catch(logError('LOGIN-PASSKEY', 'Close button fallback failed', this.bot.isMobile))
         did = true
         this.logPasskeyOnce('close button')
       }

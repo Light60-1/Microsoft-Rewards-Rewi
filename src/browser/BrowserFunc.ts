@@ -8,6 +8,7 @@ import { AppUserData } from '../interface/AppUserData'
 import { Counters, DashboardData, MorePromotion, PromotionalItem } from '../interface/DashboardData'
 import { EarnablePoints } from '../interface/Points'
 import { QuizData } from '../interface/QuizData'
+import { waitForElementSmart, waitForPageReady } from '../util/browser/SmartWait'
 import { saveSessionData } from '../util/state/Load'
 
 
@@ -74,26 +75,41 @@ export default class BrowserFunc {
 
             await page.goto(this.bot.config.baseURL)
 
+            // IMPROVED: Smart page readiness check after navigation
+            const readyResult = await waitForPageReady(page, {
+                networkIdleMs: 1000,
+                logFn: (msg) => this.bot.log(this.bot.isMobile, 'GO-HOME', msg, 'log')
+            })
+
+            if (readyResult.timeMs > 8000) {
+                this.bot.log(this.bot.isMobile, 'GO-HOME', `Page took ${readyResult.timeMs}ms to be ready (slow)`, 'warn')
+            }
+
             for (let iteration = 1; iteration <= RETRY_LIMITS.GO_HOME_MAX; iteration++) {
-                await this.bot.utils.wait(TIMEOUTS.LONG)
+                await this.bot.utils.wait(500)
                 await this.bot.browser.utils.tryDismissAllMessages(page)
 
-                try {
-                    // If activities are found, exit the loop (SUCCESS - account is OK)
-                    await page.waitForSelector(SELECTORS.MORE_ACTIVITIES, { timeout: 1000 })
+                // IMPROVED: Smart element waiting instead of fixed timeout
+                const activitiesResult = await waitForElementSmart(page, SELECTORS.MORE_ACTIVITIES, {
+                    initialTimeoutMs: 1000,
+                    extendedTimeoutMs: 2000,
+                    state: 'attached',
+                    logFn: (msg) => this.bot.log(this.bot.isMobile, 'GO-HOME', msg, 'log')
+                })
+
+                if (activitiesResult.found) {
                     this.bot.log(this.bot.isMobile, 'GO-HOME', 'Visited homepage successfully')
                     break
-
-                } catch (error) {
-                    // Activities not found yet - check if it's because account is suspended
-                    const isSuspended = await this.checkAccountSuspension(page, iteration)
-                    if (isSuspended) {
-                        throw new Error('Account has been suspended!')
-                    }
-
-                    // Not suspended, just activities not loaded yet - continue to next iteration
-                    this.bot.log(this.bot.isMobile, 'GO-HOME', `Activities not found yet (iteration ${iteration}/${RETRY_LIMITS.GO_HOME_MAX}), retrying...`, 'warn')
                 }
+
+                // Activities not found yet - check if it's because account is suspended
+                const isSuspended = await this.checkAccountSuspension(page, iteration)
+                if (isSuspended) {
+                    throw new Error('Account has been suspended!')
+                }
+
+                // Not suspended, just activities not loaded yet - continue to next iteration
+                this.bot.log(this.bot.isMobile, 'GO-HOME', `Activities not found yet (iteration ${iteration}/${RETRY_LIMITS.GO_HOME_MAX}), retrying...`, 'warn')
 
                 // Below runs if the homepage was unable to be visited
                 const currentURL = new URL(page.url())
@@ -101,14 +117,20 @@ export default class BrowserFunc {
                 if (currentURL.hostname !== dashboardURL.hostname) {
                     await this.bot.browser.utils.tryDismissAllMessages(page)
 
-                    await this.bot.utils.wait(TIMEOUTS.MEDIUM_LONG)
+                    await this.bot.utils.wait(1000)
                     await page.goto(this.bot.config.baseURL)
+
+                    // IMPROVED: Wait for page ready after redirect
+                    await waitForPageReady(page, {
+                        networkIdleMs: 1000,
+                        logFn: (msg) => this.bot.log(this.bot.isMobile, 'GO-HOME', msg, 'log')
+                    })
                 } else {
                     this.bot.log(this.bot.isMobile, 'GO-HOME', 'Visited homepage successfully')
                     break
                 }
 
-                await this.bot.utils.wait(TIMEOUTS.VERY_LONG)
+                await this.bot.utils.wait(2000)
             }
 
         } catch (error) {
@@ -137,13 +159,17 @@ export default class BrowserFunc {
             // Reload with retry
             await this.reloadPageWithRetry(target, 2)
 
-            // Wait for the more-activities element to ensure page is fully loaded
-            await target.waitForSelector(SELECTORS.MORE_ACTIVITIES, { timeout: TIMEOUTS.DASHBOARD_WAIT }).catch((error) => {
-                // Continuing is intentional: page may still be functional even if this specific element is missing
-                // The script extraction will catch any real issues
-                const errorMsg = error instanceof Error ? error.message : String(error)
-                this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Activities element not found after ${TIMEOUTS.DASHBOARD_WAIT}ms timeout, attempting to proceed: ${errorMsg}`, 'warn')
+            // IMPROVED: Smart wait for activities element
+            const activitiesResult = await waitForElementSmart(target, SELECTORS.MORE_ACTIVITIES, {
+                initialTimeoutMs: 3000,
+                extendedTimeoutMs: 7000,
+                state: 'attached',
+                logFn: (msg) => this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', msg, 'log')
             })
+
+            if (!activitiesResult.found) {
+                this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Activities element not found after ${activitiesResult.timeMs}ms, attempting to proceed anyway`, 'warn')
+            }
 
             let scriptContent = await this.extractDashboardScript(target)
 
@@ -152,11 +178,15 @@ export default class BrowserFunc {
 
                 // Force a navigation retry once before failing hard
                 await this.goHome(target)
-                await target.waitForLoadState('domcontentloaded', { timeout: TIMEOUTS.VERY_LONG }).catch((error) => {
+
+                // IMPROVED: Smart page readiness check instead of fixed wait
+                await waitForPageReady(target, {
+                    networkIdleMs: 1000,
+                    logFn: (msg) => this.bot.log(this.bot.isMobile, 'BROWSER-FUNC', msg, 'log')
+                }).catch((error) => {
                     const errorMsg = error instanceof Error ? error.message : String(error)
-                    this.bot.log(this.bot.isMobile, 'BROWSER-FUNC', `Dashboard recovery load failed: ${errorMsg}`, 'warn')
+                    this.bot.log(this.bot.isMobile, 'BROWSER-FUNC', `Dashboard recovery load incomplete: ${errorMsg}`, 'warn')
                 })
-                await this.bot.utils.wait(this.bot.isMobile ? TIMEOUTS.LONG : TIMEOUTS.MEDIUM)
 
                 scriptContent = await this.extractDashboardScript(target)
 

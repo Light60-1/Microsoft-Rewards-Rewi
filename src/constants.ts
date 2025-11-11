@@ -90,7 +90,9 @@ export const DELAYS = {
 } as const
 
 export const SELECTORS = {
-    MORE_ACTIVITIES: '#more-activities',
+    // FIXED: Use more specific selector to avoid strict mode violation (2 elements with id='more-activities')
+    // Target the mee-card-group element specifically, not the div wrapper
+    MORE_ACTIVITIES: 'mee-card-group#more-activities[role="list"]',
     SUSPENDED_ACCOUNT: '#suspendedAccountHeader',
     QUIZ_COMPLETE: '#quizCompleteContainer',
     QUIZ_CREDITS: 'span.rqMCredits'

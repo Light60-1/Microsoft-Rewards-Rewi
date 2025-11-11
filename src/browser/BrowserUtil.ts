@@ -1,6 +1,7 @@
 import { load } from 'cheerio'
 import { Page } from 'rebrowser-playwright'
 import { MicrosoftRewardsBot } from '../index'
+import { waitForPageReady } from '../util/browser/SmartWait'
 import { logError } from '../util/notifications/Logger'
 
 type DismissButton = { selector: string; label: string; isXPath?: boolean }
@@ -207,7 +208,8 @@ export default class BrowserUtil {
                 const errorType = hasHttp400Error ? 'HTTP 400' : 'network error'
                 this.bot.log(this.bot.isMobile, 'RELOAD-BAD-PAGE', `Bad page detected (${errorType}), reloading!`)
                 await page.reload({ waitUntil: 'domcontentloaded' })
-                await this.bot.utils.wait(1500)
+                // IMPROVED: Use smart wait instead of fixed 1500ms delay
+                await waitForPageReady(page)
             }
 
         } catch (error) {

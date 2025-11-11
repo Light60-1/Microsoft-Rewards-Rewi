@@ -18,6 +18,7 @@
   "scripts": {
     "clean": "rimraf dist",
     "install-deps": "npm install && npx playwright install chromium",
+    "postinstall": "npm run build",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
     "postbuild": "node -e \"console.log('\\n✅ Build complete! Run \\\"npm start\\\" to launch the bot.\\n')\"",
