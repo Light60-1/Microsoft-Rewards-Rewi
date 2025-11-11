@@ -11,7 +11,7 @@ import Humanizer from './util/browser/Humanizer'
 import { formatDetailedError, normalizeRecoveryEmail, shortErrorMessage, Util } from './util/core/Utils'
 import Axios from './util/network/Axios'
 import { QueryDiversityEngine } from './util/network/QueryDiversityEngine'
-import { log } from './util/notifications/Logger'
+import { log, stopWebhookCleanup } from './util/notifications/Logger'
 import JobState from './util/state/JobState'
 import { loadAccounts, loadConfig } from './util/state/Load'
 import { MobileRetryTracker } from './util/state/MobileRetryTracker'
@@ -908,18 +908,22 @@ async function main(): Promise<void> {
             const errorMsg = reason instanceof Error ? reason.message : String(reason)
             const stack = reason instanceof Error ? reason.stack : undefined
             log('main', 'FATAL', `UnhandledRejection: ${errorMsg}${stack ? `\nStack: ${stack.split('\n').slice(0, 3).join(' | ')}` : ''}`, 'error')
+            stopWebhookCleanup() // CLEANUP FIX: Stop webhook cleanup interval
             gracefulExit(1)
         })
         process.on('uncaughtException', (err: Error) => {
             log('main', 'FATAL', `UncaughtException: ${err.message}${err.stack ? `\nStack: ${err.stack.split('\n').slice(0, 3).join(' | ')}` : ''}`, 'error')
+            stopWebhookCleanup() // CLEANUP FIX: Stop webhook cleanup interval
             gracefulExit(1)
         })
         process.on('SIGTERM', () => {
             log('main', 'SHUTDOWN', 'Received SIGTERM, shutting down gracefully...', 'log')
+            stopWebhookCleanup() // CLEANUP FIX: Stop webhook cleanup interval
             gracefulExit(0)
         })
         process.on('SIGINT', () => {
             log('main', 'SHUTDOWN', 'Received SIGINT (Ctrl+C), shutting down gracefully...', 'log')
+            stopWebhookCleanup() // CLEANUP FIX: Stop webhook cleanup interval
             gracefulExit(0)
         })
     }

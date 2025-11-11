@@ -9,23 +9,8 @@ export function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
 }
 
-/**
- * Format a standardized error message for logging
- * Ensures consistent error message formatting across all modules
- * 
- * @param context - Context string (e.g., 'SEARCH-BING', 'LOGIN')
- * @param error - Error object or unknown value
- * @param prefix - Optional custom prefix (defaults to 'Error')
- * @returns Formatted error message
- * 
- * @example
- * formatErrorMessage('SEARCH', err) // 'Error in SEARCH: Network timeout'
- * formatErrorMessage('LOGIN', err, 'Failed') // 'Failed in LOGIN: Invalid credentials'
- */
-export function formatErrorMessage(context: string, error: unknown, prefix: string = 'Error'): string {
-    const errorMsg = getErrorMessage(error)
-    return `${prefix} in ${context}: ${errorMsg}`
-}
+// DEAD CODE REMOVED: formatErrorMessage() was never used (only JSDoc examples existed)
+// Use formatDetailedError() instead for error formatting with optional stack traces
 
 /**
  * Utility class for common operations

@@ -24,25 +24,33 @@ if (savedTheme === 'light') {
   document.querySelector('.theme-toggle i').className = 'fas fa-sun'
 }
 
+// HTML escaping utility to prevent XSS attacks
+function escapeHtml(text) {
+  if (text === null || text === undefined) return ''
+  const div = document.createElement('div')
+  div.textContent = String(text)
+  return div.innerHTML
+}
+
 // Toast notification
 function showToast(message, type = 'success') {
   const container = document.getElementById('toastContainer')
   const toast = document.createElement('div')
   toast.className = `toast toast-${type}`
-  
+
   const iconMap = {
     success: 'fa-check-circle',
     error: 'fa-exclamation-circle',
     info: 'fa-info-circle'
   }
-  
+
   toast.innerHTML = `
     <i class="fas ${iconMap[type]}"></i>
-    <span>${message}</span>
+    <span>${escapeHtml(message)}</span>
   `
-  
+
   container.appendChild(toast)
-  
+
   setTimeout(() => {
     toast.remove()
   }, 5000)
@@ -54,7 +62,7 @@ function updateStatus(data) {
   const badge = document.getElementById('statusBadge')
   const btnStart = document.getElementById('btnStart')
   const btnStop = document.getElementById('btnStop')
-  
+
   if (data.running) {
     badge.className = 'status-badge status-running'
     badge.textContent = 'RUNNING'
@@ -78,29 +86,30 @@ function updateMetrics(data) {
 function updateAccounts(data) {
   accounts = data
   const container = document.getElementById('accountsList')
-  
+
   if (data.length === 0) {
     container.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>No accounts configured</p></div>'
     return
   }
-  
+
+  // SECURITY FIX: Escape all user-provided data to prevent XSS
   container.innerHTML = data.map(acc => `
     <div class="account-item">
       <div class="account-info">
-        <div class="account-avatar">${acc.maskedEmail.charAt(0).toUpperCase()}</div>
+        <div class="account-avatar">${escapeHtml(acc.maskedEmail.charAt(0).toUpperCase())}</div>
         <div class="account-details">
-          <div class="account-email">${acc.maskedEmail}</div>
+          <div class="account-email">${escapeHtml(acc.maskedEmail)}</div>
           <div class="account-status-text">
-            ${acc.lastSync ? `Last sync: ${new Date(acc.lastSync).toLocaleString()}` : 'Never synced'}
+            ${acc.lastSync ? `Last sync: ${escapeHtml(new Date(acc.lastSync).toLocaleString())}` : 'Never synced'}
           </div>
         </div>
       </div>
       <div class="account-stats">
         <div class="account-points">
-          <div class="account-points-value">${acc.points !== undefined ? acc.points.toLocaleString() : 'N/A'}</div>
+          <div class="account-points-value">${acc.points !== undefined ? escapeHtml(acc.points.toLocaleString()) : 'N/A'}</div>
           <div class="account-points-label">Points</div>
         </div>
-        <span class="account-badge badge-${acc.status}">${acc.status.toUpperCase()}</span>
+        <span class="account-badge badge-${escapeHtml(acc.status)}">${escapeHtml(acc.status.toUpperCase())}</span>
       </div>
     </div>
   `).join('')
@@ -116,21 +125,22 @@ function addLog(log) {
 
 function renderLogs() {
   const container = document.getElementById('logsContainer')
-  
+
   if (logs.length === 0) {
     container.innerHTML = '<div class="empty-state"><i class="fas fa-stream"></i><p>No logs yet...</p></div>'
     return
   }
-  
+
+  // SECURITY FIX: Escape all log data to prevent XSS
   container.innerHTML = logs.map(log => `
-    <div class="log-entry log-level-${log.level}">
-      <span class="log-timestamp">[${new Date(log.timestamp).toLocaleTimeString()}]</span>
-      <span class="log-platform platform-${log.platform}">${log.platform}</span>
-      <span class="log-title">[${log.title}]</span>
-      <span>${log.message}</span>
+    <div class="log-entry log-level-${escapeHtml(log.level)}">
+      <span class="log-timestamp">[${escapeHtml(new Date(log.timestamp).toLocaleTimeString())}]</span>
+      <span class="log-platform platform-${escapeHtml(log.platform)}">${escapeHtml(log.platform)}</span>
+      <span class="log-title">[${escapeHtml(log.title)}]</span>
+      <span>${escapeHtml(log.message)}</span>
     </div>
   `).join('')
-  
+
   // Auto-scroll to bottom
   container.scrollTop = container.scrollHeight
 }
@@ -144,7 +154,7 @@ async function fetchData() {
       fetch('/api/metrics'),
       fetch('/api/logs?limit=100')
     ])
-    
+
     updateStatus(await statusRes.json())
     updateAccounts(await accountsRes.json())
     updateMetrics(await metricsRes.json())
@@ -223,15 +233,15 @@ function refreshData() {
 function connectWebSocket() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   ws = new WebSocket(`${protocol}//${window.location.host}`)
-  
+
   ws.onopen = () => {
     console.log('WebSocket connected')
   }
-  
+
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data)
-      
+
       if (data.type === 'init') {
         logs = data.data.logs || []
         renderLogs()
@@ -256,12 +266,12 @@ function connectWebSocket() {
       console.error('WebSocket message error:', error)
     }
   }
-  
+
   ws.onclose = () => {
     console.log('WebSocket disconnected, reconnecting...')
     setTimeout(connectWebSocket, 3000)
   }
-  
+
   ws.onerror = (error) => {
     console.error('WebSocket error:', error)
   }
