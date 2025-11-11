@@ -4,6 +4,7 @@ import { TIMEOUTS } from '../constants'
 import { DashboardData, MorePromotion, PromotionalItem, PunchCard } from '../interface/DashboardData'
 
 import { MicrosoftRewardsBot } from '../index'
+import { waitForElementSmart, waitForNetworkIdle } from '../util/browser/SmartWait'
 import { Retry } from '../util/core/Retry'
 import { AdaptiveThrottler } from '../util/notifications/AdaptiveThrottler'
 import { logError } from '../util/notifications/Logger'
@@ -109,8 +110,11 @@ export class Workers {
             // Got to punch card index page in a new tab
             await page.goto(punchCard.parentPromotion.destinationUrl, { referer: this.bot.config.baseURL })
 
-            // Wait for new page to load, max 10 seconds, however try regardless in case of error
-            await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(logError('PUNCH-CARD', 'Network idle wait timeout (non-critical)', this.bot.isMobile))
+            // IMPROVED: Smart wait replaces fixed 5s timeout with adaptive detection
+            await waitForNetworkIdle(page, {
+                timeoutMs: 5000,
+                logFn: (msg) => this.bot.log(this.bot.isMobile, 'PUNCH-CARD', msg)
+            }).catch(logError('PUNCH-CARD', 'Network idle wait timeout (non-critical)', this.bot.isMobile))
 
             await this.solveActivities(page, activitiesUncompleted, punchCard)
 
@@ -232,7 +236,11 @@ export class Workers {
     }
 
     private async prepareActivityPage(page: Page, selector: string, throttle: AdaptiveThrottler): Promise<void> {
-        await page.waitForLoadState('networkidle', { timeout: TIMEOUTS.DASHBOARD_WAIT }).catch(logError('WORKERS', 'Network idle wait failed', this.bot.isMobile))
+        // IMPROVED: Smart wait replaces fixed 10s timeout with adaptive detection
+        await waitForNetworkIdle(page, {
+            timeoutMs: TIMEOUTS.DASHBOARD_WAIT,
+            logFn: (msg) => this.bot.log(this.bot.isMobile, 'WORKERS', msg)
+        }).catch(logError('WORKERS', 'Network idle wait failed', this.bot.isMobile))
         await this.bot.browser.utils.humanizePage(page)
         await this.applyThrottle(throttle, ACTIVITY_DELAYS.ACTIVITY_SPACING_MIN, ACTIVITY_DELAYS.ACTIVITY_SPACING_MAX)
     }
@@ -240,12 +248,17 @@ export class Workers {
     private async executeActivity(page: Page, activity: PromotionalItem | MorePromotion, selector: string, throttle: AdaptiveThrottler, retry: Retry): Promise<void> {
         this.bot.log(this.bot.isMobile, 'ACTIVITY', `Found activity type: "${this.bot.activities.getTypeLabel(activity)}" title: "${activity.title}"`)
 
-        // Check if element exists before clicking (avoid 30s timeout)
-        try {
-            await page.waitForSelector(selector, { timeout: TIMEOUTS.NETWORK_IDLE })
-        } catch (error) {
+        // IMPROVED: Smart wait replaces fixed 5s timeout with adaptive 2s+5s detection
+        const elementResult = await waitForElementSmart(page, selector, {
+            initialTimeoutMs: 2000,
+            extendedTimeoutMs: TIMEOUTS.NETWORK_IDLE,
+            state: 'attached',
+            logFn: (msg) => this.bot.log(this.bot.isMobile, 'ACTIVITY', msg)
+        })
+
+        if (!elementResult.found) {
             this.bot.log(this.bot.isMobile, 'ACTIVITY', `Activity selector not found (might be completed or unavailable): ${selector}`, 'warn')
-            return // Skip this activity gracefully instead of waiting 30s
+            return // Skip this activity gracefully
         }
 
         // Click with timeout to prevent indefinite hangs

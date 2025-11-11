@@ -6,6 +6,7 @@ import { Workers } from '../Workers'
 import { AxiosRequestConfig } from 'axios'
 import { Counters, DashboardData } from '../../interface/DashboardData'
 import { GoogleSearch } from '../../interface/Search'
+import { waitForElementSmart } from '../../util/browser/SmartWait'
 
 type GoogleTrendsResponse = [
     string,
@@ -69,7 +70,7 @@ export class Search extends Workers {
         }
 
         googleSearchQueries = this.bot.utils.shuffleArray(googleSearchQueries)
-        
+
         // Combined deduplication: exact + semantic in single pass for performance
         if (this.bot.config.searchSettings.semanticDedup !== false) {
             const threshold = this.bot.config.searchSettings.semanticDedupThreshold ?? 0.65
@@ -160,7 +161,7 @@ export class Search extends Workers {
                     const filteredRelated = this.bot.config.searchSettings.semanticDedup !== false
                         ? this.semanticDedupStrings(relatedTerms, this.bot.config.searchSettings.semanticDedupThreshold ?? 0.65)
                         : relatedTerms
-                    
+
                     // Search for the first 2 related terms
                     for (const term of filteredRelated.slice(1, 3)) {
                         this.bot.log(this.bot.isMobile, 'SEARCH-BING-EXTRA', `${missingPoints} Points Remaining | Query: ${term}`)
@@ -314,7 +315,7 @@ export class Search extends Workers {
 
             const mappedTrendsData = trendsData.map(query => [query[0], query[9]!.slice(1)])
             this.bot.log(this.bot.isMobile, 'SEARCH-GOOGLE-TRENDS', `Found ${mappedTrendsData.length} search queries for ${geoLocale}`)
-            
+
             if (mappedTrendsData.length < 30 && geoLocale.toUpperCase() !== 'US') {
                 this.bot.log(this.bot.isMobile, 'SEARCH-GOOGLE-TRENDS', `Insufficient search queries (${mappedTrendsData.length} < 30), falling back to US`, 'warn')
                 return this.getGoogleTrends()
@@ -388,7 +389,7 @@ export class Search extends Workers {
     private async clickRandomLink(page: Page) {
         try {
             // Silent catch justified: Click is best-effort humanization, failure is acceptable
-            await page.click('#b_results .b_algo h2', { timeout: 2000 }).catch(() => {})
+            await page.click('#b_results .b_algo h2', { timeout: 2000 }).catch(() => { })
 
             // Only used if the browser is not the edge browser (continue on Edge popup)
             await this.closeContinuePopup(page)
@@ -468,11 +469,15 @@ export class Search extends Workers {
 
     private async closeContinuePopup(page: Page) {
         try {
-            await page.waitForSelector('#sacs_close', { timeout: 1000 })
-            const continueButton = await page.$('#sacs_close')
+            // IMPROVED: Smart wait replaces fixed 1s timeout with adaptive detection
+            const buttonResult = await waitForElementSmart(page, '#sacs_close', {
+                initialTimeoutMs: 500,
+                extendedTimeoutMs: 1000,
+                state: 'attached'
+            })
 
-            if (continueButton) {
-                await continueButton.click()
+            if (buttonResult.found && buttonResult.element) {
+                await buttonResult.element.click()
             }
         } catch (error) {
             // Continue if element is not found or other error occurs
@@ -498,24 +503,24 @@ export class Search extends Workers {
     private combinedDeduplication(queries: GoogleSearch[], threshold = 0.65): GoogleSearch[] {
         const result: GoogleSearch[] = []
         const seen = new Set<string>() // Track exact duplicates (case-insensitive)
-        
+
         for (const query of queries) {
             const lower = query.topic.toLowerCase()
-            
+
             // Check exact duplicate first (faster)
             if (seen.has(lower)) continue
-            
+
             // Check semantic similarity with existing results
-            const isSimilar = result.some(existing => 
+            const isSimilar = result.some(existing =>
                 this.jaccardSimilarity(query.topic, existing.topic) > threshold
             )
-            
+
             if (!isSimilar) {
                 result.push(query)
                 seen.add(lower)
             }
         }
-        
+
         return result
     }
 
@@ -525,7 +530,7 @@ export class Search extends Workers {
     private semanticDedupStrings(terms: string[], threshold = 0.65): string[] {
         const result: string[] = []
         for (const term of terms) {
-            const isSimilar = result.some(existing => 
+            const isSimilar = result.some(existing =>
                 this.jaccardSimilarity(term, existing) > threshold
             )
             if (!isSimilar) {

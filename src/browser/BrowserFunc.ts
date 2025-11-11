@@ -26,10 +26,13 @@ export default class BrowserFunc {
      * @returns true if suspended, false otherwise
      */
     private async checkAccountSuspension(page: Page, iteration: number): Promise<boolean> {
-        // Primary check: suspension header element
-        const suspendedByHeader = await page.waitForSelector(SELECTORS.SUSPENDED_ACCOUNT, { state: 'visible', timeout: 500 })
-            .then(() => true)
-            .catch(() => false)
+        // IMPROVED: Smart wait replaces fixed 500ms timeout with adaptive detection
+        const headerResult = await waitForElementSmart(page, SELECTORS.SUSPENDED_ACCOUNT, {
+            initialTimeoutMs: 500,
+            extendedTimeoutMs: 500,
+            state: 'visible'
+        })
+        const suspendedByHeader = headerResult.found
 
         if (suspendedByHeader) {
             this.bot.log(this.bot.isMobile, 'GO-HOME', `Account suspension detected by header selector (iteration ${iteration})`, 'error')
@@ -541,9 +544,20 @@ export default class BrowserFunc {
 
     async waitForQuizRefresh(page: Page): Promise<boolean> {
         try {
-            await page.waitForSelector(SELECTORS.QUIZ_CREDITS, { state: 'visible', timeout: TIMEOUTS.DASHBOARD_WAIT })
-            await this.bot.utils.wait(TIMEOUTS.MEDIUM_LONG)
+            // IMPROVED: Smart wait replaces fixed 10s timeout with adaptive 2s+5s detection
+            const result = await waitForElementSmart(page, SELECTORS.QUIZ_CREDITS, {
+                initialTimeoutMs: 2000,
+                extendedTimeoutMs: TIMEOUTS.DASHBOARD_WAIT - 2000,
+                state: 'visible',
+                logFn: (msg) => this.bot.log(this.bot.isMobile, 'QUIZ-REFRESH', msg)
+            })
 
+            if (!result.found) {
+                this.bot.log(this.bot.isMobile, 'QUIZ-REFRESH', 'Quiz credits element not found', 'error')
+                return false
+            }
+
+            await this.bot.utils.wait(TIMEOUTS.MEDIUM_LONG)
             return true
         } catch (error) {
             this.bot.log(this.bot.isMobile, 'QUIZ-REFRESH', 'An error occurred:' + error, 'error')
@@ -553,9 +567,19 @@ export default class BrowserFunc {
 
     async checkQuizCompleted(page: Page): Promise<boolean> {
         try {
-            await page.waitForSelector(SELECTORS.QUIZ_COMPLETE, { state: 'visible', timeout: TIMEOUTS.MEDIUM_LONG })
-            await this.bot.utils.wait(TIMEOUTS.MEDIUM_LONG)
+            // IMPROVED: Smart wait replaces fixed 2s timeout with adaptive detection
+            const result = await waitForElementSmart(page, SELECTORS.QUIZ_COMPLETE, {
+                initialTimeoutMs: 1000,
+                extendedTimeoutMs: TIMEOUTS.MEDIUM_LONG,
+                state: 'visible',
+                logFn: (msg) => this.bot.log(this.bot.isMobile, 'QUIZ-COMPLETE', msg)
+            })
 
+            if (!result.found) {
+                return false
+            }
+
+            await this.bot.utils.wait(TIMEOUTS.MEDIUM_LONG)
             return true
         } catch (error) {
             return false

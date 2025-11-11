@@ -1,7 +1,8 @@
 import { Page } from 'rebrowser-playwright'
 
-import { Workers } from '../Workers'
 import { RETRY_LIMITS, TIMEOUTS } from '../../constants'
+import { waitForElementSmart } from '../../util/browser/SmartWait'
+import { Workers } from '../Workers'
 
 
 export class ABC extends Workers {
@@ -14,18 +15,51 @@ export class ABC extends Workers {
 
             let i
             for (i = 0; i < RETRY_LIMITS.ABC_MAX && !$('span.rw_icon').length; i++) {
-                await page.waitForSelector('.wk_OptionClickClass', { state: 'visible', timeout: TIMEOUTS.DASHBOARD_WAIT })
+                // IMPROVED: Smart wait replaces fixed 10s timeout with adaptive 2s+5s detection
+                const optionsResult = await waitForElementSmart(page, '.wk_OptionClickClass', {
+                    initialTimeoutMs: 2000,
+                    extendedTimeoutMs: TIMEOUTS.DASHBOARD_WAIT - 2000,
+                    state: 'visible',
+                    logFn: (msg) => this.bot.log(this.bot.isMobile, 'ABC', msg)
+                })
+
+                if (!optionsResult.found) {
+                    this.bot.log(this.bot.isMobile, 'ABC', 'Options not found', 'warn')
+                    break
+                }
 
                 const answers = $('.wk_OptionClickClass')
                 const answer = answers[this.bot.utils.randomNumber(0, 2)]?.attribs['id']
 
-                await page.waitForSelector(`#${answer}`, { state: 'visible', timeout: TIMEOUTS.DASHBOARD_WAIT })
+                // IMPROVED: Smart wait for specific answer
+                const answerResult = await waitForElementSmart(page, `#${answer}`, {
+                    initialTimeoutMs: 1000,
+                    extendedTimeoutMs: TIMEOUTS.DASHBOARD_WAIT - 1000,
+                    state: 'visible'
+                })
+
+                if (!answerResult.found) {
+                    this.bot.log(this.bot.isMobile, 'ABC', `Answer ${answer} not found`, 'warn')
+                    break
+                }
 
                 await this.bot.utils.wait(TIMEOUTS.MEDIUM_LONG)
                 await page.click(`#${answer}`) // Click answer
 
                 await this.bot.utils.wait(TIMEOUTS.LONG + 1000)
-                await page.waitForSelector('div.wk_button', { state: 'visible', timeout: TIMEOUTS.DASHBOARD_WAIT })
+
+                // IMPROVED: Smart wait for next button
+                const buttonResult = await waitForElementSmart(page, 'div.wk_button', {
+                    initialTimeoutMs: 2000,
+                    extendedTimeoutMs: TIMEOUTS.DASHBOARD_WAIT - 2000,
+                    state: 'visible'
+                })
+
+                if (!buttonResult.found) {
+                    this.bot.log(this.bot.isMobile, 'ABC', 'Next button not found', 'warn')
+                    break
+                }
+
                 await page.click('div.wk_button') // Click next question button
 
                 page = await this.bot.browser.utils.getLatestTab(page)

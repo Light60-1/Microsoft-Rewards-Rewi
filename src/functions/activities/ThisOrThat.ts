@@ -1,7 +1,8 @@
 import { Page } from 'rebrowser-playwright'
 
-import { Workers } from '../Workers'
 import { DELAYS } from '../../constants'
+import { waitForElementSmart } from '../../util/browser/SmartWait'
+import { Workers } from '../Workers'
 
 
 export class ThisOrThat extends Workers {
@@ -11,9 +12,15 @@ export class ThisOrThat extends Workers {
 
 
         try {
-            // Check if the quiz has been started or not
-            const quizNotStarted = await page.waitForSelector('#rqStartQuiz', { state: 'visible', timeout: DELAYS.THIS_OR_THAT_START }).then(() => true).catch(() => false)
-            if (quizNotStarted) {
+            // IMPROVED: Smart wait replaces fixed 2s timeout with adaptive detection
+            const startQuizResult = await waitForElementSmart(page, '#rqStartQuiz', {
+                initialTimeoutMs: 1000,
+                extendedTimeoutMs: DELAYS.THIS_OR_THAT_START,
+                state: 'visible',
+                logFn: (msg) => this.bot.log(this.bot.isMobile, 'THIS-OR-THAT', msg)
+            })
+
+            if (startQuizResult.found) {
                 await page.click('#rqStartQuiz')
             } else {
                 this.bot.log(this.bot.isMobile, 'THIS-OR-THAT', 'ThisOrThat has already been started, trying to finish it')

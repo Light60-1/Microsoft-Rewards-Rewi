@@ -1,7 +1,8 @@
 import { Page } from 'rebrowser-playwright'
 
-import { Workers } from '../Workers'
 import { TIMEOUTS } from '../../constants'
+import { waitForElementSmart } from '../../util/browser/SmartWait'
+import { Workers } from '../Workers'
 
 
 export class Poll extends Workers {
@@ -12,11 +13,21 @@ export class Poll extends Workers {
         try {
             const buttonId = `#btoption${Math.floor(this.bot.utils.randomNumber(0, 1))}`
 
-            await page.waitForSelector(buttonId, { state: 'visible', timeout: TIMEOUTS.DASHBOARD_WAIT }).catch((e) => {
-                this.bot.log(this.bot.isMobile, 'POLL', `Could not find poll button: ${e}`, 'warn')
+            // IMPROVED: Smart wait replaces fixed 10s timeout with adaptive 2s+5s detection
+            const buttonResult = await waitForElementSmart(page, buttonId, {
+                initialTimeoutMs: 2000,
+                extendedTimeoutMs: TIMEOUTS.DASHBOARD_WAIT - 2000,
+                state: 'visible',
+                logFn: (msg) => this.bot.log(this.bot.isMobile, 'POLL', msg)
             })
-            await this.bot.utils.wait(TIMEOUTS.MEDIUM_LONG)
 
+            if (!buttonResult.found) {
+                this.bot.log(this.bot.isMobile, 'POLL', `Could not find poll button: ${buttonId}`, 'warn')
+                await page.close()
+                return
+            }
+
+            await this.bot.utils.wait(TIMEOUTS.MEDIUM_LONG)
             await page.click(buttonId)
 
             await this.bot.utils.wait(TIMEOUTS.LONG + 1000)

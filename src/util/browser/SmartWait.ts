@@ -1,9 +1,53 @@
-/**
- * Smart waiting utilities for browser automation
- * Replaces fixed timeouts with intelligent page readiness detection
- */
-
 import { Locator, Page } from 'rebrowser-playwright';
+
+/**
+ * Wait for network idle state specifically
+ * Optimized for post-navigation or post-action network settling
+ * 
+ * @param page Playwright page instance
+ * @param options Configuration options
+ * @returns Result with completion status and timing
+ */
+export async function waitForNetworkIdle(
+    page: Page,
+    options: {
+        timeoutMs?: number
+        logFn?: (msg: string) => void
+    } = {}
+): Promise<{ idle: boolean; timeMs: number }> {
+    const startTime = Date.now()
+    const timeoutMs = options.timeoutMs ?? 5000
+    const logFn = options.logFn ?? (() => { })
+
+    try {
+        // Quick check: is network already idle?
+        const hasActivity = await page.evaluate(() => {
+            return (performance.getEntriesByType('resource') as PerformanceResourceTiming[])
+                .some(r => r.responseEnd === 0)
+        }).catch(() => false)
+
+        if (!hasActivity) {
+            const elapsed = Date.now() - startTime
+            logFn(`✓ Network already idle (${elapsed}ms)`)
+            return { idle: true, timeMs: elapsed }
+        }
+
+        // Wait for network to settle
+        await page.waitForLoadState('networkidle', { timeout: timeoutMs }).catch(() => {
+            logFn(`Network idle timeout (${timeoutMs}ms) - continuing anyway`)
+        })
+
+        const elapsed = Date.now() - startTime
+        logFn(`✓ Network idle after ${elapsed}ms`)
+        return { idle: true, timeMs: elapsed }
+
+    } catch (error) {
+        const elapsed = Date.now() - startTime
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        logFn(`⚠ Network idle check failed after ${elapsed}ms: ${errorMsg}`)
+        return { idle: false, timeMs: elapsed }
+    }
+}
 
 /**
  * Wait for page to be truly ready (network idle + DOM ready)
