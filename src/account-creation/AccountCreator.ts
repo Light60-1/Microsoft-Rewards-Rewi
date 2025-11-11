@@ -1166,7 +1166,7 @@ export class AccountCreator {
     log(false, 'CREATOR', `Clicking Next button (${step})...`, 'log')
 
     // CRITICAL: Ensure page is stable before clicking
-    await this.waitForPageStable(`BEFORE_NEXT_${step.toUpperCase()}`, 15000)
+    await this.waitForPageStable(`BEFORE_NEXT_${step.toUpperCase()}`, 8000)
 
     // Find button by test id or type submit
     const nextBtn = this.page.locator('button[data-testid="primaryButton"], button[type="submit"]').first()
@@ -1200,21 +1200,18 @@ export class AccountCreator {
     await this.humanDelay(3000, 5000)
 
     // CRITICAL: Wait for page to be stable after clicking
-    await this.waitForPageStable(`AFTER_NEXT_${step.toUpperCase()}`, 20000)
+    await this.waitForPageStable(`AFTER_NEXT_${step.toUpperCase()}`, 10000)
 
     // CRITICAL: Verify the click was successful
     const urlAfter = this.page.url()
     let clickSuccessful = false
 
     if (urlBefore !== urlAfter) {
-      log(false, 'CREATOR', `✅ Navigation detected: ${urlBefore} → ${urlAfter}`, 'log', 'green')
+      log(false, 'CREATOR', '✅ Navigation detected', 'log', 'green')
       clickSuccessful = true
     } else {
-      log(false, 'CREATOR', `URL unchanged after clicking Next (${step})`, 'log', 'yellow')
-
-      // URL didn't change - this might be OK if content changed
-      // Wait a bit more and check for errors
-      await this.humanDelay(2000, 3000)
+      // URL didn't change - check for errors (some pages don't change URL)
+      await this.humanDelay(1500, 2000)
 
       const hasErrors = !(await this.verifyNoErrors())
       if (hasErrors) {
@@ -1222,8 +1219,7 @@ export class AccountCreator {
         return false
       }
 
-      // No errors - assume success (some pages don't change URL)
-      log(false, 'CREATOR', `No errors detected, assuming Next (${step}) was successful`, 'log', 'yellow')
+      // No errors - success (silent, no need to log)
       clickSuccessful = true
     }
 
@@ -1233,9 +1229,9 @@ export class AccountCreator {
   private async fillPassword(): Promise<string | null> {
 
 
-    await this.page.locator('h1[data-testid="title"]').first().waitFor({ timeout: 20000 })
-    await this.waitForPageStable('PASSWORD_PAGE', 15000)
-    await this.humanDelay(1000, 2000)
+    await this.page.locator('h1[data-testid="title"]').first().waitFor({ timeout: 10000 })
+    await this.waitForPageStable('PASSWORD_PAGE', 8000)
+    await this.humanDelay(800, 1500)
 
     log(false, 'CREATOR', '🔐 Generating password...', 'log', 'cyan')
     const password = this.dataGenerator.generatePassword()
@@ -1311,7 +1307,7 @@ export class AccountCreator {
   private async fillBirthdate(): Promise<{ day: number; month: number; year: number } | null> {
     log(false, 'CREATOR', '🎂 Filling birthdate...', 'log', 'cyan')
 
-    await this.waitForPageStable('BIRTHDATE_PAGE', 15000)
+    await this.waitForPageStable('BIRTHDATE_PAGE', 8000)
 
     const birthdate = this.dataGenerator.generateBirthdate()
 
@@ -1496,7 +1492,7 @@ export class AccountCreator {
   private async fillNames(email: string): Promise<{ firstName: string; lastName: string } | null> {
     log(false, 'CREATOR', '👤 Filling name...', 'log', 'cyan')
 
-    await this.waitForPageStable('NAMES_PAGE', 15000)
+    await this.waitForPageStable('NAMES_PAGE', 8000)
 
     const names = this.dataGenerator.generateNames(email)
 
