@@ -998,8 +998,8 @@ export class AccountCreator {
   private async handleEmailTaken(retryCount = 0): Promise<{ success: boolean; email: string | null }> {
     log(false, 'CREATOR', 'Email taken, looking for Microsoft suggestions...', 'log', 'yellow')
 
-    await this.humanDelay(2000, 3000)
-    await this.waitForPageStable('EMAIL_SUGGESTIONS', 10000)
+    await this.humanDelay(1000, 1500) // REDUCED: Faster suggestion handling (was 2000-3000)
+    await this.waitForPageStable('EMAIL_SUGGESTIONS', 5000) // REDUCED: Faster suggestion detection (was 10000)
 
     // Multiple selectors for suggestions container
     const suggestionSelectors = [
@@ -1115,7 +1115,7 @@ export class AccountCreator {
 
     // Click the suggestion
     await firstButton.click()
-    await this.humanDelay(1500, 2500)
+    await this.humanDelay(500, 1000) // REDUCED: Faster suggestion click (was 1500-2500)
 
     // Verify the email input was updated
     const emailInput = this.page.locator('input[type="email"]').first()
@@ -1497,6 +1497,9 @@ export class AccountCreator {
     const names = this.dataGenerator.generateNames(email)
 
     try {
+      // CRITICAL: Uncheck marketing opt-in BEFORE filling names (checkbox is default checked in US locale)
+      await this.uncheckMarketingOptIn()
+
       await this.humanDelay(1000, 2000)
 
       const firstNameSelectors = [
@@ -1590,9 +1593,6 @@ export class AccountCreator {
 
       log(false, 'CREATOR', `✅ Names filled: ${names.firstName} ${names.lastName}`, 'log', 'green')
 
-      // CRITICAL: Uncheck marketing opt-in checkbox (decline promotional emails)
-      await this.uncheckMarketingOptIn()
-
       // CRITICAL: Verify no errors appeared after filling names
       const noErrors = await this.verifyNoErrors()
       if (!noErrors) {
@@ -1632,22 +1632,35 @@ export class AccountCreator {
     try {
       log(false, 'CREATOR', 'Checking for marketing opt-in checkbox...', 'log', 'cyan')
 
-      // Multiple selectors for the marketing checkbox
+      // IMPROVED: Wait for checkbox to be present before checking
+      await this.humanDelay(500, 1000)
+
+      // Multiple selectors for the marketing checkbox (order matters: most specific first)
       const checkboxSelectors = [
         'input#marketingOptIn',
         'input[data-testid="marketingOptIn"]',
         'input[name="marketingOptIn"]',
-        'input[aria-label*="information, tips, and offers"]'
+        'input[type="checkbox"][aria-label*="information"]',
+        'input[type="checkbox"][aria-label*="conseils"]', // French locale
+        'input[type="checkbox"][aria-label*="offers"]'
       ]
 
       let checkbox = null
+
       for (const selector of checkboxSelectors) {
-        const element = this.page.locator(selector).first()
-        const visible = await element.isVisible().catch(() => false)
-        if (visible) {
-          checkbox = element
-          log(false, 'CREATOR', `Found marketing checkbox with selector: ${selector}`, 'log', 'cyan')
-          break
+        try {
+          const element = this.page.locator(selector).first()
+          // CRITICAL: Check if visible AND enabled (not disabled)
+          const visible = await element.isVisible({ timeout: 2000 }).catch(() => false)
+          const enabled = await element.isEnabled().catch(() => false)
+
+          if (visible && enabled) {
+            checkbox = element
+            log(false, 'CREATOR', `Found marketing checkbox: ${selector}`, 'log', 'cyan')
+            break
+          }
+        } catch {
+          continue
         }
       }
 
@@ -1656,25 +1669,38 @@ export class AccountCreator {
         return
       }
 
-      // Check if the checkbox is already checked
+      // CRITICAL: Wait for checkbox state to stabilize (US locale defaults to checked)
+      await this.humanDelay(300, 600)
+
+      // Check if the checkbox is currently checked
       const isChecked = await checkbox.isChecked().catch(() => false)
 
       if (isChecked) {
-        log(false, 'CREATOR', 'Marketing checkbox is checked, unchecking it...', 'log', 'yellow')
+        log(false, 'CREATOR', '⚠️ Marketing checkbox is CHECKED (US locale default) - unchecking now...', 'log', 'yellow')
 
         // Click to uncheck
         await checkbox.click()
-        await this.humanDelay(500, 1000)
+        await this.humanDelay(400, 800)
 
-        // Verify it was unchecked
+        // CRITICAL: Verify it was actually unchecked
         const stillChecked = await checkbox.isChecked().catch(() => true)
         if (!stillChecked) {
           log(false, 'CREATOR', '✅ Marketing opt-in unchecked successfully', 'log', 'green')
         } else {
-          log(false, 'CREATOR', '⚠️ Failed to uncheck marketing opt-in', 'warn', 'yellow')
+          log(false, 'CREATOR', '⚠️ Failed to uncheck marketing opt-in (still checked)', 'warn', 'yellow')
+          // Retry once
+          log(false, 'CREATOR', '🔄 Retrying uncheck...', 'log', 'cyan')
+          await checkbox.click()
+          await this.humanDelay(400, 800)
+          const finalCheck = await checkbox.isChecked().catch(() => true)
+          if (!finalCheck) {
+            log(false, 'CREATOR', '✅ Marketing opt-in unchecked on retry', 'log', 'green')
+          } else {
+            log(false, 'CREATOR', '❌ Could not uncheck marketing opt-in after retry', 'error')
+          }
         }
       } else {
-        log(false, 'CREATOR', '✅ Marketing opt-in already unchecked', 'log', 'green')
+        log(false, 'CREATOR', '✅ Marketing opt-in already unchecked (good!)', 'log', 'green')
       }
 
     } catch (error) {
@@ -1945,12 +1971,12 @@ export class AccountCreator {
 
       log(false, 'CREATOR', '✅ On rewards.bing.com', 'log', 'green')
 
-      // Clear cookies on rewards page
-      await this.dismissCookieBanner()
-
-      // Handle "Get started" popup (ReferAndEarn)
+      // CRITICAL: Handle "Get started" popup FIRST (before cookies)
       await this.humanDelay(2000, 3000)
       await this.handleGetStartedPopup()
+
+      // Then clear cookie banner (after Get started)
+      await this.dismissCookieBanner()
 
       // Referral enrollment if needed
       if (this.referralUrl) {
@@ -2214,6 +2240,15 @@ export class AccountCreator {
         await this.humanDelay(2000, 3000)
         await this.waitForPageStable('AFTER_JOIN', 7000)
         log(false, 'CREATOR', '✅ Successfully clicked Join button', 'log', 'green')
+
+        // CRITICAL: Verify referral was successful by checking for &new=1 in URL
+        const currentUrl = this.page.url()
+        if (currentUrl.includes('&new=1') || currentUrl.includes('?new=1')) {
+          log(false, 'CREATOR', '✅ Referral successful! URL contains &new=1', 'log', 'green')
+        } else {
+          log(false, 'CREATOR', '⚠️ Warning: URL does not contain &new=1 - referral may not have worked', 'warn', 'yellow')
+          log(false, 'CREATOR', `Current URL: ${currentUrl}`, 'log', 'cyan')
+        }
       } else {
         log(false, 'CREATOR', '✅ Already enrolled or Join button not found', 'log', 'gray')
       }
@@ -2487,15 +2522,17 @@ ${JSON.stringify(accountData, null, 2)}`
 
       // Strategy 1: Wait for common TOTP secret selectors
       const secretSelectors = [
-        '#iTOTP_Secret',           // Most common
-        '#totpSecret',              // Alternative
-        'input[name="secret"]',     // Input field
-        'input[id*="secret"]',      // Partial ID match
-        'input[id*="TOTP"]',        // TOTP-related input
-        '[data-bind*="secret"]',    // Data binding
-        'div.text-block-body',      // Text block (new UI)
-        'pre',                      // Pre-formatted text
-        'code'                      // Code block
+        '#iActivationCode span.dirltr.bold',  // CORRECT: Secret key in span (lvb5 ysvi...)
+        '#iActivationCode span.bold',          // Alternative without dirltr
+        '#iTOTP_Secret',                       // Legacy selector
+        '#totpSecret',                         // Alternative
+        'input[name="secret"]',                // Input field
+        'input[id*="secret"]',                 // Partial ID match
+        'input[id*="TOTP"]',                   // TOTP-related input
+        '[data-bind*="secret"]',               // Data binding
+        'div.text-block-body',                 // Text block (new UI)
+        'pre',                                 // Pre-formatted text
+        'code'                                 // Code block
       ]
 
       let totpSecret = ''
@@ -2518,7 +2555,8 @@ ${JSON.stringify(accountData, null, 2)}`
 
             for (const method of methods) {
               const value = await method()
-              const cleaned = value?.trim() || ''
+              // CRITICAL: Remove &nbsp; (non-breaking spaces) and all whitespace
+              const cleaned = value?.replace(/\s+/g, '').replace(/&nbsp;/g, '').trim() || ''
 
               // TOTP secrets are typically 16-32 characters, base32 encoded (A-Z, 2-7)
               if (cleaned && cleaned.length >= 16 && cleaned.length <= 64 && /^[A-Z2-7]+$/i.test(cleaned)) {
@@ -2558,19 +2596,7 @@ ${JSON.stringify(accountData, null, 2)}`
 
       if (!totpSecret) {
         log(false, 'CREATOR', '❌ Could not find TOTP secret', 'error')
-
-        // Take screenshot for debugging
-        try {
-          const screenshotPath = path.join(process.cwd(), 'totp-secret-not-found.png')
-          await this.page.screenshot({ path: screenshotPath, fullPage: true })
-          log(false, 'CREATOR', `📸 Screenshot saved to: ${screenshotPath}`, 'log', 'cyan')
-        } catch {
-          log(false, 'CREATOR', '⚠️ Could not save debug screenshot', 'warn')
-        }
-
-        // Log page URL for manual check
-        log(false, 'CREATOR', `📍 Current URL: ${this.page.url()}`, 'log', 'cyan')
-
+        log(false, 'CREATOR', ` Current URL: ${this.page.url()}`, 'log', 'cyan')
         return undefined
       }
 
@@ -2616,11 +2642,53 @@ ${JSON.stringify(accountData, null, 2)}`
 
       log(false, 'CREATOR', '✅ 2FA enabled!', 'log', 'green')
 
-      // Extract recovery code
-      const recoveryElement = this.page.locator('#NewRecoveryCode').first()
-      const recoveryText = await recoveryElement.textContent().catch(() => '') || ''
-      const recoveryMatch = recoveryText.match(/([A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5})/)
-      const recoveryCode = recoveryMatch ? recoveryMatch[1] : ''
+      // IMPROVED: Extract recovery code from <b> tag with multiple strategies
+      let recoveryCode = ''
+
+      // Strategy 1: Look for <b> tag containing recovery code pattern
+      try {
+        const boldElements = await this.page.locator('b').all()
+        for (const element of boldElements) {
+          const text = await element.textContent().catch(() => '') || ''
+          const match = text.match(/([A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5})/)
+          if (match) {
+            recoveryCode = match[1]!
+            log(false, 'CREATOR', '✅ Found recovery code in <b> tag', 'log', 'green')
+            break
+          }
+        }
+      } catch {
+        // Continue to next strategy
+      }
+
+      // Strategy 2: Try legacy selector #NewRecoveryCode
+      if (!recoveryCode) {
+        try {
+          const recoveryElement = this.page.locator('#NewRecoveryCode').first()
+          const recoveryText = await recoveryElement.textContent().catch(() => '') || ''
+          const recoveryMatch = recoveryText.match(/([A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5})/)
+          if (recoveryMatch) {
+            recoveryCode = recoveryMatch[1]!
+            log(false, 'CREATOR', '✅ Found recovery code via #NewRecoveryCode', 'log', 'green')
+          }
+        } catch {
+          // Continue to next strategy
+        }
+      }
+
+      // Strategy 3: Scan entire page content as fallback
+      if (!recoveryCode) {
+        try {
+          const pageContent = await this.page.content().catch(() => '')
+          const match = pageContent.match(/([A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5})/)
+          if (match) {
+            recoveryCode = match[1]!
+            log(false, 'CREATOR', '✅ Found recovery code via page scan', 'log', 'yellow')
+          }
+        } catch {
+          // Continue
+        }
+      }
 
       if (recoveryCode) {
         log(false, 'CREATOR', `🔐 Recovery Code: ${recoveryCode}`, 'log', 'green')
