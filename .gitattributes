@@ -1,2 +1,8 @@
 *.sh text eol=lf
 *.template text eol=lf
+
+# Exclude development files from GitHub ZIP downloads
+# Users don't need these files, but they remain in Git for maintainers
+.github/ export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore

@@ -2,7 +2,6 @@ sessions/
 dist/
 node_modules/
 .vscode/
-.github/
 diagnostics/
 reports/
 accounts-created/
