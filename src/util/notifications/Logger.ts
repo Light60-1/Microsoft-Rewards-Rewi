@@ -340,11 +340,16 @@ export function log(isMobile: boolean | 'main', title: string, message: string, 
                     title,
                     platform: platformText
                 })
-            } catch {
+            } catch (reportError) {
                 // Silent fail - error reporting should never break the application
+                // But log to stderr for debugging
+                const msg = reportError instanceof Error ? reportError.message : String(reportError)
+                process.stderr.write(`[Logger] Error reporting failed in promise: ${msg}\n`)
             }
-        }).catch(() => {
-            // Catch any promise rejection silently
+        }).catch((promiseError) => {
+            // Catch any promise rejection silently but log for debugging
+            const msg = promiseError instanceof Error ? promiseError.message : String(promiseError)
+            process.stderr.write(`[Logger] Error reporting promise rejected: ${msg}\n`)
         })
 
         return errorObj

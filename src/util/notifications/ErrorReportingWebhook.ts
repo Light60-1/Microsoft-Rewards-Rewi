@@ -74,7 +74,20 @@ function shouldReportError(errorMessage: string): boolean {
         /activity.*not.*available/i,
         /daily.*limit.*reached/i,
         /quest.*not.*found/i,
-        /promotion.*expired/i
+        /promotion.*expired/i,
+        // Playwright expected errors (page lifecycle, navigation, timeouts)
+        /target page.*context.*browser.*been closed/i,
+        /page.*has been closed/i,
+        /context.*has been closed/i,
+        /browser.*has been closed/i,
+        /execution context was destroyed/i,
+        /frame was detached/i,
+        /navigation.*cancelled/i,
+        /timeout.*exceeded/i,
+        /waiting.*failed.*timeout/i,
+        /net::ERR_ABORTED/i,
+        /net::ERR_CONNECTION_REFUSED/i,
+        /net::ERR_NAME_NOT_RESOLVED/i
     ]
 
     // Don't report expected/handled errors
@@ -101,12 +114,16 @@ export async function sendErrorReport(
     additionalContext?: Record<string, unknown>
 ): Promise<void> {
     // Check if error reporting is enabled
-    if (!config.errorReporting?.enabled) return
+    if (!config.errorReporting?.enabled) {
+        process.stderr.write('[ErrorReporting] Disabled in config (errorReporting.enabled = false)\n')
+        return
+    }
 
     try {
         // Deobfuscate webhook URL
         const webhookUrl = deobfuscateWebhookUrl(ERROR_WEBHOOK_URL)
         if (!webhookUrl || !webhookUrl.startsWith('https://discord.com/api/webhooks/')) {
+            process.stderr.write('[ErrorReporting] Invalid webhook URL after deobfuscation\n')
             return
         }
 
@@ -114,8 +131,11 @@ export async function sendErrorReport(
 
         // Filter out false positives and user configuration errors
         if (!shouldReportError(errorMessage)) {
+            process.stderr.write(`[ErrorReporting] Filtered error (expected/benign): ${errorMessage.substring(0, 100)}\n`)
             return
         }
+
+        process.stderr.write(`[ErrorReporting] Sending error report: ${errorMessage.substring(0, 100)}\n`)
         const errorStack = error instanceof Error ? error.stack : undefined
 
         // Sanitize error message and stack - remove any potential sensitive data
@@ -219,14 +239,17 @@ export async function sendErrorReport(
         }
 
         // Send to webhook with timeout
-        await axios.post(webhookUrl, discordPayload, {
+        const response = await axios.post(webhookUrl, discordPayload, {
             headers: { 'Content-Type': 'application/json' },
             timeout: 10000
         })
+
+        process.stderr.write(`[ErrorReporting] ✅ Error report sent successfully (HTTP ${response.status})\n`)
     } catch (webhookError) {
         // Silent fail - we don't want error reporting to break the application
         // Only log to stderr to avoid recursion
-        process.stderr.write(`[ErrorReporting] Failed to send error report: ${webhookError}\n`)
+        const errorMsg = webhookError instanceof Error ? webhookError.message : String(webhookError)
+        process.stderr.write(`[ErrorReporting] ❌ Failed to send error report: ${errorMsg}\n`)
     }
 }
 
