@@ -2578,7 +2578,9 @@ ${JSON.stringify(accountData, null, 2)}`
         return undefined
       }
 
-      log(false, 'CREATOR', `🔑 TOTP Secret: ${totpSecret} (found via: ${foundSelector})`, 'log', 'green')
+      // SECURITY: Redact TOTP secret - only show first 4 chars for verification
+      const redactedSecret = totpSecret.substring(0, 4) + '*'.repeat(Math.max(totpSecret.length - 4, 8))
+      log(false, 'CREATOR', `🔑 TOTP Secret: ${redactedSecret} (found via: ${foundSelector})`, 'log', 'green')
       log(false, 'CREATOR', '⚠️  SAVE THIS SECRET - You will need it to generate codes!', 'warn', 'yellow')
 
       // Click "I'll scan a bar code instead" to go back to QR code view

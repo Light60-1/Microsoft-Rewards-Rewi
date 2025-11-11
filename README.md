@@ -133,7 +133,7 @@ Automatically create new Microsoft accounts with advanced security features:
 npm run creator
 
 # With specific recovery email (auto-detected, no flag needed!)
-npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
+npm run creator -- https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
 
 ```
 
@@ -161,10 +161,10 @@ npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.co
 | Command | Recovery Email | 2FA | Notes |
 |---------|---------------|-----|-------|
 | `npm run creator` | ❓ Prompts | ❓ Prompts | Interactive mode |
-| `npm run creator -y` | ✅ Prompts for email | ✅ Enabled | Auto-accept all |
-| `npm run creator -y backup@gmail.com` | ✅ Uses provided email | ✅ Enabled | Full automation |
-| `npm run creator URL -y` | ✅ Prompts for email | ✅ Enabled | With referral |
-| `npm run creator URL -y backup@gmail.com` | ✅ Uses provided email | ✅ Enabled | Complete setup |
+| `npm run creator -- -y` | ✅ Prompts for email | ✅ Enabled | Auto-accept all |
+| `npm run creator -- -y backup@gmail.com` | ✅ Uses provided email | ✅ Enabled | Full automation |
+| `npm run creator -- URL -y` | ✅ Prompts for email | ✅ Enabled | With referral |
+| `npm run creator -- URL -y backup@gmail.com` | ✅ Uses provided email | ✅ Enabled | Complete setup |
 
 **📋 What happens:**
 1. Creates Microsoft account (email, password, birthdate, names)

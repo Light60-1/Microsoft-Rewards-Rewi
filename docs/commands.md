@@ -219,7 +219,13 @@ npm run dashboard-dev
 **Account creation wizard** - Create new Microsoft accounts.
 
 ```bash
+# Interactive mode
 npm run creator
+
+# With referral URL and auto-accept mode
+npm run creator -- https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
+
+# Note: The -- is required to pass arguments to the script!
 ```
 
 **When to use:**

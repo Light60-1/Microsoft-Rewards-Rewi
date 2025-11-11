@@ -119,7 +119,7 @@ Explore advanced features and customization options:| **[NTFY Alerts](ntfy.md)**
 
 **Quick command:**
 ```bash
-npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
+npm run creator -- https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
 ```
 
 ---

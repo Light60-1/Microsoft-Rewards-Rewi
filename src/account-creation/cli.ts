@@ -35,6 +35,17 @@ async function main(): Promise<void> {
   log(false, 'CREATOR-CLI', '='.repeat(60), 'log', 'cyan')
   log(false, 'CREATOR-CLI', '', 'log') // Empty line
 
+  // Show usage help if no arguments passed
+  if (args.length === 0) {
+    log(false, 'CREATOR-CLI', '📖 Usage Examples:', 'log', 'cyan')
+    log(false, 'CREATOR-CLI', '   npm run creator -- -y                                    # Auto mode', 'log', 'gray')
+    log(false, 'CREATOR-CLI', '   npm run creator -- -y email@gmail.com                     # With recovery email', 'log', 'gray')
+    log(false, 'CREATOR-CLI', '   npm run creator -- https://rewards.bing.com/... -y        # With referral URL', 'log', 'gray')
+    log(false, 'CREATOR-CLI', '', 'log')
+    log(false, 'CREATOR-CLI', '⚠️  IMPORTANT: The -- is required to pass arguments via npm!', 'warn', 'yellow')
+    log(false, 'CREATOR-CLI', '', 'log')
+  }
+
   // Display detected arguments
   if (referralUrl) {
     log(false, 'CREATOR-CLI', `✅ Referral URL: ${referralUrl}`, 'log', 'green')
