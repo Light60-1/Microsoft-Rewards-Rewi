@@ -244,13 +244,14 @@ export class StartupValidator {
 
     // Risk management validation
     if (config.riskManagement?.enabled === true) {
-      if (config.riskManagement.stopOnCritical === true) {
-        this.addWarning(
-          'config',
-          'Risk management will stop execution if critical risk is detected',
-          'Bot will halt all accounts if risk score becomes too high'
-        )
-      }
+      // If risk management is enabled, notify the user to ensure policies are configured.
+      // This avoids an empty-block lint/compile error and provides actionable guidance.
+      this.addWarning(
+        'riskManagement',
+        'Risk management is enabled but no specific policies were validated here',
+        'Review and configure riskManagement settings (throttles, maxRestarts, detection thresholds)',
+        'docs/config.md'
+      )
     }
 
     // Search delays validation
