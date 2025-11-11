@@ -1,3 +1,4 @@
+import * as readline from 'readline'
 import Browser from '../browser/Browser'
 import { MicrosoftRewardsBot } from '../index'
 import { log } from '../util/notifications/Logger'
@@ -21,6 +22,41 @@ async function main(): Promise<void> {
     } else if (arg.includes('@')) {
       // Auto-detect email addresses
       recoveryEmail = arg
+    }
+  }
+
+  // CRITICAL: Detect truncated URLs (PowerShell/CMD cut at & character)
+  // If URL detected but no -y flag AND no email, likely the URL was cut
+  if (referralUrl && !autoAccept && !recoveryEmail && args.length === 1) {
+    // Check if URL looks truncated (ends with parameter but no value after &)
+    if (referralUrl.includes('?') && !referralUrl.includes('&')) {
+      log(false, 'CREATOR-CLI', '', 'log')
+      log(false, 'CREATOR-CLI', '⚠️  WARNING: URL may be truncated!', 'warn', 'yellow')
+      log(false, 'CREATOR-CLI', '   The & character is special in CMD/PowerShell and cuts the URL.', 'warn', 'yellow')
+      log(false, 'CREATOR-CLI', '', 'log')
+      log(false, 'CREATOR-CLI', '✅ SOLUTION: Put the URL in quotes:', 'log', 'green')
+      log(false, 'CREATOR-CLI', '   npm run creator -- "https://rewards.bing.com/...full-url..." -y email@gmail.com', 'log', 'cyan')
+      log(false, 'CREATOR-CLI', '', 'log')
+      log(false, 'CREATOR-CLI', '💡 TIP: Only the rh= code matters. You can simplify to:', 'log', 'gray')
+      log(false, 'CREATOR-CLI', '   npm run creator -- https://rewards.bing.com/welcome?rh=YOUR_CODE -y email@gmail.com', 'log', 'cyan')
+      log(false, 'CREATOR-CLI', '', 'log')
+
+      // Ask user if they want to continue anyway
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      })
+
+      await new Promise<void>((resolve) => {
+        rl.question('Continue with this URL anyway? (y/N): ', (answer: string) => {
+          rl.close()
+          if (answer.toLowerCase() !== 'y' && answer.toLowerCase() !== 'yes') {
+            log(false, 'CREATOR-CLI', '❌ Aborted. Please retry with the URL in quotes.', 'error')
+            process.exit(0)
+          }
+          resolve()
+        })
+      })
     }
   }
 

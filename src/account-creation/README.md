@@ -38,10 +38,16 @@ npm run creator -- https://rewards.bing.com/welcome?rh=YOUR_CODE -y
 # With specific recovery email (auto-detected)
 npm run creator -- https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
 
+# If URL from Microsoft has &ref= or &form=, use quotes:
+npm run creator -- "https://rewards.bing.com/welcome?rh=CODE&ref=..." -y backup@gmail.com
+
 # Minimal - just recovery email without referral
 npm run creator -- -y myrecovery@gmail.com
 
-# Note: The -- is REQUIRED to pass arguments to the script via npm!
+# ⚠️ CRITICAL NOTES:
+# - The -- is REQUIRED to pass arguments via npm
+# - URLs with & MUST be in quotes (CMD/PowerShell cuts at & otherwise)
+# - You can simplify URLs to just ?rh=CODE (other params are optional)
 ```
 
 ### 🎛️ Command Line Arguments

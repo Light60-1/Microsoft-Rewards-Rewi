@@ -132,9 +132,13 @@ Automatically create new Microsoft accounts with advanced security features:
 # Interactive mode (asks everything)
 npm run creator
 
-# With specific recovery email (auto-detected, no flag needed!)
+# With specific recovery email (simplified URL - recommended)
 npm run creator -- https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
 
+# If URL has & symbols (from Microsoft copy-paste), use quotes:
+npm run creator -- "https://rewards.bing.com/welcome?rh=CODE&ref=..." -y backup@gmail.com
+
+# ⚠️ IMPORTANT: URLs with & MUST be in quotes (CMD/PowerShell requirement)
 ```
 
 **✨ Features:**
