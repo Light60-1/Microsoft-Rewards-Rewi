@@ -163,7 +163,7 @@
         "enabled": true,
         "method": "github-api",
         "dockerMode": "auto", // "auto" = detect automatically, "force-docker" = always use Docker mode, "force-host" = never use Docker mode
-        "autoUpdateConfig": true,
+        "autoUpdateConfig": false,
         "autoUpdateAccounts": false
     },
     // === ERROR REPORTING ===
