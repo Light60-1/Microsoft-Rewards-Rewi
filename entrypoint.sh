@@ -21,8 +21,8 @@ fi
 if [ "${RUN_ON_START:-false}" = "true" ]; then
   echo "[entrypoint] Starting initial run in background at $(date)"
   (
-    cd /usr/src/microsoft-rewards-script || {
-      echo "[entrypoint-bg] ERROR: Unable to cd to /usr/src/microsoft-rewards-script" >&2
+    cd /usr/src/microsoft-rewards-bot || {
+      echo "[entrypoint-bg] ERROR: Unable to cd to /usr/src/microsoft-rewards-bot" >&2
       exit 1
     }
     # Skip random sleep for initial run, but preserve setting for cron jobs

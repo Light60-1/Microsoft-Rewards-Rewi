@@ -5,7 +5,7 @@ export PATH="/usr/local/bin:/usr/bin:/bin"
 export PLAYWRIGHT_BROWSERS_PATH=0
 export TZ="${TZ:-UTC}"
 
-cd /usr/src/microsoft-rewards-script
+cd /usr/src/microsoft-rewards-bot
 
 LOCKFILE=/tmp/run_daily.lock
 
