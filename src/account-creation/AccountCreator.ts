@@ -214,6 +214,34 @@ export class AccountCreator {
       // Ignore
     }
 
+    // CRITICAL: Check for temporary unavailability (Microsoft servers overloaded)
+    try {
+      const unavailableSelectors = [
+        '#idPageTitle:has-text("temporarily unavailable")',
+        '#idPageTitle:has-text("temporairement indisponible")',
+        'div:has-text("site is temporarily unavailable")',
+        'div:has-text("site est temporairement indisponible")'
+      ]
+
+      for (const selector of unavailableSelectors) {
+        const unavailableElement = this.page.locator(selector).first()
+        const isVisible = await unavailableElement.isVisible({ timeout: 1000 }).catch(() => false)
+
+        if (isVisible) {
+          log(false, 'CREATOR', '🚨 MICROSOFT TEMPORARY UNAVAILABILITY', 'error')
+          log(false, 'CREATOR', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'error')
+          log(false, 'CREATOR', '❌ "This site is temporarily unavailable" detected', 'error')
+          log(false, 'CREATOR', '📍 Cause: Microsoft servers overloaded or under maintenance', 'warn', 'yellow')
+          log(false, 'CREATOR', '⏰ Solution: Wait 30-60 minutes and try again', 'warn', 'yellow')
+          log(false, 'CREATOR', '🌐 Tip: Avoid peak hours (8am-6pm US time)', 'log', 'cyan')
+          log(false, 'CREATOR', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'error')
+          return false
+        }
+      }
+    } catch {
+      // Ignore
+    }
+
     return true
   }
 
@@ -435,11 +463,66 @@ export class AccountCreator {
    * This happens AFTER CAPTCHA and can take several seconds
    */
   private async waitForAccountCreation(): Promise<boolean> {
-    const maxWaitTime = 60000 // 60 seconds
+    const maxWaitTime = 90000 // 90 seconds (increased for slow Microsoft servers)
     const startTime = Date.now()
 
     try {
-      // STEP 1: Wait for any "Creating account" messages to appear AND disappear
+      // CRITICAL: Check for temporary unavailability error FIRST
+      const unavailableSelectors = [
+        '#idPageTitle:has-text("temporarily unavailable")',
+        '#idPageTitle:has-text("temporairement indisponible")',
+        'div:has-text("site is temporarily unavailable")',
+        'div:has-text("site est temporairement indisponible")'
+      ]
+
+      for (const selector of unavailableSelectors) {
+        const errorElement = this.page.locator(selector).first()
+        const errorVisible = await errorElement.isVisible({ timeout: 2000 }).catch(() => false)
+
+        if (errorVisible) {
+          log(false, 'CREATOR', '🚨 MICROSOFT TEMPORARY UNAVAILABILITY DETECTED', 'error')
+          log(false, 'CREATOR', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'error')
+          log(false, 'CREATOR', '❌ "This site is temporarily unavailable" error detected', 'error')
+          log(false, 'CREATOR', '📍 Cause: Microsoft servers overloaded or maintenance', 'warn', 'yellow')
+          log(false, 'CREATOR', '⏰ Solution: Wait 30-60 minutes and try again', 'warn', 'yellow')
+          log(false, 'CREATOR', '🌐 Alternative: Try a different time of day (avoid peak hours)', 'log', 'cyan')
+          log(false, 'CREATOR', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'error')
+          log(false, 'CREATOR', '⚠️  Browser left open for inspection. Press Ctrl+C to exit.', 'warn', 'yellow')
+          // Keep browser open
+          await new Promise(() => { })
+          return false
+        }
+      }
+
+      // STEP 1: Wait for "Login" message (account creation in progress - DO NOTHING)
+      const loginMessages = [
+        'text="Login"',
+        'text="Connexion"',
+        'div:has-text("Login")',
+        'div:has-text("Connexion")',
+        '[data-testid*="login"]'
+      ]
+
+      for (const messageSelector of loginMessages) {
+        const element = this.page.locator(messageSelector).first()
+        const visible = await element.isVisible({ timeout: 2000 }).catch(() => false)
+
+        if (visible) {
+          log(false, 'CREATOR', '⏳ "Login" message detected - Microsoft is creating account...', 'log', 'cyan')
+          log(false, 'CREATOR', '⚠️  DO NOT INTERACT - Waiting for account creation to complete', 'warn', 'yellow')
+
+          // Wait for "Login" message to disappear (account creation complete)
+          try {
+            await element.waitFor({ state: 'hidden', timeout: 60000 }) // 60s max
+            log(false, 'CREATOR', '✅ Account creation completed (Login message disappeared)', 'log', 'green')
+          } catch {
+            log(false, 'CREATOR', '⚠️ Login message still visible after 60s - continuing anyway', 'warn', 'yellow')
+          }
+          break
+        }
+      }
+
+      // STEP 2: Wait for any other "Creating account" messages to appear AND disappear
       const creationMessages = [
         'text="Creating your account"',
         'text="Création de votre compte"',
@@ -454,9 +537,11 @@ export class AccountCreator {
         const visible = await element.isVisible().catch(() => false)
 
         if (visible) {
+          log(false, 'CREATOR', `⏳ Account creation message detected: ${messageSelector}`, 'log', 'cyan')
           // Wait for this message to disappear
           try {
             await element.waitFor({ state: 'hidden', timeout: 45000 })
+            log(false, 'CREATOR', '✅ Creation message disappeared', 'log', 'green')
           } catch {
             // Continue even if message persists
           }
@@ -1246,6 +1331,18 @@ export class AccountCreator {
       const hasErrors = !(await this.verifyNoErrors())
       if (hasErrors) {
         log(false, 'CREATOR', `❌ Errors detected after clicking Next (${step})`, 'error')
+        log(false, 'CREATOR', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'error')
+        log(false, 'CREATOR', '📊 Common causes:', 'log', 'yellow')
+        log(false, 'CREATOR', '   1️⃣  Rate limit (too many accounts from this IP)', 'log', 'cyan')
+        log(false, 'CREATOR', '   2️⃣  Microsoft servers temporarily unavailable', 'log', 'cyan')
+        log(false, 'CREATOR', '   3️⃣  Invalid input (name, email, birthdate)', 'log', 'cyan')
+        log(false, 'CREATOR', '   4️⃣  Captcha required or anti-bot detection', 'log', 'cyan')
+        log(false, 'CREATOR', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'error')
+        log(false, 'CREATOR', '💡 Solutions:', 'log', 'yellow')
+        log(false, 'CREATOR', '   • Check browser window for specific error message', 'log', 'cyan')
+        log(false, 'CREATOR', '   • Wait 30-60 minutes if server/rate limit issue', 'log', 'cyan')
+        log(false, 'CREATOR', '   • Try different IP (VPN/proxy) if repeated failures', 'log', 'cyan')
+        log(false, 'CREATOR', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'error')
         log(false, 'CREATOR', '⚠️  Browser left open for inspection. Press Ctrl+C to exit.', 'warn', 'yellow')
         // Keep browser open for user to see the error
         await new Promise(() => { })
@@ -1630,7 +1727,13 @@ export class AccountCreator {
       const noErrors = await this.verifyNoErrors()
       if (!noErrors) {
         log(false, 'CREATOR', '❌ Errors detected after filling names', 'error')
-        log(false, 'CREATOR', '⚠️  This usually means Microsoft rate limit was triggered', 'warn', 'yellow')
+        log(false, 'CREATOR', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'error')
+        log(false, 'CREATOR', '📊 Most likely causes at this step:', 'log', 'yellow')
+        log(false, 'CREATOR', '   1️⃣  Rate limit (Microsoft detected unusual activity)', 'log', 'cyan')
+        log(false, 'CREATOR', '   2️⃣  Microsoft servers temporarily unavailable', 'log', 'cyan')
+        log(false, 'CREATOR', '   3️⃣  Name validation failed (special characters?)', 'log', 'cyan')
+        log(false, 'CREATOR', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'error')
+        log(false, 'CREATOR', '⚠️  Check browser window for exact error message', 'warn', 'yellow')
         log(false, 'CREATOR', '⚠️  Browser left open for inspection. Press Ctrl+C to exit.', 'warn', 'yellow')
         // Keep browser open for user to see the error
         await new Promise(() => { })
@@ -1663,6 +1766,35 @@ export class AccountCreator {
       log(false, 'CREATOR', `Error filling names: ${msg}`, 'error')
       return null
     }
+  }
+
+  /**
+   * CRITICAL: Check if checkbox is checked (Fluent UI compatible)
+   * Uses 3 methods because Playwright's isChecked() doesn't work with Fluent UI
+   */
+  private async isCheckboxChecked(checkbox: import('rebrowser-playwright').Locator): Promise<boolean> {
+    // Method 1: Standard Playwright isChecked()
+    const playwrightCheck = await checkbox.isChecked().catch(() => false)
+    if (playwrightCheck) return true
+
+    // Method 2: Check for SVG checkmark in indicator div (Fluent UI visual indicator)
+    try {
+      const indicator = this.page.locator('div.fui-Checkbox__indicator svg').first()
+      const svgVisible = await indicator.isVisible({ timeout: 500 }).catch(() => false)
+      if (svgVisible) return true
+    } catch {
+      // Continue
+    }
+
+    // Method 3: JavaScript evaluation (most reliable)
+    try {
+      const jsChecked = await checkbox.evaluate((el: HTMLInputElement) => el.checked)
+      if (jsChecked) return true
+    } catch {
+      // Continue
+    }
+
+    return false
   }
 
   private async uncheckMarketingOptIn(): Promise<void> {
@@ -1709,8 +1841,9 @@ export class AccountCreator {
       // CRITICAL: Wait for checkbox state to stabilize (US locale defaults to checked)
       await this.humanDelay(300, 600)
 
-      // Check if the checkbox is currently checked
-      const isChecked = await checkbox.isChecked().catch(() => false)
+      // IMPROVED: Use Fluent UI compatible checker
+      const isChecked = await this.isCheckboxChecked(checkbox)
+      log(false, 'CREATOR', `Checkbox state detected: ${isChecked ? 'CHECKED' : 'UNCHECKED'}`, 'log', 'cyan')
 
       if (isChecked) {
         log(false, 'CREATOR', '⚠️ Marketing checkbox is CHECKED (US locale default) - unchecking now...', 'log', 'yellow')
@@ -1722,8 +1855,8 @@ export class AccountCreator {
         try {
           await checkbox.click({ force: false })
           await this.humanDelay(500, 800)
-          const check1 = await checkbox.isChecked().catch(() => true)
-          if (!check1) {
+          const stillChecked1 = await this.isCheckboxChecked(checkbox)
+          if (!stillChecked1) {
             unchecked = true
             log(false, 'CREATOR', '✅ Unchecked via normal click', 'log', 'green')
           }
@@ -1736,8 +1869,8 @@ export class AccountCreator {
           try {
             await checkbox.click({ force: true })
             await this.humanDelay(500, 800)
-            const check2 = await checkbox.isChecked().catch(() => true)
-            if (!check2) {
+            const stillChecked2 = await this.isCheckboxChecked(checkbox)
+            if (!stillChecked2) {
               unchecked = true
               log(false, 'CREATOR', '✅ Unchecked via force click', 'log', 'green')
             }
@@ -1754,8 +1887,8 @@ export class AccountCreator {
             if (labelVisible) {
               await label.click()
               await this.humanDelay(500, 800)
-              const check3 = await checkbox.isChecked().catch(() => true)
-              if (!check3) {
+              const stillChecked3 = await this.isCheckboxChecked(checkbox)
+              if (!stillChecked3) {
                 unchecked = true
                 log(false, 'CREATOR', '✅ Unchecked via label click', 'log', 'green')
               }
@@ -1770,8 +1903,8 @@ export class AccountCreator {
           try {
             await checkbox.evaluate((el: HTMLInputElement) => el.click())
             await this.humanDelay(500, 800)
-            const check4 = await checkbox.isChecked().catch(() => true)
-            if (!check4) {
+            const stillChecked4 = await this.isCheckboxChecked(checkbox)
+            if (!stillChecked4) {
               unchecked = true
               log(false, 'CREATOR', '✅ Unchecked via JavaScript click', 'log', 'green')
             }
