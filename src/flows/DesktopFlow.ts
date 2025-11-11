@@ -12,7 +12,7 @@
 
 import type { MicrosoftRewardsBot } from '../index'
 import type { Account } from '../interface/Account'
-import { createBrowserInstance } from '../util/BrowserFactory'
+import { closeBrowserSafely, createBrowserInstance } from '../util/BrowserFactory'
 import { handleCompromisedMode } from './FlowUtils'
 
 export interface DesktopFlowResult {
@@ -51,12 +51,12 @@ export class DesktopFlow {
      */
     async run(account: Account): Promise<DesktopFlowResult> {
         this.bot.log(false, 'DESKTOP-FLOW', 'Starting desktop automation flow')
-        
+
         // IMPROVED: Use centralized browser factory to eliminate duplication
         const browser = await createBrowserInstance(this.bot, account.proxy, account.email)
-        
+
         let keepBrowserOpen = false
-        
+
         try {
             this.bot.homePage = await browser.newPage()
 
@@ -129,19 +129,15 @@ export class DesktopFlow {
 
             // Fetch points BEFORE closing (avoid page closed reload error)
             const after = await this.bot.browser.func.getCurrentPoints().catch(() => initial)
-            
+
             return {
                 initialPoints: initial,
                 collectedPoints: (after - initial) || 0
             }
         } finally {
             if (!keepBrowserOpen) {
-                try {
-                    await this.bot.browser.func.closeBrowser(browser, account.email)
-                } catch (closeError) {
-                    const message = closeError instanceof Error ? closeError.message : String(closeError)
-                    this.bot.log(false, 'DESKTOP-FLOW', `Failed to close desktop context: ${message}`, 'warn')
-                }
+                // IMPROVED: Use centralized browser close utility to eliminate duplication
+                await closeBrowserSafely(this.bot, browser, account.email, false)
             }
         }
     }

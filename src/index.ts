@@ -16,7 +16,7 @@ import { log } from './util/Logger'
 import { MobileRetryTracker } from './util/MobileRetryTracker'
 import { QueryDiversityEngine } from './util/QueryDiversityEngine'
 import { StartupValidator } from './util/StartupValidator'
-import { formatDetailedError, shortErrorMessage, Util } from './util/Utils'
+import { formatDetailedError, normalizeRecoveryEmail, shortErrorMessage, Util } from './util/Utils'
 
 import { Activities } from './functions/Activities'
 import { Login } from './functions/Login'
@@ -92,7 +92,7 @@ export class MicrosoftRewardsBot {
 
     async initialize() {
         this.accounts = loadAccounts()
-        
+
         // Run comprehensive startup validation
         const validator = new StartupValidator()
         try {
@@ -103,9 +103,9 @@ export class MicrosoftRewardsBot {
             log('main', 'VALIDATION', `Fatal validation error: ${errorMsg}`, 'error')
             throw error // Re-throw to stop execution
         }
-        
+
         // Validation passed - continue with initialization
-        
+
         // Initialize job state
         if (this.config.jobState?.enabled !== false) {
             this.accountJobState = new JobState(this.config)
@@ -146,25 +146,25 @@ export class MicrosoftRewardsBot {
     private async promptResetJobState(): Promise<boolean> {
         // Check if auto-reset is enabled in config (for scheduled tasks)
         if (this.config.jobState?.autoResetOnComplete === true) {
-            log('main','TASK','Auto-reset enabled (jobState.autoResetOnComplete=true) - resetting and rerunning all accounts', 'log', 'green')
+            log('main', 'TASK', 'Auto-reset enabled (jobState.autoResetOnComplete=true) - resetting and rerunning all accounts', 'log', 'green')
             return true
         }
 
         // Check environment variable override
         const envAutoReset = process.env.REWARDS_AUTO_RESET_JOBSTATE
         if (envAutoReset === '1' || envAutoReset?.toLowerCase() === 'true') {
-            log('main','TASK','Auto-reset enabled (REWARDS_AUTO_RESET_JOBSTATE) - resetting and rerunning all accounts', 'log', 'green')
+            log('main', 'TASK', 'Auto-reset enabled (REWARDS_AUTO_RESET_JOBSTATE) - resetting and rerunning all accounts', 'log', 'green')
             return true
         }
 
         // Detect non-interactive environments more reliably
-        const isNonInteractive = !process.stdin.isTTY || 
-                                 process.env.CI === 'true' || 
-                                 process.env.DOCKER === 'true' ||
-                                 process.env.SCHEDULED_TASK === 'true'
-        
+        const isNonInteractive = !process.stdin.isTTY ||
+            process.env.CI === 'true' ||
+            process.env.DOCKER === 'true' ||
+            process.env.SCHEDULED_TASK === 'true'
+
         if (isNonInteractive) {
-            log('main','TASK','Non-interactive environment detected - keeping job state (set jobState.autoResetOnComplete=true to auto-rerun)', 'warn')
+            log('main', 'TASK', 'Non-interactive environment detected - keeping job state (set jobState.autoResetOnComplete=true to auto-rerun)', 'warn')
             return false
         }
 
@@ -184,7 +184,7 @@ export class MicrosoftRewardsBot {
 
     private resetAllJobStates(): void {
         if (!this.accountJobState) return
-        
+
         const jobStateDir = this.accountJobState.getJobStateDir()
         if (!fs.existsSync(jobStateDir)) return
 
@@ -225,9 +225,9 @@ export class MicrosoftRewardsBot {
     }
     private printBanner() {
         if (this.config.clusters > 1 && !cluster.isPrimary) return
-        
+
         const version = this.getVersion()
-        
+
         log('main', 'BANNER', `Microsoft Rewards Bot v${version}`)
         log('main', 'BANNER', `PID: ${process.pid} | Workers: ${this.config.clusters}`)
     }
@@ -246,7 +246,7 @@ export class MicrosoftRewardsBot {
         }
         return DEFAULT_VERSION
     }
-    
+
     // Return summaries (used when clusters==1)
     public getSummaries() {
         return this.accountSummaries
@@ -256,13 +256,13 @@ export class MicrosoftRewardsBot {
         log('main', 'MAIN-PRIMARY', 'Primary process started')
 
         const totalAccounts = this.accounts.length
-        
+
         // Validate accounts exist
         if (totalAccounts === 0) {
             log('main', 'MAIN-PRIMARY', 'No accounts found to process. Exiting.', 'warn')
             process.exit(0)
         }
-        
+
         // If user over-specified clusters (e.g. 10 clusters but only 2 accounts), don't spawn useless idle workers.
         const workerCount = Math.min(this.config.clusters, totalAccounts)
         const accountChunks = this.utils.chunkArray(this.accounts, workerCount)
@@ -275,17 +275,17 @@ export class MicrosoftRewardsBot {
         for (let i = 0; i < workerCount; i++) {
             const worker = cluster.fork()
             const chunk = accountChunks[i] || []
-            
+
             // Validate chunk has accounts
             if (chunk.length === 0) {
                 log('main', 'MAIN-PRIMARY', `Warning: Worker ${i} received empty account chunk`, 'warn')
             }
-            
+
             // Store chunk mapping for crash recovery
             if (worker.id) {
                 workerChunkMap.set(worker.id, chunk)
             }
-            
+
             // FIXED: Proper type checking before calling send
             if (worker.send && typeof worker.send === 'function') {
                 worker.send({ chunk })
@@ -298,7 +298,7 @@ export class MicrosoftRewardsBot {
             })
         }
 
-    cluster.on('exit', (worker: Worker, code: number) => {
+        cluster.on('exit', (worker: Worker, code: number) => {
             this.activeWorkers -= 1
 
             log('main', 'MAIN-WORKER', `Worker ${worker.process.pid} destroyed | Code: ${code} | Active workers: ${this.activeWorkers}`, 'warn')
@@ -309,20 +309,20 @@ export class MicrosoftRewardsBot {
                 const attempts = (worker as { _restartAttempts?: number })._restartAttempts || 0
                 if (attempts < (cr.restartFailedWorkerAttempts ?? 1)) {
                     (worker as { _restartAttempts?: number })._restartAttempts = attempts + 1
-                    log('main','CRASH-RECOVERY',`Respawning worker (attempt ${attempts + 1})`, 'warn')
-                    
+                    log('main', 'CRASH-RECOVERY', `Respawning worker (attempt ${attempts + 1})`, 'warn')
+
                     const originalChunk = workerChunkMap.get(worker.id)
                     const newW = cluster.fork()
-                    
+
                     if (originalChunk && originalChunk.length > 0 && newW.id) {
                         (newW as { send?: (m: { chunk: Account[] }) => void }).send?.({ chunk: originalChunk })
                         workerChunkMap.set(newW.id, originalChunk)
                         workerChunkMap.delete(worker.id)
-                        log('main','CRASH-RECOVERY',`Assigned ${originalChunk.length} account(s) to respawned worker`)
+                        log('main', 'CRASH-RECOVERY', `Assigned ${originalChunk.length} account(s) to respawned worker`)
                     } else {
-                        log('main','CRASH-RECOVERY','Warning: Could not reassign accounts to respawned worker', 'warn')
+                        log('main', 'CRASH-RECOVERY', 'Warning: Could not reassign accounts to respawned worker', 'warn')
                     }
-                    
+
                     newW.on('message', (msg: unknown) => {
                         // IMPROVED: Using type-safe interface and type guard
                         if (isWorkerMessage(msg)) {
@@ -350,20 +350,20 @@ export class MicrosoftRewardsBot {
 
     private runWorker() {
         log('main', 'MAIN-WORKER', `Worker ${process.pid} spawned`)
-        // Receive the chunk of accounts from the master
-    ;(process as unknown as { on: (ev: 'message', cb: (m: { chunk: Account[] }) => void) => void }).on('message', async ({ chunk }: { chunk: Account[] }) => {
-            const passes = this.config.passesPerRun ?? 1
-            for (let pass = 1; pass <= passes; pass++) {
-                if (passes > 1) {
-                    log('main', 'MAIN-WORKER', `Starting pass ${pass}/${passes}`)
+            // Receive the chunk of accounts from the master
+            ; (process as unknown as { on: (ev: 'message', cb: (m: { chunk: Account[] }) => void) => void }).on('message', async ({ chunk }: { chunk: Account[] }) => {
+                const passes = this.config.passesPerRun ?? 1
+                for (let pass = 1; pass <= passes; pass++) {
+                    if (passes > 1) {
+                        log('main', 'MAIN-WORKER', `Starting pass ${pass}/${passes}`)
+                    }
+                    await this.runTasks(chunk, pass, passes)
+                    if (pass < passes) {
+                        log('main', 'MAIN-WORKER', `Completed pass ${pass}/${passes}. Waiting before next pass...`)
+                        await this.utils.wait(TIMEOUTS.ONE_MINUTE)
+                    }
                 }
-                await this.runTasks(chunk, pass, passes)
-                if (pass < passes) {
-                    log('main', 'MAIN-WORKER', `Completed pass ${pass}/${passes}. Waiting before next pass...`)
-                    await this.utils.wait(TIMEOUTS.ONE_MINUTE)
-                }
-            }
-        })
+            })
     }
 
     private async runTasks(accounts: Account[], currentPass: number = 1, totalPasses: number = 1) {
@@ -371,65 +371,64 @@ export class MicrosoftRewardsBot {
         // BUT skip this check for multi-pass runs (passes > 1) OR if not on first pass
         const accountDayKey = this.utils.getFormattedDate()
         const allCompleted = accounts.every(acc => this.shouldSkipAccount(acc.email, accountDayKey))
-        
+
         // Only check completion on first pass and if not doing multiple passes
         if (allCompleted && accounts.length > 0 && currentPass === 1 && totalPasses === 1) {
-            log('main','TASK',`All accounts already completed on ${accountDayKey}`, 'warn', 'yellow')
+            log('main', 'TASK', `All accounts already completed on ${accountDayKey}`, 'warn', 'yellow')
             const shouldReset = await this.promptResetJobState()
             if (shouldReset) {
                 this.resetAllJobStates()
-                log('main','TASK','Job state reset - proceeding with all accounts', 'log', 'green')
+                log('main', 'TASK', 'Job state reset - proceeding with all accounts', 'log', 'green')
             } else {
-                log('main','TASK','Keeping existing job state - exiting', 'log')
+                log('main', 'TASK', 'Keeping existing job state - exiting', 'log')
                 return
             }
         } else if (allCompleted && accounts.length > 0 && currentPass > 1) {
             // Multi-pass mode: clear job state for this pass to allow re-running
-            log('main','TASK',`Pass ${currentPass}/${totalPasses}: Clearing job state to allow account re-run`, 'log', 'cyan')
+            log('main', 'TASK', `Pass ${currentPass}/${totalPasses}: Clearing job state to allow account re-run`, 'log', 'cyan')
             this.resetAllJobStates()
         }
 
         for (const account of accounts) {
             // If a global standby is active due to security/banned, stop processing further accounts
             if (this.globalStandby.active) {
-                log('main','SECURITY',`Global standby active (${this.globalStandby.reason || 'security-issue'}). Not proceeding to next accounts until resolved.`, 'warn', 'yellow')
+                log('main', 'SECURITY', `Global standby active (${this.globalStandby.reason || 'security-issue'}). Not proceeding to next accounts until resolved.`, 'warn', 'yellow')
                 break
             }
             // Optional global stop after first ban
             if (this.config?.humanization?.stopOnBan === true && this.bannedTriggered) {
-                log('main','TASK',`Stopping remaining accounts due to ban on ${this.bannedTriggered.email}: ${this.bannedTriggered.reason}`,'warn')
+                log('main', 'TASK', `Stopping remaining accounts due to ban on ${this.bannedTriggered.email}: ${this.bannedTriggered.reason}`, 'warn')
                 break
             }
             const currentDayKey = this.utils.getFormattedDate()
             // Note: shouldSkipAccount already returns false for multi-pass runs (passesPerRun > 1)
             if (this.shouldSkipAccount(account.email, currentDayKey)) {
-                log('main','TASK',`Skipping account ${account.email}: already completed on ${currentDayKey} (job-state resume)`, 'warn')
+                log('main', 'TASK', `Skipping account ${account.email}: already completed on ${currentDayKey} (job-state resume)`, 'warn')
                 continue
             }
-            
+
             // Log pass info for multi-pass runs
             if (totalPasses > 1) {
-                log('main','TASK',`[Pass ${currentPass}/${totalPasses}] Processing account ${account.email}`, 'log', 'cyan')
+                log('main', 'TASK', `[Pass ${currentPass}/${totalPasses}] Processing account ${account.email}`, 'log', 'cyan')
             }
             // Reset compromised state per account
             this.compromisedModeActive = false
             this.compromisedReason = undefined
-            
+
             // If humanization allowed windows are configured, wait until within a window
             try {
                 const windows: string[] | undefined = this.config?.humanization?.allowedWindows
                 if (Array.isArray(windows) && windows.length > 0) {
                     const waitMs = this.computeWaitForAllowedWindow(windows)
                     if (waitMs > 0) {
-                        log('main','HUMANIZATION',`Waiting ${Math.ceil(waitMs/1000)}s until next allowed window before starting ${account.email}`,'warn')
+                        log('main', 'HUMANIZATION', `Waiting ${Math.ceil(waitMs / 1000)}s until next allowed window before starting ${account.email}`, 'warn')
                         await new Promise<void>(r => setTimeout(r, waitMs))
                     }
                 }
-            } catch {/* ignore */}
+            } catch {/* ignore */ }
             this.currentAccountEmail = account.email
-            this.currentAccountRecoveryEmail = (typeof account.recoveryEmail === 'string' && account.recoveryEmail.trim() !== '')
-                ? account.recoveryEmail.trim()
-                : undefined
+            // IMPROVED: Use centralized recovery email validation utility
+            this.currentAccountRecoveryEmail = normalizeRecoveryEmail(account.recoveryEmail)
             const runNumber = (this.accountRunCounts.get(account.email) ?? 0) + 1
             this.accountRunCounts.set(account.email, runNumber)
             log('main', 'MAIN-WORKER', `Started tasks for account ${account.email}`)
@@ -466,54 +465,54 @@ export class MicrosoftRewardsBot {
             if (this.config.parallel) {
                 const mobileInstance = new MicrosoftRewardsBot(true)
                 mobileInstance.axios = this.axios
-                
+
                 // IMPROVED: Shared state to track desktop issues for early mobile abort consideration
                 let desktopDetectedIssue = false
-                
+
                 // Run both and capture results with detailed logging
                 const desktopPromise = this.Desktop(account).catch((e: unknown) => {
                     const msg = e instanceof Error ? e.message : String(e)
-                    log(false, 'TASK', `Desktop flow failed early for ${account.email}: ${msg}`,'error')
+                    log(false, 'TASK', `Desktop flow failed early for ${account.email}: ${msg}`, 'error')
                     const bd = detectBanReason(e)
                     if (bd.status) {
                         desktopDetectedIssue = true // Track issue for logging
-                        banned.status = true; banned.reason = bd.reason.substring(0,200)
+                        banned.status = true; banned.reason = bd.reason.substring(0, 200)
                         void this.handleImmediateBanAlert(account.email, banned.reason)
                     }
                     errors.push(formatFullError('desktop', e, verbose)); return null
                 })
                 const mobilePromise = mobileInstance.Mobile(account).catch((e: unknown) => {
                     const msg = e instanceof Error ? e.message : String(e)
-                    log(true, 'TASK', `Mobile flow failed early for ${account.email}: ${msg}`,'error')
+                    log(true, 'TASK', `Mobile flow failed early for ${account.email}: ${msg}`, 'error')
                     const bd = detectBanReason(e)
                     if (bd.status) {
-                        banned.status = true; banned.reason = bd.reason.substring(0,200)
+                        banned.status = true; banned.reason = bd.reason.substring(0, 200)
                         void this.handleImmediateBanAlert(account.email, banned.reason)
                     }
                     errors.push(formatFullError('mobile', e, verbose)); return null
                 })
                 const [desktopResult, mobileResult] = await Promise.allSettled([desktopPromise, mobilePromise])
-                
+
                 // Log if desktop detected issue (helps identify when both flows ran despite ban)
                 if (desktopDetectedIssue) {
                     log('main', 'TASK', `Desktop detected security issue for ${account.email} during parallel execution. Future enhancement: implement AbortController for early mobile cancellation.`, 'warn')
                 }
-                
+
                 // Handle desktop result
                 if (desktopResult.status === 'fulfilled' && desktopResult.value) {
                     desktopInitial = desktopResult.value.initialPoints
                     desktopCollected = desktopResult.value.collectedPoints
                 } else if (desktopResult.status === 'rejected') {
-                    log(false, 'TASK', `Desktop promise rejected unexpectedly: ${shortErr(desktopResult.reason)}`,'error')
+                    log(false, 'TASK', `Desktop promise rejected unexpectedly: ${shortErr(desktopResult.reason)}`, 'error')
                     errors.push(formatFullError('desktop-rejected', desktopResult.reason, verbose))
                 }
-                
+
                 // Handle mobile result
                 if (mobileResult.status === 'fulfilled' && mobileResult.value) {
                     mobileInitial = mobileResult.value.initialPoints
                     mobileCollected = mobileResult.value.collectedPoints
                 } else if (mobileResult.status === 'rejected') {
-                    log(true, 'TASK', `Mobile promise rejected unexpectedly: ${shortErr(mobileResult.reason)}`,'error')
+                    log(true, 'TASK', `Mobile promise rejected unexpectedly: ${shortErr(mobileResult.reason)}`, 'error')
                     errors.push(formatFullError('mobile-rejected', mobileResult.reason, verbose))
                 }
             } else {
@@ -521,10 +520,10 @@ export class MicrosoftRewardsBot {
                 this.isMobile = false
                 const desktopResult = await this.Desktop(account).catch(e => {
                     const msg = e instanceof Error ? e.message : String(e)
-                    log(false, 'TASK', `Desktop flow failed early for ${account.email}: ${msg}`,'error')
+                    log(false, 'TASK', `Desktop flow failed early for ${account.email}: ${msg}`, 'error')
                     const bd = detectBanReason(e)
                     if (bd.status) {
-                        banned.status = true; banned.reason = bd.reason.substring(0,200)
+                        banned.status = true; banned.reason = bd.reason.substring(0, 200)
                         void this.handleImmediateBanAlert(account.email, banned.reason)
                     }
                     errors.push(formatFullError('desktop', e, verbose)); return null
@@ -538,10 +537,10 @@ export class MicrosoftRewardsBot {
                     this.isMobile = true
                     const mobileResult = await this.Mobile(account).catch((e: unknown) => {
                         const msg = e instanceof Error ? e.message : String(e)
-                        log(true, 'TASK', `Mobile flow failed early for ${account.email}: ${msg}`,'error')
+                        log(true, 'TASK', `Mobile flow failed early for ${account.email}: ${msg}`, 'error')
                         const bd = detectBanReason(e)
                         if (bd.status) {
-                            banned.status = true; banned.reason = bd.reason.substring(0,200)
+                            banned.status = true; banned.reason = bd.reason.substring(0, 200)
                             void this.handleImmediateBanAlert(account.email, banned.reason)
                         }
                         errors.push(formatFullError('mobile', e, verbose)); return null
@@ -559,13 +558,13 @@ export class MicrosoftRewardsBot {
             const accountEnd = Date.now()
             const durationMs = accountEnd - accountStart
             const totalCollected = desktopCollected + mobileCollected
-            
+
             // Sequential mode: desktop runs first, mobile starts with desktop's end points
             // Parallel mode: both start from same baseline, take minimum to avoid double-count
-            const initialTotal = this.config.parallel 
+            const initialTotal = this.config.parallel
                 ? Math.min(desktopInitial || Infinity, mobileInitial || Infinity)
                 : (desktopInitial || mobileInitial || 0)
-            
+
             const endTotal = initialTotal + totalCollected
 
             const summary: AccountSummary = {
@@ -593,21 +592,21 @@ export class MicrosoftRewardsBot {
             await log('main', 'MAIN-WORKER', `Completed tasks for account ${account.email}`, 'log', 'green')
         }
 
-    await log(this.isMobile, 'MAIN-PRIMARY', 'Completed tasks for ALL accounts', 'log', 'green')
+        await log(this.isMobile, 'MAIN-PRIMARY', 'Completed tasks for ALL accounts', 'log', 'green')
         // Extra diagnostic summary when verbose
         if (process.env.DEBUG_REWARDS_VERBOSE === '1') {
             for (const summary of this.accountSummaries) {
-                log('main','SUMMARY-DEBUG',`Account ${summary.email} collected D:${summary.desktopCollected} M:${summary.mobileCollected} TOTAL:${summary.totalCollected} ERRORS:${summary.errors.length ? summary.errors.join(';') : 'none'}`)
+                log('main', 'SUMMARY-DEBUG', `Account ${summary.email} collected D:${summary.desktopCollected} M:${summary.mobileCollected} TOTAL:${summary.totalCollected} ERRORS:${summary.errors.length ? summary.errors.join(';') : 'none'}`)
             }
         }
         // If any account is flagged compromised, do NOT exit; keep the process alive so the browser stays open
         if (this.compromisedModeActive || this.globalStandby.active) {
-            log('main','SECURITY','Security alert active. Process kept alive for manual review. Press CTRL+C to exit when done.','warn','yellow')
+            log('main', 'SECURITY', 'Security alert active. Process kept alive for manual review. Press CTRL+C to exit when done.', 'warn', 'yellow')
             // Periodic heartbeat with cleanup on exit
             const standbyInterval = setInterval(() => {
-                log('main','SECURITY','Standby mode active: sessions kept open for review...','warn','yellow')
+                log('main', 'SECURITY', 'Standby mode active: sessions kept open for review...', 'warn', 'yellow')
             }, 5 * 60 * 1000)
-            
+
             // Cleanup on process exit
             process.once('SIGINT', () => { clearInterval(standbyInterval); process.exit(0) })
             process.once('SIGTERM', () => { clearInterval(standbyInterval); process.exit(0) })
@@ -639,7 +638,7 @@ export class MicrosoftRewardsBot {
                 DISCORD.COLOR_RED
             )
         } catch (e) {
-            log('main','ALERT',`Failed to send ban alert: ${e instanceof Error ? e.message : e}`,'warn')
+            log('main', 'ALERT', `Failed to send ban alert: ${e instanceof Error ? e.message : e}`, 'warn')
         }
     }
 
@@ -658,26 +657,26 @@ export class MicrosoftRewardsBot {
         const now = new Date()
         const minsNow = now.getHours() * 60 + now.getMinutes()
         let nextStartMins: number | null = null
-        
+
         for (const w of windows) {
             const [start, end] = w.split('-')
             if (!start || !end) continue
-            
+
             const pStart = start.split(':').map(v => parseInt(v, 10))
             const pEnd = end.split(':').map(v => parseInt(v, 10))
             if (pStart.length !== 2 || pEnd.length !== 2) continue
-            
+
             const sh = pStart[0]!, sm = pStart[1]!
             const eh = pEnd[0]!, em = pEnd[1]!
-            
+
             // Validate hours and minutes ranges
             if ([sh, sm, eh, em].some(n => Number.isNaN(n))) continue
             if (sh < 0 || sh > 23 || eh < 0 || eh > 23) continue
             if (sm < 0 || sm > 59 || em < 0 || em > 59) continue
-            
+
             const s = sh * 60 + sm
             const e = eh * 60 + em
-            
+
             if (s <= e) {
                 // Same-day window (e.g., 09:00-17:00)
                 if (minsNow >= s && minsNow <= e) return 0
@@ -688,13 +687,13 @@ export class MicrosoftRewardsBot {
                 nextStartMins = Math.min(nextStartMins ?? s, s)
             }
         }
-        
+
         const msPerMin = 60 * 1000
         if (nextStartMins != null) {
             const targetTodayMs = (nextStartMins - minsNow) * msPerMin
             return targetTodayMs > 0 ? targetTodayMs : (24 * 60 + nextStartMins - minsNow) * msPerMin
         }
-        
+
         // No valid windows parsed -> do not block
         return 0
     }
@@ -731,7 +730,7 @@ export class MicrosoftRewardsBot {
         // Use SummaryReporter for modern reporting
         const reporter = new SummaryReporter(this.config)
         const summary = reporter.createSummary(accountResults, startTime, endTime)
-        
+
         // Generate console output and send notifications (webhooks, ntfy, job state)
         await reporter.generateReport(summary)
     }
@@ -745,16 +744,16 @@ export class MicrosoftRewardsBot {
     async runAutoUpdate(): Promise<number> {
         const upd = this.config.update
         if (!upd) return 0
-        
+
         // Check if updates are enabled
         if (upd.enabled === false) {
             log('main', 'UPDATE', 'Updates disabled in config (update.enabled = false)')
             return 0
         }
-        
+
         const scriptRel = upd.scriptPath || 'setup/update/update.mjs'
         const scriptAbs = path.join(process.cwd(), scriptRel)
-        
+
         if (!fs.existsSync(scriptAbs)) {
             log('main', 'UPDATE', `Update script not found: ${scriptAbs}`, 'warn')
             return 0
@@ -794,7 +793,7 @@ export class MicrosoftRewardsBot {
         try {
             // Idempotent: don't re-engage if already active
             if (this.globalStandby.active) return
-            
+
             this.globalStandby = { active: true, reason }
             const who = email || this.currentAccountEmail || 'unknown'
             await this.sendGlobalSecurityStandbyAlert(who, reason)
@@ -816,7 +815,7 @@ export class MicrosoftRewardsBot {
                 DISCORD.COLOR_RED
             )
         } catch (e) {
-            log('main','ALERT',`Failed to send alert: ${e instanceof Error ? e.message : e}`,'warn')
+            log('main', 'ALERT', `Failed to send alert: ${e instanceof Error ? e.message : e}`, 'warn')
         }
     }
 }
@@ -861,7 +860,7 @@ async function main(): Promise<void> {
         const { startDashboardServer } = await import('./dashboard/server')
         const { dashboardState } = await import('./dashboard/state')
         log('main', 'DASHBOARD', 'Starting standalone dashboard server...')
-        
+
         // Load and initialize accounts
         try {
             const accounts = loadAccounts()
@@ -870,7 +869,7 @@ async function main(): Promise<void> {
         } catch (error) {
             log('main', 'DASHBOARD', 'Could not load accounts: ' + (error instanceof Error ? error.message : String(error)), 'warn')
         }
-        
+
         startDashboardServer()
         return
     }
@@ -886,15 +885,15 @@ async function main(): Promise<void> {
         const { dashboardState } = await import('./dashboard/state')
         const port = config.dashboard.port || 3000
         const host = config.dashboard.host || '127.0.0.1'
-        
+
         // Override env vars with config values
         process.env.DASHBOARD_PORT = String(port)
         process.env.DASHBOARD_HOST = host
-        
+
         // Initialize dashboard with accounts
         const accounts = loadAccounts()
         dashboardState.initializeAccounts(accounts.map(a => a.email))
-        
+
         const dashboardServer = new DashboardServer()
         dashboardServer.start()
         log('main', 'DASHBOARD', `Auto-started dashboard on http://${host}:${port}`)
@@ -930,7 +929,7 @@ async function main(): Promise<void> {
             const max = config.crashRecovery.maxRestarts ?? 2
             if (crashState.restarts < max) {
                 const backoff = (config.crashRecovery.backoffBaseMs ?? 2000) * (crashState.restarts + 1)
-                log('main','CRASH-RECOVERY',`Scheduling restart in ${backoff}ms (attempt ${crashState.restarts + 1}/${max})`, 'warn','yellow')
+                log('main', 'CRASH-RECOVERY', `Scheduling restart in ${backoff}ms (attempt ${crashState.restarts + 1}/${max})`, 'warn', 'yellow')
                 setTimeout(() => {
                     crashState.restarts++
                     bootstrap()
@@ -948,20 +947,20 @@ async function main(): Promise<void> {
         try {
             // Check /.dockerenv file
             if (fs.existsSync('/.dockerenv')) return true
-            
+
             // Check /proc/1/cgroup
             if (fs.existsSync('/proc/1/cgroup')) {
                 const content = fs.readFileSync('/proc/1/cgroup', 'utf8')
                 if (content.includes('docker') || content.includes('/kubepods/')) return true
             }
-            
+
             // Check environment variables
-            if (process.env.DOCKER === 'true' || 
+            if (process.env.DOCKER === 'true' ||
                 process.env.CONTAINER === 'docker' ||
                 process.env.KUBERNETES_SERVICE_HOST) {
                 return true
             }
-            
+
             return false
         } catch {
             return false
@@ -973,17 +972,17 @@ async function main(): Promise<void> {
             // Check for updates BEFORE initializing and running tasks
             const updateMarkerPath = path.join(process.cwd(), '.update-happened')
             const isDocker = isDockerEnvironment()
-            
+
             try {
                 const updateResult = await rewardsBot.runAutoUpdate().catch((e) => {
                     log('main', 'UPDATE', `Auto-update check failed: ${e instanceof Error ? e.message : String(e)}`, 'warn')
                     return -1
                 })
-                
+
                 if (updateResult === 0) {
                     // Check if update marker exists (created by update.mjs when version changed)
                     const updateHappened = fs.existsSync(updateMarkerPath)
-                    
+
                     if (updateHappened) {
                         // Remove marker file
                         try {
@@ -991,7 +990,7 @@ async function main(): Promise<void> {
                         } catch {
                             // Ignore cleanup errors
                         }
-                        
+
                         if (isDocker) {
                             // Docker mode: exit cleanly to let container restart
                             log('main', 'UPDATE', 'Update complete - exiting for container restart', 'log', 'green')
@@ -1005,7 +1004,7 @@ async function main(): Promise<void> {
                                     delete require.cache[key]
                                 }
                             })
-                            
+
                             // Recursive restart in same process
                             log('main', 'UPDATE', 'Reloading with new version...')
                             setTimeout(() => {
@@ -1021,11 +1020,11 @@ async function main(): Promise<void> {
             } catch (updateError) {
                 log('main', 'UPDATE', `Update check failed (continuing): ${updateError instanceof Error ? updateError.message : String(updateError)}`, 'warn')
             }
-            
+
             await rewardsBot.initialize()
             await rewardsBot.run()
         } catch (e) {
-            log('main','MAIN-ERROR','Fatal during run: ' + (e instanceof Error ? e.message : e),'error')
+            log('main', 'MAIN-ERROR', 'Fatal during run: ' + (e instanceof Error ? e.message : e), 'error')
             gracefulExit(1)
         }
     }

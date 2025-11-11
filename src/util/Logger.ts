@@ -1,6 +1,6 @@
 import axios from 'axios'
 import chalk from 'chalk'
-import { DISCORD, TIMEOUTS } from '../constants'
+import { DISCORD, LOGGER_CLEANUP } from '../constants'
 import { sendErrorReport } from './ErrorReportingWebhook'
 import { loadConfig } from './Load'
 import { Ntfy } from './Ntfy'
@@ -26,22 +26,19 @@ type WebhookBuffer = {
 const webhookBuffers = new Map<string, WebhookBuffer>()
 
 // Periodic cleanup of old/idle webhook buffers to prevent memory leaks
-// IMPROVED: Using centralized constants instead of magic numbers
-const BUFFER_MAX_AGE_MS = TIMEOUTS.ONE_HOUR
-const BUFFER_CLEANUP_INTERVAL_MS = TIMEOUTS.TEN_MINUTES
-
+// IMPROVED: Using centralized constants from constants.ts
 const cleanupInterval = setInterval(() => {
     const now = Date.now()
-    
+
     for (const [url, buf] of webhookBuffers.entries()) {
         if (!buf.sending && buf.lines.length === 0) {
             const lastActivity = (buf as unknown as { lastActivity?: number }).lastActivity || 0
-            if (now - lastActivity > BUFFER_MAX_AGE_MS) {
+            if (now - lastActivity > LOGGER_CLEANUP.BUFFER_MAX_AGE_MS) {
                 webhookBuffers.delete(url)
             }
         }
     }
-}, BUFFER_CLEANUP_INTERVAL_MS)
+}, LOGGER_CLEANUP.BUFFER_CLEANUP_INTERVAL_MS)
 
 // FIXED: Allow cleanup to be stopped with proper fallback
 // unref() prevents process from hanging but may not exist in all environments
@@ -134,7 +131,7 @@ const COLOR_RULES: ColorRule[] = [
 
 function determineColorFromContent(content: string): number {
     const lower = content.toLowerCase()
-    
+
     // Check rules in priority order
     for (const rule of COLOR_RULES) {
         if (typeof rule.pattern === 'string') {
@@ -143,19 +140,50 @@ function determineColorFromContent(content: string): number {
             if (rule.pattern.test(lower)) return rule.color
         }
     }
-    
+
     return DISCORD.COLOR_GRAY
 }
 
 /**
  * Type guard to check if config has valid logging configuration
+ * IMPROVED: Enhanced edge case handling and null checks
  */
-function hasValidLogging(config: unknown): config is { logging: { excludeFunc?: string[]; webhookExcludeFunc?: string[] } } {
-    return typeof config === 'object' && 
-           config !== null && 
-           'logging' in config &&
-           typeof config.logging === 'object' &&
-           config.logging !== null
+function hasValidLogging(config: unknown): config is { logging: { excludeFunc?: string[]; webhookExcludeFunc?: string[]; redactEmails?: boolean; liveWebhookUrl?: string } } {
+    if (typeof config !== 'object' || config === null) {
+        return false
+    }
+
+    if (!('logging' in config)) {
+        return false
+    }
+
+    const cfg = config as Record<string, unknown>
+    const logging = cfg.logging
+
+    if (typeof logging !== 'object' || logging === null) {
+        return false
+    }
+
+    // Validate optional fields have correct types if present
+    const loggingObj = logging as Record<string, unknown>
+
+    if ('excludeFunc' in loggingObj && !Array.isArray(loggingObj.excludeFunc)) {
+        return false
+    }
+
+    if ('webhookExcludeFunc' in loggingObj && !Array.isArray(loggingObj.webhookExcludeFunc)) {
+        return false
+    }
+
+    if ('redactEmails' in loggingObj && typeof loggingObj.redactEmails !== 'boolean') {
+        return false
+    }
+
+    if ('liveWebhookUrl' in loggingObj && typeof loggingObj.liveWebhookUrl !== 'string') {
+        return false
+    }
+
+    return true
 }
 
 function enqueueWebhookLog(url: string, line: string) {
@@ -193,13 +221,13 @@ export function log(isMobile: boolean | 'main', title: string, message: string, 
 
     const currentTime = new Date().toLocaleString()
     const platformText = isMobile === 'main' ? 'MAIN' : isMobile ? 'MOBILE' : 'DESKTOP'
-    
+
     // Clean string for notifications (no chalk, structured)
     type LoggingCfg = { excludeFunc?: string[]; webhookExcludeFunc?: string[]; redactEmails?: boolean }
     const loggingCfg: LoggingCfg = logging || {}
     const shouldRedact = !!loggingCfg.redactEmails
     const redact = (s: string) => shouldRedact ? s.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig, (m) => {
-        const [u, d] = m.split('@'); return `${(u||'').slice(0,2)}***@${d||''}`
+        const [u, d] = m.split('@'); return `${(u || '').slice(0, 2)}***@${d || ''}`
     }) : s
     const cleanStr = redact(`[${currentTime}] [PID: ${process.pid}] [${type.toUpperCase()}] ${platformText} [${title}] ${message}`)
 
@@ -210,7 +238,7 @@ export function log(isMobile: boolean | 'main', title: string, message: string, 
             message.toLowerCase().includes('press the number'),
             message.toLowerCase().includes('no points to earn')
         ],
-        error: [], 
+        error: [],
         warn: [
             message.toLowerCase().includes('aborting'),
             message.toLowerCase().includes('didn\'t gain')
@@ -229,11 +257,11 @@ export function log(isMobile: boolean | 'main', title: string, message: string, 
     const typeIndicator = type === 'error' ? '✗' : type === 'warn' ? '⚠' : '✓'
     const platformColor = isMobile === 'main' ? chalk.cyan : isMobile ? chalk.blue : chalk.magenta
     const typeColor = type === 'error' ? chalk.red : type === 'warn' ? chalk.yellow : chalk.green
-    
+
     // Add contextual icon based on title/message (ASCII-safe for Windows PowerShell)
     const titleLower = title.toLowerCase()
     const msgLower = message.toLowerCase()
-    
+
     // ASCII-safe icons for Windows PowerShell compatibility
     const iconMap: Array<[RegExp, string]> = [
         [/security|compromised/i, '[SECURITY]'],
@@ -248,7 +276,7 @@ export function log(isMobile: boolean | 'main', title: string, message: string, 
         [/browser/i, '[BROWSER]'],
         [/main/i, '[MAIN]']
     ]
-    
+
     let icon = ''
     for (const [pattern, symbol] of iconMap) {
         if (pattern.test(titleLower) || pattern.test(msgLower)) {
@@ -256,9 +284,9 @@ export function log(isMobile: boolean | 'main', title: string, message: string, 
             break
         }
     }
-    
+
     const iconPart = icon ? icon + ' ' : ''
-    
+
     const formattedStr = [
         chalk.gray(`[${currentTime}]`),
         chalk.gray(`[${process.pid}]`),
@@ -304,7 +332,7 @@ export function log(isMobile: boolean | 'main', title: string, message: string, 
     // Automatic error reporting to community webhook (fire and forget)
     if (type === 'error') {
         const errorObj = new Error(cleanStr)
-        
+
         // Send error report asynchronously without blocking
         Promise.resolve().then(async () => {
             try {
@@ -318,7 +346,7 @@ export function log(isMobile: boolean | 'main', title: string, message: string, 
         }).catch(() => {
             // Catch any promise rejection silently
         })
-        
+
         return errorObj
     }
 }

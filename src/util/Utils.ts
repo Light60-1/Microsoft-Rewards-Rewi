@@ -6,7 +6,7 @@ import ms from 'ms'
  * @returns String representation of the error
  */
 export function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+    return error instanceof Error ? error.message : String(error)
 }
 
 /**
@@ -23,8 +23,8 @@ export function getErrorMessage(error: unknown): string {
  * formatErrorMessage('LOGIN', err, 'Failed') // 'Failed in LOGIN: Invalid credentials'
  */
 export function formatErrorMessage(context: string, error: unknown, prefix: string = 'Error'): string {
-  const errorMsg = getErrorMessage(error)
-  return `${prefix} in ${context}: ${errorMsg}`
+    const errorMsg = getErrorMessage(error)
+    return `${prefix} in ${context}: ${errorMsg}`
 }
 
 /**
@@ -35,21 +35,25 @@ export class Util {
 
     /**
      * Wait for a specified number of milliseconds
-     * @param ms - Milliseconds to wait (max 1 hour)
-     * @throws {Error} If ms is not finite or is NaN/Infinity
+     * @param ms - Milliseconds to wait (max 1 hour, min 0)
+     * @throws {Error} If ms is not finite, is NaN/Infinity, or is negative
      * @example await utils.wait(1000) // Wait 1 second
      */
     wait(ms: number): Promise<void> {
         const MAX_WAIT_MS = 3600000 // 1 hour max to prevent infinite waits
         const MIN_WAIT_MS = 0
-        
-        // FIXED: Simplified validation - isFinite checks both NaN and Infinity
+
+        // FIXED: Comprehensive validation - check finite, NaN, Infinity, and negative values
         if (!Number.isFinite(ms)) {
             throw new Error(`Invalid wait time: ${ms}. Must be a finite number (not NaN or Infinity).`)
         }
-        
+
+        if (ms < 0) {
+            throw new Error(`Invalid wait time: ${ms}. Cannot wait negative milliseconds.`)
+        }
+
         const safeMs = Math.min(Math.max(MIN_WAIT_MS, ms), MAX_WAIT_MS)
-        
+
         return new Promise<void>((resolve) => {
             setTimeout(resolve, safeMs)
         })
@@ -66,11 +70,11 @@ export class Util {
         if (!Number.isFinite(minMs) || !Number.isFinite(maxMs)) {
             throw new Error(`Invalid wait range: min=${minMs}, max=${maxMs}. Both must be finite numbers.`)
         }
-        
+
         if (minMs > maxMs) {
             throw new Error(`Invalid wait range: min (${minMs}) cannot be greater than max (${maxMs}).`)
         }
-        
+
         const delta = this.randomNumber(minMs, maxMs)
         return this.wait(delta)
     }
@@ -115,11 +119,11 @@ export class Util {
         if (!Number.isFinite(min) || !Number.isFinite(max)) {
             throw new Error(`Invalid range: min=${min}, max=${max}. Both must be finite numbers.`)
         }
-        
+
         if (min > max) {
             throw new Error(`Invalid range: min (${min}) cannot be greater than max (${max}).`)
         }
-        
+
         return Math.floor(Math.random() * (max - min + 1)) + min
     }
 
@@ -136,19 +140,19 @@ export class Util {
         if (!Array.isArray(arr)) {
             throw new Error('Invalid input: arr must be an array.')
         }
-        
+
         if (arr.length === 0) {
             return []
         }
-        
+
         if (!Number.isFinite(numChunks) || numChunks <= 0) {
             throw new Error(`Invalid numChunks: ${numChunks}. Must be a positive finite number.`)
         }
-        
+
         if (!Number.isInteger(numChunks)) {
             throw new Error(`Invalid numChunks: ${numChunks}. Must be an integer.`)
         }
-        
+
         const safeNumChunks = Math.max(1, Math.floor(numChunks))
         const chunkSize = Math.ceil(arr.length / safeNumChunks)
         const chunks: T[][] = []
@@ -174,7 +178,7 @@ export class Util {
         if (typeof input !== 'string' && typeof input !== 'number') {
             throw new Error('Invalid input type. Expected string or number.')
         }
-        
+
         const milisec = ms(input.toString())
         if (!milisec || !Number.isFinite(milisec)) {
             throw new Error('The string provided cannot be parsed to a valid time! Use a format like "1 min", "1m" or "1 minutes"')
@@ -214,4 +218,25 @@ export function formatDetailedError(label: string, error: unknown, includeStack:
         return `${label}:${baseMessage} :: ${stackLines}`
     }
     return `${label}:${baseMessage}`
+}
+
+/**
+ * Validate and normalize recovery email
+ * IMPROVEMENT: Extracted to eliminate duplication and provide consistent validation
+ * 
+ * @param recoveryEmail - Raw recovery email value from account configuration
+ * @returns Normalized recovery email string or undefined if invalid
+ * 
+ * @example
+ * normalizeRecoveryEmail('  test@example.com  ') // 'test@example.com'
+ * normalizeRecoveryEmail('') // undefined
+ * normalizeRecoveryEmail(undefined) // undefined
+ */
+export function normalizeRecoveryEmail(recoveryEmail: unknown): string | undefined {
+    if (typeof recoveryEmail !== 'string') {
+        return undefined
+    }
+
+    const trimmed = recoveryEmail.trim()
+    return trimmed === '' ? undefined : trimmed
 }

@@ -14,7 +14,7 @@
 function parseEnvNumber(key: string, defaultValue: number, min: number, max: number): number {
     const raw = process.env[key]
     if (!raw) return defaultValue
-    
+
     const parsed = Number(raw)
     if (!Number.isFinite(parsed)) {
         queueMicrotask(() => {
@@ -26,7 +26,7 @@ function parseEnvNumber(key: string, defaultValue: number, min: number, max: num
         })
         return defaultValue
     }
-    
+
     if (parsed < min || parsed > max) {
         queueMicrotask(() => {
             import('./util/Logger').then(({ log }) => {
@@ -37,7 +37,7 @@ function parseEnvNumber(key: string, defaultValue: number, min: number, max: num
         })
         return defaultValue
     }
-    
+
     return parsed
 }
 
@@ -115,4 +115,9 @@ export const DISCORD = {
     COLOR_GRAY: 0x95A5A6,
     WEBHOOK_USERNAME: 'Microsoft-Rewards-Bot',
     AVATAR_URL: 'https://raw.githubusercontent.com/Obsidian-wtf/Microsoft-Rewards-Bot/main/assets/logo.png'
+} as const
+
+export const LOGGER_CLEANUP = {
+    BUFFER_MAX_AGE_MS: TIMEOUTS.ONE_HOUR,
+    BUFFER_CLEANUP_INTERVAL_MS: TIMEOUTS.TEN_MINUTES
 } as const

@@ -13,7 +13,7 @@
 
 import type { MicrosoftRewardsBot } from '../index'
 import type { Account } from '../interface/Account'
-import { createBrowserInstance } from '../util/BrowserFactory'
+import { closeBrowserSafely, createBrowserInstance } from '../util/BrowserFactory'
 import { MobileRetryTracker } from '../util/MobileRetryTracker'
 import { handleCompromisedMode } from './FlowUtils'
 
@@ -57,13 +57,13 @@ export class MobileFlow {
         retryTracker = new MobileRetryTracker(this.bot.config.searchSettings.retryMobileSearchAmount)
     ): Promise<MobileFlowResult> {
         this.bot.log(true, 'MOBILE-FLOW', 'Starting mobile automation flow')
-        
+
         // IMPROVED: Use centralized browser factory to eliminate duplication
         const browser = await createBrowserInstance(this.bot, account.proxy, account.email)
-        
+
         let keepBrowserOpen = false
         let browserClosed = false
-        
+
         try {
             this.bot.homePage = await browser.newPage()
 
@@ -71,19 +71,25 @@ export class MobileFlow {
 
             // Login into MS Rewards, then respect compromised mode
             await this.bot.login.login(this.bot.homePage, account.email, account.password, account.totp)
-            
+
             if (this.bot.compromisedModeActive) {
                 const reason = this.bot.compromisedReason || 'security-issue'
                 const result = await handleCompromisedMode(this.bot, account.email, reason, true)
                 keepBrowserOpen = result.keepBrowserOpen
                 return { initialPoints: 0, collectedPoints: 0 }
             }
-            
+
             const accessToken = await this.bot.login.getMobileAccessToken(this.bot.homePage, account.email, account.totp)
             await this.bot.browser.func.goHome(this.bot.homePage)
 
             const data = await this.bot.browser.func.getDashboardData()
-            const initialPoints = data.userStatus.availablePoints || 0
+
+            // FIXED: Log warning when availablePoints is missing instead of silently defaulting
+            const initialPoints = data.userStatus.availablePoints
+            if (initialPoints === undefined || initialPoints === null) {
+                this.bot.log(true, 'MOBILE-FLOW', 'Warning: availablePoints is undefined/null, defaulting to 0. This may indicate dashboard data issues.', 'warn')
+            }
+            const safeInitialPoints = initialPoints ?? 0
 
             const browserEarnablePoints = await this.bot.browser.func.getBrowserEarnablePoints()
             const appEarnablePoints = await this.bot.browser.func.getAppEarnablePoints(accessToken)
@@ -102,11 +108,11 @@ export class MobileFlow {
                 this.bot.log(true, 'MOBILE-FLOW', 'No points to earn and "runOnZeroPoints" is set to "false", stopping!', 'log', 'yellow')
 
                 return {
-                    initialPoints: initialPoints,
+                    initialPoints: safeInitialPoints,
                     collectedPoints: 0
                 }
             }
-            
+
             // Do daily check in
             if (this.bot.config.workers.doDailyCheckIn) {
                 await this.bot.activities.doDailyCheckIn(accessToken, data)
@@ -146,13 +152,9 @@ export class MobileFlow {
                             this.bot.log(true, 'MOBILE-FLOW', `Attempt ${attempt}/${maxMobileRetries}: Unable to complete mobile searches, bad User-Agent? Increase search delay? Retrying...`, 'log', 'yellow')
 
                             // Close mobile browser before retrying to release resources
-                            try {
-                                await this.bot.browser.func.closeBrowser(browser, account.email)
-                                browserClosed = true
-                            } catch (closeError) {
-                                const message = closeError instanceof Error ? closeError.message : String(closeError)
-                                this.bot.log(true, 'MOBILE-FLOW', `Failed to close mobile context before retry: ${message}`, 'warn')
-                            }
+                            // IMPROVED: Use centralized browser close utility
+                            await closeBrowserSafely(this.bot, browser, account.email, true)
+                            browserClosed = true
 
                             // Create a new browser and try again with the same tracker
                             return await this.run(account, retryTracker)
@@ -165,21 +167,17 @@ export class MobileFlow {
 
             const afterPointAmount = await this.bot.browser.func.getCurrentPoints()
 
-            this.bot.log(true, 'MOBILE-FLOW', `The script collected ${afterPointAmount - initialPoints} points today`)
+            this.bot.log(true, 'MOBILE-FLOW', `The script collected ${afterPointAmount - safeInitialPoints} points today`)
 
             return {
-                initialPoints: initialPoints,
-                collectedPoints: (afterPointAmount - initialPoints) || 0
+                initialPoints: safeInitialPoints,
+                collectedPoints: (afterPointAmount - safeInitialPoints) || 0
             }
         } finally {
             if (!keepBrowserOpen && !browserClosed) {
-                try {
-                    await this.bot.browser.func.closeBrowser(browser, account.email)
-                    browserClosed = true
-                } catch (closeError) {
-                    const message = closeError instanceof Error ? closeError.message : String(closeError)
-                    this.bot.log(true, 'MOBILE-FLOW', `Failed to close mobile context: ${message}`, 'warn')
-                }
+                // IMPROVED: Use centralized browser close utility to eliminate duplication
+                await closeBrowserSafely(this.bot, browser, account.email, true)
+                browserClosed = true
             }
         }
     }
