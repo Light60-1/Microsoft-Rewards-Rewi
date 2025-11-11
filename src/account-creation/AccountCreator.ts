@@ -184,6 +184,36 @@ export class AccountCreator {
       }
     }
 
+    // CRITICAL: Check for Microsoft rate-limit block (too many accounts created)
+    try {
+      const blockTitles = [
+        'h1:has-text("We can\'t create your account")',
+        'h1:has-text("We can\'t create your Microsoft account")',
+        'h1:has-text("nous ne pouvons pas créer votre compte")', // French
+        '[data-testid="title"]:has-text("can\'t create")',
+        '[data-testid="title"]:has-text("unusual activity")'
+      ]
+
+      for (const selector of blockTitles) {
+        const blockElement = this.page.locator(selector).first()
+        const isVisible = await blockElement.isVisible({ timeout: 1000 }).catch(() => false)
+
+        if (isVisible) {
+          log(false, 'CREATOR', '🚨 MICROSOFT RATE LIMIT DETECTED', 'error')
+          log(false, 'CREATOR', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'error')
+          log(false, 'CREATOR', '❌ "We can\'t create your account" error detected', 'error')
+          log(false, 'CREATOR', '📍 Cause: Too many accounts created from this IP recently', 'warn', 'yellow')
+          log(false, 'CREATOR', '⏰ Solution: Wait 24-48 hours before creating more accounts', 'warn', 'yellow')
+          log(false, 'CREATOR', '🌐 Alternative: Use a different IP address (VPN, proxy, mobile hotspot)', 'log', 'cyan')
+          log(false, 'CREATOR', '🔗 Learn more: https://go.microsoft.com/fwlink/?linkid=2259413', 'log', 'cyan')
+          log(false, 'CREATOR', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'error')
+          return false
+        }
+      }
+    } catch {
+      // Ignore
+    }
+
     return true
   }
 
@@ -1216,6 +1246,9 @@ export class AccountCreator {
       const hasErrors = !(await this.verifyNoErrors())
       if (hasErrors) {
         log(false, 'CREATOR', `❌ Errors detected after clicking Next (${step})`, 'error')
+        log(false, 'CREATOR', '⚠️  Browser left open for inspection. Press Ctrl+C to exit.', 'warn', 'yellow')
+        // Keep browser open for user to see the error
+        await new Promise(() => { })
         return false
       }
 
@@ -1597,6 +1630,10 @@ export class AccountCreator {
       const noErrors = await this.verifyNoErrors()
       if (!noErrors) {
         log(false, 'CREATOR', '❌ Errors detected after filling names', 'error')
+        log(false, 'CREATOR', '⚠️  This usually means Microsoft rate limit was triggered', 'warn', 'yellow')
+        log(false, 'CREATOR', '⚠️  Browser left open for inspection. Press Ctrl+C to exit.', 'warn', 'yellow')
+        // Keep browser open for user to see the error
+        await new Promise(() => { })
         return null
       }
 
@@ -1678,26 +1715,74 @@ export class AccountCreator {
       if (isChecked) {
         log(false, 'CREATOR', '⚠️ Marketing checkbox is CHECKED (US locale default) - unchecking now...', 'log', 'yellow')
 
-        // Click to uncheck
-        await checkbox.click()
-        await this.humanDelay(400, 800)
+        // IMPROVED: Try multiple click strategies for Fluent UI checkboxes
+        let unchecked = false
 
-        // CRITICAL: Verify it was actually unchecked
-        const stillChecked = await checkbox.isChecked().catch(() => true)
-        if (!stillChecked) {
-          log(false, 'CREATOR', '✅ Marketing opt-in unchecked successfully', 'log', 'green')
-        } else {
-          log(false, 'CREATOR', '⚠️ Failed to uncheck marketing opt-in (still checked)', 'warn', 'yellow')
-          // Retry once
-          log(false, 'CREATOR', '🔄 Retrying uncheck...', 'log', 'cyan')
-          await checkbox.click()
-          await this.humanDelay(400, 800)
-          const finalCheck = await checkbox.isChecked().catch(() => true)
-          if (!finalCheck) {
-            log(false, 'CREATOR', '✅ Marketing opt-in unchecked on retry', 'log', 'green')
-          } else {
-            log(false, 'CREATOR', '❌ Could not uncheck marketing opt-in after retry', 'error')
+        // Strategy 1: Normal Playwright click
+        try {
+          await checkbox.click({ force: false })
+          await this.humanDelay(500, 800)
+          const check1 = await checkbox.isChecked().catch(() => true)
+          if (!check1) {
+            unchecked = true
+            log(false, 'CREATOR', '✅ Unchecked via normal click', 'log', 'green')
           }
+        } catch {
+          // Continue to next strategy
+        }
+
+        // Strategy 2: Force click (bypass visibility checks)
+        if (!unchecked) {
+          try {
+            await checkbox.click({ force: true })
+            await this.humanDelay(500, 800)
+            const check2 = await checkbox.isChecked().catch(() => true)
+            if (!check2) {
+              unchecked = true
+              log(false, 'CREATOR', '✅ Unchecked via force click', 'log', 'green')
+            }
+          } catch {
+            // Continue to next strategy
+          }
+        }
+
+        // Strategy 3: Click the label instead (Fluent UI pattern)
+        if (!unchecked) {
+          try {
+            const label = this.page.locator('label[for="marketingOptIn"]').first()
+            const labelVisible = await label.isVisible({ timeout: 1000 }).catch(() => false)
+            if (labelVisible) {
+              await label.click()
+              await this.humanDelay(500, 800)
+              const check3 = await checkbox.isChecked().catch(() => true)
+              if (!check3) {
+                unchecked = true
+                log(false, 'CREATOR', '✅ Unchecked via label click', 'log', 'green')
+              }
+            }
+          } catch {
+            // Continue to next strategy
+          }
+        }
+
+        // Strategy 4: JavaScript click (most reliable for stubborn checkboxes)
+        if (!unchecked) {
+          try {
+            await checkbox.evaluate((el: HTMLInputElement) => el.click())
+            await this.humanDelay(500, 800)
+            const check4 = await checkbox.isChecked().catch(() => true)
+            if (!check4) {
+              unchecked = true
+              log(false, 'CREATOR', '✅ Unchecked via JavaScript click', 'log', 'green')
+            }
+          } catch {
+            // Continue
+          }
+        }
+
+        if (!unchecked) {
+          log(false, 'CREATOR', '❌ Could not uncheck marketing opt-in after all strategies', 'error')
+          log(false, 'CREATOR', '⚠️  Account will receive Microsoft promotional emails', 'warn', 'yellow')
         }
       } else {
         log(false, 'CREATOR', '✅ Marketing opt-in already unchecked (good!)', 'log', 'green')
