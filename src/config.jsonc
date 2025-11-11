@@ -3,7 +3,6 @@
     "baseURL": "https://rewards.bing.com",
     "sessionPath": "sessions",
     "dryRun": false,
-
     // === EXECUTION ===
     "execution": {
         "parallel": false,
@@ -16,7 +15,6 @@
         "dir": "",
         "autoResetOnComplete": true
     },
-
     // === TASKS ===
     "workers": {
         "doDailySet": true,
@@ -28,7 +26,6 @@
         "doReadToEarn": true,
         "bundleDailySetWithSearch": true
     },
-
     // === SEARCH ===
     "search": {
         "useLocalQueries": false,
@@ -47,11 +44,14 @@
     },
     "queryDiversity": {
         "enabled": true,
-        "sources": ["google-trends", "reddit", "local-fallback"],
+        "sources": [
+            "google-trends",
+            "reddit",
+            "local-fallback"
+        ],
         "maxQueriesPerSource": 10,
         "cacheMinutes": 30
     },
-
     // === HUMANIZATION ===
     "humanization": {
         "enabled": true,
@@ -70,7 +70,6 @@
         "minDays": 2,
         "maxDays": 4
     },
-
     // === RISK MANAGEMENT ===
     "riskManagement": {
         "enabled": true,
@@ -86,7 +85,6 @@
         "multiplier": 2,
         "jitter": 0.2
     },
-
     // === BROWSER ===
     "browser": {
         "headless": false,
@@ -98,13 +96,11 @@
             "desktop": true
         }
     },
-
     // === PROXY ===
     "proxy": {
         "proxyGoogleTrends": true,
         "proxyBingTerms": true
     },
-
     // === NOTIFICATIONS ===
     // See docs/notifications.md for details
     "webhook": {
@@ -121,7 +117,6 @@
         "topic": "rewards",
         "authToken": ""
     },
-
     // === LOGGING ===
     "logging": {
         "excludeFunc": [
@@ -136,14 +131,12 @@
         ],
         "redactEmails": true
     },
-
     // === DASHBOARD ===
     "dashboard": {
         "enabled": false,
         "port": 3000,
         "host": "127.0.0.1"
     },
-
     // === SCHEDULING ===
     // See docs/getting-started.md for setup instructions
     "scheduling": {
@@ -165,17 +158,14 @@
             "highestPrivileges": false
         }
     },
-
     // === UPDATES ===
     "update": {
         "enabled": true,
         "method": "github-api",
         "dockerMode": "auto", // "auto" = detect automatically, "force-docker" = always use Docker mode, "force-host" = never use Docker mode
-        "scriptPath": "setup/update/update.mjs",
         "autoUpdateConfig": true,
         "autoUpdateAccounts": false
     },
-
     // === ERROR REPORTING ===
     // Help improve the project by automatically reporting errors (no sensitive data sent)
     "errorReporting": {

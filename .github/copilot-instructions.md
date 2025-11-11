@@ -1121,7 +1121,7 @@ private combinedDeduplication(queries: string[], threshold = 0.65): string[] {
 
 **update.mjs (600+ LINES - CRITICAL FEATURE):**
 - **Purpose:** Git-free update system using GitHub ZIP downloads (NO merge conflicts!)
-- **Location:** `scripts/installer/update.mjs` (moved from `setup/update/`)
+- **Location:** `scripts/installer/update.mjs`
 - **Features:** Version comparison (cache-busting), GitHub API ZIP download, selective file preservation, automatic rollback on build failure, integrity checks, Docker vs Host detection, dependency installation, TypeScript rebuild verification, update marker creation
 - **Protected Files:** `src/config.jsonc`, `src/accounts.jsonc`, `sessions/`, `.playwright-chromium-installed`
 - **Workflow:** Check version → Create backups → Download ZIP → Extract → Selective copy → Restore protected → npm ci → npm install → npm build → Verify integrity → Create marker → Clean temp
