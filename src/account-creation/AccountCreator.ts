@@ -2189,12 +2189,13 @@ export class AccountCreator {
 
       log(false, 'CREATOR', '✅ On rewards.bing.com', 'log', 'green')
 
-      // CRITICAL: Handle "Get started" popup FIRST (before cookies)
+      // CRITICAL: Dismiss cookies IMMEDIATELY (they block Get started popup)
+      await this.humanDelay(1000, 1500)
+      await this.dismissCookieBanner()
+
+      // THEN handle "Get started" popup (after cookies cleared)
       await this.humanDelay(2000, 3000)
       await this.handleGetStartedPopup()
-
-      // Then clear cookie banner (after Get started)
-      await this.dismissCookieBanner()
 
       // Referral enrollment if needed
       if (this.referralUrl) {
@@ -2256,16 +2257,59 @@ export class AccountCreator {
       log(false, 'CREATOR', '✅ Found "Get started" popup', 'log', 'green')
       await this.humanDelay(1000, 2000)
 
-      // Click "Get started" button
+      // IMPROVED: Try multiple strategies to click (cookie banner may block)
       const getStartedButton = this.page.locator('a#reward_pivot_earn, a.dashboardPopUpPopUpSelectButton').first()
       const buttonVisible = await getStartedButton.isVisible({ timeout: 2000 }).catch(() => false)
 
-      if (buttonVisible) {
-        log(false, 'CREATOR', '🎯 Clicking "Get started"', 'log', 'cyan')
-        await getStartedButton.click()
+      if (!buttonVisible) {
+        log(false, 'CREATOR', 'Get started button not visible', 'log', 'gray')
+        return
+      }
+
+      let clickSuccess = false
+
+      // Strategy 1: Normal click
+      try {
+        log(false, 'CREATOR', '🎯 Clicking "Get started" (normal click)', 'log', 'cyan')
+        await getStartedButton.click({ timeout: 10000 })
         await this.humanDelay(2000, 3000)
         await this.waitForPageStable('AFTER_GET_STARTED', 5000)
-        log(false, 'CREATOR', '✅ Clicked "Get started"', 'log', 'green')
+        clickSuccess = true
+        log(false, 'CREATOR', '✅ Clicked "Get started" successfully', 'log', 'green')
+      } catch (error1) {
+        log(false, 'CREATOR', `Normal click failed: ${error1}`, 'log', 'yellow')
+      }
+
+      // Strategy 2: Force click (if cookie banner blocks)
+      if (!clickSuccess) {
+        try {
+          log(false, 'CREATOR', '🔄 Retrying with force click...', 'log', 'cyan')
+          await getStartedButton.click({ force: true, timeout: 5000 })
+          await this.humanDelay(2000, 3000)
+          await this.waitForPageStable('AFTER_GET_STARTED_RETRY', 5000)
+          clickSuccess = true
+          log(false, 'CREATOR', '✅ Clicked "Get started" with force', 'log', 'green')
+        } catch (error2) {
+          log(false, 'CREATOR', `Force click failed: ${error2}`, 'log', 'yellow')
+        }
+      }
+
+      // Strategy 3: JavaScript click (last resort)
+      if (!clickSuccess) {
+        try {
+          log(false, 'CREATOR', '🔄 Retrying with JavaScript click...', 'log', 'cyan')
+          await getStartedButton.evaluate((el: HTMLElement) => el.click())
+          await this.humanDelay(2000, 3000)
+          await this.waitForPageStable('AFTER_GET_STARTED_JS', 5000)
+          clickSuccess = true
+          log(false, 'CREATOR', '✅ Clicked "Get started" with JavaScript', 'log', 'green')
+        } catch (error3) {
+          log(false, 'CREATOR', `JavaScript click failed: ${error3}`, 'log', 'yellow')
+        }
+      }
+
+      if (!clickSuccess) {
+        log(false, 'CREATOR', '⚠️ Could not click "Get started" after 3 attempts', 'warn', 'yellow')
       }
     } catch (error) {
       log(false, 'CREATOR', `Get started popup error: ${error}`, 'log', 'gray')
@@ -2448,27 +2492,66 @@ export class AccountCreator {
       await this.waitForPageStable('REFERRAL_ENROLLMENT', 7000)
       await this.humanDelay(2000, 3000)
 
-      // Click "Join Microsoft Rewards" button
-      const joinButton = this.page.locator('a#start-earning-rewards-link').first()
-      const joinVisible = await joinButton.isVisible({ timeout: 3000 }).catch(() => false)
+      // IMPROVED: Try to click "Join Microsoft Rewards" with retry
+      let joinSuccess = false
+      let joinVisible = false
+      const maxRetries = 3
 
-      if (joinVisible) {
-        log(false, 'CREATOR', '🎯 Clicking "Join Microsoft Rewards"', 'log', 'cyan')
-        await joinButton.click()
-        await this.humanDelay(2000, 3000)
-        await this.waitForPageStable('AFTER_JOIN', 7000)
-        log(false, 'CREATOR', '✅ Successfully clicked Join button', 'log', 'green')
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        const joinButton = this.page.locator('a#start-earning-rewards-link').first()
+        joinVisible = await joinButton.isVisible({ timeout: 3000 }).catch(() => false)
 
-        // CRITICAL: Verify referral was successful by checking for &new=1 in URL
-        const currentUrl = this.page.url()
-        if (currentUrl.includes('&new=1') || currentUrl.includes('?new=1')) {
-          log(false, 'CREATOR', '✅ Referral successful! URL contains &new=1', 'log', 'green')
-        } else {
-          log(false, 'CREATOR', '⚠️ Warning: URL does not contain &new=1 - referral may not have worked', 'warn', 'yellow')
-          log(false, 'CREATOR', `Current URL: ${currentUrl}`, 'log', 'cyan')
+        if (!joinVisible) {
+          if (attempt === 1) {
+            log(false, 'CREATOR', '✅ Already enrolled or Join button not found', 'log', 'gray')
+          }
+          break
         }
-      } else {
-        log(false, 'CREATOR', '✅ Already enrolled or Join button not found', 'log', 'gray')
+
+        try {
+          log(false, 'CREATOR', `🎯 Clicking "Join Microsoft Rewards" (attempt ${attempt}/${maxRetries})`, 'log', 'cyan')
+          await joinButton.click({ timeout: 10000 })
+          await this.humanDelay(2000, 3000)
+          await this.waitForPageStable('AFTER_JOIN', 7000)
+          log(false, 'CREATOR', '✅ Successfully clicked Join button', 'log', 'green')
+
+          // CRITICAL: Verify referral was successful by checking for &new=1 in URL
+          const currentUrl = this.page.url()
+          if (currentUrl.includes('&new=1') || currentUrl.includes('?new=1')) {
+            log(false, 'CREATOR', '✅ Referral successful! URL contains &new=1', 'log', 'green')
+            joinSuccess = true
+            break
+          } else {
+            log(false, 'CREATOR', '⚠️ Warning: URL does not contain &new=1 - referral may not have worked', 'warn', 'yellow')
+            log(false, 'CREATOR', `Current URL: ${currentUrl}`, 'log', 'cyan')
+
+            // If no &new=1 and not last attempt, retry
+            if (attempt < maxRetries) {
+              log(false, 'CREATOR', '🔄 Retrying join (no &new=1 detected)...', 'log', 'cyan')
+              await this.humanDelay(2000, 3000)
+              // Reload referral URL for retry
+              await this.page.goto(this.referralUrl, { waitUntil: 'networkidle', timeout: 30000 })
+              await this.waitForPageStable('REFERRAL_RETRY', 5000)
+              await this.humanDelay(1000, 2000)
+            } else {
+              log(false, 'CREATOR', '❌ Referral failed after 3 attempts (no &new=1)', 'error')
+            }
+          }
+        } catch (error) {
+          log(false, 'CREATOR', `Join button click failed (attempt ${attempt}): ${error}`, 'warn', 'yellow')
+          if (attempt < maxRetries) {
+            log(false, 'CREATOR', '🔄 Retrying...', 'log', 'cyan')
+            await this.humanDelay(2000, 3000)
+            // Reload referral URL for retry
+            await this.page.goto(this.referralUrl, { waitUntil: 'networkidle', timeout: 30000 })
+            await this.waitForPageStable('REFERRAL_RETRY', 5000)
+            await this.humanDelay(1000, 2000)
+          }
+        }
+      }
+
+      if (!joinSuccess && joinVisible) {
+        log(false, 'CREATOR', '⚠️ Could not verify referral success', 'warn', 'yellow')
       }
 
       log(false, 'CREATOR', '✅ Enrollment process completed', 'log', 'green')
@@ -2490,8 +2573,10 @@ export class AccountCreator {
       }
 
       // Create a unique filename for THIS account using timestamp and email
-      const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\./g, '-')
-      const emailPrefix = (account.email.split('@')[0] || 'account').substring(0, 20) // First 20 chars of email
+      // Format: account_email_YYYY-MM-DD_HH-MM-SS.jsonc (clean and readable)
+      const now = new Date()
+      const timestamp = (now.toISOString().split('.')[0] || '').replace(/:/g, '-').replace('T', '_')
+      const emailPrefix = (account.email.split('@')[0] || 'account').substring(0, 15) // Max 15 chars
       const filename = `account_${emailPrefix}_${timestamp}.jsonc`
       const filepath = path.join(accountsDir, filename)
 

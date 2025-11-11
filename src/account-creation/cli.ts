@@ -135,6 +135,10 @@ async function main(): Promise<void> {
       log(false, 'CREATOR-CLI', '✅ Account creation complete! Browser will remain open.', 'log', 'green')
       log(false, 'CREATOR-CLI', 'You can now use the account or close the browser manually.', 'log', 'cyan')
       log(false, 'CREATOR-CLI', 'Press Ctrl+C to exit the script.', 'log', 'yellow')
+      log(false, 'CREATOR-CLI', '', 'log') // Empty line
+      log(false, 'CREATOR-CLI', '⚠️  IMPORTANT: Wait 10-20 minutes before creating another account', 'warn', 'yellow')
+      log(false, 'CREATOR-CLI', '📍 For multiple accounts: Wait longer between each (5-10 min minimum)', 'warn', 'yellow')
+      log(false, 'CREATOR-CLI', '🚫 Creating too many too quickly = Rate limit (24-48 hours blocked)', 'warn', 'yellow')
 
       // Keep process alive indefinitely
       await new Promise(() => { }) // Never resolves
