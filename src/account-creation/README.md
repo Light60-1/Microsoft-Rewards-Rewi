@@ -33,21 +33,15 @@ npm run creator
 npm run creator -- https://rewards.bing.com/welcome?rh=YOUR_CODE
 
 # Auto-accept mode (enables recovery email + 2FA automatically)
-npm run creator -- https://rewards.bing.com/welcome?rh=YOUR_CODE -y
+npm run creator -- -y https://rewards.bing.com/welcome?rh=YOUR_CODE
 
-# With specific recovery email (auto-detected)
-npm run creator -- https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
-
-# If URL from Microsoft has &ref= or &form=, use quotes:
-npm run creator -- "https://rewards.bing.com/welcome?rh=CODE&ref=..." -y backup@gmail.com
+# With specific recovery email (full automation) - RECOMMENDED ORDER
+npm run creator -- -y backup@gmail.com https://rewards.bing.com/welcome?rh=YOUR_CODE
 
 # Minimal - just recovery email without referral
 npm run creator -- -y myrecovery@gmail.com
 
-# ⚠️ CRITICAL NOTES:
-# - The -- is REQUIRED to pass arguments via npm
-# - URLs with & MUST be in quotes (CMD/PowerShell cuts at & otherwise)
-# - You can simplify URLs to just ?rh=CODE (other params are optional)
+# ⚠️ IMPORTANT: Put -y and email BEFORE the URL to avoid issues with & in URLs
 ```
 
 ### 🎛️ Command Line Arguments
@@ -67,8 +61,8 @@ npm run creator -- -y myrecovery@gmail.com
 | `npm run creator` | ❓ Ask user | ❓ Ask user | Fully interactive |
 | `npm run creator -- -y` | ✅ Prompt for email | ✅ Enabled | Auto-accept all |
 | `npm run creator -- -y backup@gmail.com` | ✅ Use provided email | ✅ Enabled | Full automation |
-| `npm run creator -- URL -y` | ✅ Prompt for email | ✅ Enabled | With referral |
-| `npm run creator -- URL -y backup@gmail.com` | ✅ Use provided email | ✅ Enabled | Complete setup |
+| `npm run creator -- -y URL` | ✅ Prompt for email | ✅ Enabled | With referral |
+| `npm run creator -- -y backup@gmail.com URL` | ✅ Use provided email | ✅ Enabled | Complete setup |
 
 **⚠️ Important: How `-y` Works**
 
@@ -90,10 +84,10 @@ npm run creator -- https://rewards.bing.com/welcome?rh=B395E9D7
 npm run creator -- -y
 
 # Auto with referral (enables 2FA, prompts for recovery)
-npm run creator -- https://rewards.bing.com/welcome?rh=B395E9D7 -y
+npm run creator -- -y https://rewards.bing.com/welcome?rh=B395E9D7
 
 # Full automation with specific recovery email (no prompts)
-npm run creator -- https://rewards.bing.com/welcome?rh=B395E9D7 -y backup@gmail.com
+npm run creator -- -y backup@gmail.com https://rewards.bing.com/welcome?rh=B395E9D7
 
 # Just with recovery email, no referral
 npm run creator -- -y myrecovery@example.com
@@ -439,6 +433,9 @@ When you use `--2fa` argument OR answer 'y' to "Enable 2FA?" prompt:
 
 **Q: How do I provide a recovery email?**
 A: Just add it as an argument: `npm run creator -- -y myemail@gmail.com` - it's auto-detected!
+
+**Q: Do I need to modify the URL from Microsoft?**
+A: No! Just copy-paste it directly. The script automatically handles special characters and optional parameters.
 
 **Q: What does `-y` do exactly?**
 A: It enables EVERYTHING automatically (recovery email prompt + 2FA). One flag, full automation.

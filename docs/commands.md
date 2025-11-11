@@ -222,10 +222,8 @@ npm run dashboard-dev
 # Interactive mode
 npm run creator
 
-# With referral URL and auto-accept mode
-npm run creator -- https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.com
-
-# Note: The -- is required to pass arguments to the script!
+# With auto-accept and recovery email (copy-paste URL directly from Microsoft)
+npm run creator -- -y backup@gmail.com https://rewards.bing.com/welcome?rh=YOUR_CODE
 ```
 
 **When to use:**

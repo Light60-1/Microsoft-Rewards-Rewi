@@ -1,4 +1,3 @@
-import * as readline from 'readline'
 import Browser from '../browser/Browser'
 import { MicrosoftRewardsBot } from '../index'
 import { log } from '../util/notifications/Logger'
@@ -22,42 +21,24 @@ async function main(): Promise<void> {
     } else if (arg.includes('@')) {
       // Auto-detect email addresses
       recoveryEmail = arg
+    } else if (arg.startsWith('ref=') || arg.startsWith('form=') || arg.startsWith('CREA=')) {
+      // SMART FIX: Detect leftover URL fragments from CMD/PowerShell & splitting
+      // When user forgets quotes, CMD splits at & and passes fragments as separate args
+      // We silently ignore these fragments (only the rh= code matters anyway)
+      // Example: "https://...?rh=CODE&ref=X&form=Y" becomes ["https://...?rh=CODE", "ref=X", "form=Y"]
+      continue // Ignore these - they're optional tracking parameters
     }
   }
 
-  // CRITICAL: Detect truncated URLs (PowerShell/CMD cut at & character)
-  // If URL detected but no -y flag AND no email, likely the URL was cut
-  if (referralUrl && !autoAccept && !recoveryEmail && args.length === 1) {
-    // Check if URL looks truncated (ends with parameter but no value after &)
-    if (referralUrl.includes('?') && !referralUrl.includes('&')) {
-      log(false, 'CREATOR-CLI', '', 'log')
-      log(false, 'CREATOR-CLI', '⚠️  WARNING: URL may be truncated!', 'warn', 'yellow')
-      log(false, 'CREATOR-CLI', '   The & character is special in CMD/PowerShell and cuts the URL.', 'warn', 'yellow')
-      log(false, 'CREATOR-CLI', '', 'log')
-      log(false, 'CREATOR-CLI', '✅ SOLUTION: Put the URL in quotes:', 'log', 'green')
-      log(false, 'CREATOR-CLI', '   npm run creator -- "https://rewards.bing.com/...full-url..." -y email@gmail.com', 'log', 'cyan')
-      log(false, 'CREATOR-CLI', '', 'log')
-      log(false, 'CREATOR-CLI', '💡 TIP: Only the rh= code matters. You can simplify to:', 'log', 'gray')
-      log(false, 'CREATOR-CLI', '   npm run creator -- https://rewards.bing.com/welcome?rh=YOUR_CODE -y email@gmail.com', 'log', 'cyan')
-      log(false, 'CREATOR-CLI', '', 'log')
-
-      // Ask user if they want to continue anyway
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      })
-
-      await new Promise<void>((resolve) => {
-        rl.question('Continue with this URL anyway? (y/N): ', (answer: string) => {
-          rl.close()
-          if (answer.toLowerCase() !== 'y' && answer.toLowerCase() !== 'yes') {
-            log(false, 'CREATOR-CLI', '❌ Aborted. Please retry with the URL in quotes.', 'error')
-            process.exit(0)
-          }
-          resolve()
-        })
-      })
-    }
+  // AUTO-FIX: Clean up URL if it contains & parameters that might cause issues
+  // Only keep the part up to the first & to ensure compatibility even without quotes
+  if (referralUrl && referralUrl.includes('&')) {
+    const originalUrl = referralUrl
+    referralUrl = referralUrl.split('&')[0] // Keep only base URL + first parameter (rh=CODE)
+    log(false, 'CREATOR-CLI', '� Auto-cleaned URL (removed optional tracking parameters)', 'log', 'gray')
+    log(false, 'CREATOR-CLI', `   Original: ${originalUrl}`, 'log', 'gray')
+    log(false, 'CREATOR-CLI', `   Using: ${referralUrl}`, 'log', 'cyan')
+    log(false, 'CREATOR-CLI', '', 'log')
   }
 
   // Banner
@@ -76,9 +57,9 @@ async function main(): Promise<void> {
     log(false, 'CREATOR-CLI', '📖 Usage Examples:', 'log', 'cyan')
     log(false, 'CREATOR-CLI', '   npm run creator -- -y                                    # Auto mode', 'log', 'gray')
     log(false, 'CREATOR-CLI', '   npm run creator -- -y email@gmail.com                     # With recovery email', 'log', 'gray')
-    log(false, 'CREATOR-CLI', '   npm run creator -- https://rewards.bing.com/... -y        # With referral URL', 'log', 'gray')
+    log(false, 'CREATOR-CLI', '   npm run creator -- -y email@gmail.com https://rewards...  # Full automation', 'log', 'gray')
     log(false, 'CREATOR-CLI', '', 'log')
-    log(false, 'CREATOR-CLI', '⚠️  IMPORTANT: The -- is required to pass arguments via npm!', 'warn', 'yellow')
+    log(false, 'CREATOR-CLI', '⚠️  IMPORTANT: Put -y and email BEFORE the URL!', 'warn', 'yellow')
     log(false, 'CREATOR-CLI', '', 'log')
   }
 
