@@ -88,17 +88,43 @@ export default class BrowserFunc {
                 this.bot.log(this.bot.isMobile, 'GO-HOME', `Page took ${readyResult.timeMs}ms to be ready (slow)`, 'warn')
             }
 
+            // IMPROVED: Wait for Custom Elements to be registered
+            try {
+                await page.evaluate(() => customElements.whenDefined('mee-card-group'), { timeout: 5000 })
+            } catch (error) {
+                this.bot.log(this.bot.isMobile, 'GO-HOME', 'mee-card-group custom element not registered within 5s', 'warn')
+            }
+
             for (let iteration = 1; iteration <= RETRY_LIMITS.GO_HOME_MAX; iteration++) {
                 await this.bot.utils.wait(500)
                 await this.bot.browser.utils.tryDismissAllMessages(page)
 
-                // IMPROVED: Smart element waiting instead of fixed timeout
-                const activitiesResult = await waitForElementSmart(page, SELECTORS.MORE_ACTIVITIES, {
-                    initialTimeoutMs: 1000,
-                    extendedTimeoutMs: 2000,
+                // IMPROVED: Try primary selector first with increased timeouts
+                let activitiesResult = await waitForElementSmart(page, SELECTORS.MORE_ACTIVITIES, {
+                    initialTimeoutMs: 3000,  // FIXED: Increased from 1000ms to 3000ms
+                    extendedTimeoutMs: 7000, // FIXED: Increased from 2000ms to 7000ms
                     state: 'attached',
                     logFn: (msg) => this.bot.log(this.bot.isMobile, 'GO-HOME', msg, 'log')
                 })
+
+                // IMPROVED: Try fallback selectors if primary fails
+                if (!activitiesResult.found) {
+                    this.bot.log(this.bot.isMobile, 'GO-HOME', 'Primary selector failed, trying fallbacks...', 'log')
+
+                    for (const fallbackSelector of SELECTORS.MORE_ACTIVITIES_FALLBACKS) {
+                        activitiesResult = await waitForElementSmart(page, fallbackSelector, {
+                            initialTimeoutMs: 2000,
+                            extendedTimeoutMs: 3000,
+                            state: 'attached',
+                            logFn: (msg) => this.bot.log(this.bot.isMobile, 'GO-HOME', msg, 'log')
+                        })
+
+                        if (activitiesResult.found) {
+                            this.bot.log(this.bot.isMobile, 'GO-HOME', `Found activities using fallback: ${fallbackSelector}`, 'log')
+                            break
+                        }
+                    }
+                }
 
                 if (activitiesResult.found) {
                     this.bot.log(this.bot.isMobile, 'GO-HOME', 'Visited homepage successfully')
@@ -109,6 +135,55 @@ export default class BrowserFunc {
                 const isSuspended = await this.checkAccountSuspension(page, iteration)
                 if (isSuspended) {
                     throw new Error('Account has been suspended!')
+                }
+
+                // IMPROVED: Diagnostic logging to identify DOM structure changes
+                if (iteration <= 2) {
+                    try {
+                        const diagnosticInfo = await page.evaluate(() => {
+                            const elementsWithActivitiesId = document.querySelectorAll('[id*="activit"]')
+                            const meeCardGroups = document.querySelectorAll('mee-card-group')
+                            const hasRoleList = document.querySelectorAll('[role="list"]')
+
+                            return {
+                                activitiesIdCount: elementsWithActivitiesId.length,
+                                activitiesIds: Array.from(elementsWithActivitiesId).map(el => el.id).slice(0, 5),
+                                meeCardGroupCount: meeCardGroups.length,
+                                roleListCount: hasRoleList.length,
+                                pageTitle: document.title,
+                                bodyClasses: document.body.className
+                            }
+                        })
+
+                        this.bot.log(this.bot.isMobile, 'GO-HOME-DEBUG',
+                            `DOM Diagnostic - Elements with 'activit': ${diagnosticInfo.activitiesIdCount}, ` +
+                            `IDs: [${diagnosticInfo.activitiesIds.join(', ')}], ` +
+                            `mee-card-group: ${diagnosticInfo.meeCardGroupCount}, ` +
+                            `role=list: ${diagnosticInfo.roleListCount}`, 'warn')
+                    } catch (error) {
+                        this.bot.log(this.bot.isMobile, 'GO-HOME-DEBUG', `Diagnostic failed: ${error}`, 'warn')
+                    }
+                }
+
+                // IMPROVED: Capture screenshot on final iteration for debugging
+                if (iteration === RETRY_LIMITS.GO_HOME_MAX) {
+                    try {
+                        const fs = await import('fs')
+                        const path = await import('path')
+                        const debugDir = path.join(process.cwd(), 'debug-screenshots')
+
+                        if (!fs.existsSync(debugDir)) {
+                            fs.mkdirSync(debugDir, { recursive: true })
+                        }
+
+                        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+                        const screenshotPath = path.join(debugDir, `goHome-${this.bot.currentAccountEmail}-${timestamp}.png`)
+                        await page.screenshot({ path: screenshotPath, fullPage: true })
+
+                        this.bot.log(this.bot.isMobile, 'GO-HOME', `Debug screenshot saved: ${screenshotPath}`, 'warn')
+                    } catch (error) {
+                        this.bot.log(this.bot.isMobile, 'GO-HOME', `Screenshot capture failed: ${error}`, 'warn')
+                    }
                 }
 
                 // Not suspended, just activities not loaded yet - continue to next iteration

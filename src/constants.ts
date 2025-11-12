@@ -93,6 +93,15 @@ export const SELECTORS = {
     // FIXED: Use more specific selector to avoid strict mode violation (2 elements with id='more-activities')
     // Target the mee-card-group element specifically, not the div wrapper
     MORE_ACTIVITIES: 'mee-card-group#more-activities[role="list"]',
+    // IMPROVED: Fallback selectors for MORE_ACTIVITIES in case Microsoft changes structure
+    MORE_ACTIVITIES_FALLBACKS: [
+        '#more-activities',                    // ID only (most permissive)
+        'mee-card-group#more-activities',      // Without role attribute
+        '[id="more-activities"]',              // Attribute selector
+        'mee-card-group[role="list"]',         // Element type with role
+        '.daily-sets',                         // Class-based fallback
+        'main[data-bi-name="dashboard"]'      // Dashboard root element
+    ],
     SUSPENDED_ACCOUNT: '#suspendedAccountHeader',
     QUIZ_COMPLETE: '#quizCompleteContainer',
     QUIZ_CREDITS: 'span.rqMCredits'
