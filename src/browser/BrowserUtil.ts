@@ -174,56 +174,49 @@ export default class BrowserUtil {
     }
 
     async getLatestTab(page: Page): Promise<Page> {
-        try {
-            await this.bot.utils.wait(1000)
+        await this.bot.utils.wait(1000)
 
-            const browser = page.context()
-            const pages = browser.pages()
+        const browser = page.context()
+        const pages = browser.pages()
 
-            // IMPROVED: If no pages exist, create a new one instead of throwing error
-            if (pages.length === 0) {
-                this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'No pages found in context, creating new page', 'warn')
+        // IMPROVED: If no pages exist, create a new one instead of throwing error
+        if (pages.length === 0) {
+            this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'No pages found in context, creating new page', 'warn')
+            try {
                 const newPage = await browser.newPage()
                 await this.bot.utils.wait(500)
                 return newPage
+            } catch (createError) {
+                const createMsg = createError instanceof Error ? createError.message : String(createError)
+                this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'Failed to create new page: ' + createMsg, 'error')
+                throw new Error('Unable to create new page in empty context: ' + createMsg)
             }
+        }
 
-            const newTab = pages[pages.length - 1]
+        const newTab = pages[pages.length - 1]
 
-            // IMPROVED: Verify the page is not closed before returning
-            if (newTab && !newTab.isClosed()) {
-                return newTab
-            }
+        // IMPROVED: Verify the page is not closed before returning
+        if (newTab && !newTab.isClosed()) {
+            return newTab
+        }
 
-            // IMPROVED: If latest tab is closed, find first non-closed tab or create new one
-            const openPage = pages.find(p => !p.isClosed())
-            if (openPage) {
-                this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'Latest tab was closed, using first available open tab')
-                return openPage
-            }
+        // IMPROVED: If latest tab is closed, find first non-closed tab or create new one
+        const openPage = pages.find(p => !p.isClosed())
+        if (openPage) {
+            this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'Latest tab was closed, using first available open tab')
+            return openPage
+        }
 
-            // IMPROVED: Last resort - create new page
-            this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'All tabs were closed, creating new page', 'warn')
+        // IMPROVED: Last resort - create new page (all tabs were closed)
+        this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'All tabs were closed, creating new page', 'warn')
+        try {
             const newPage = await browser.newPage()
             await this.bot.utils.wait(500)
             return newPage
-
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error)
-            this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'Critical error in getLatestTab: ' + errorMessage, 'error')
-
-            // IMPROVED: Try one more time to create a new page as absolute last resort
-            try {
-                const browser = page.context()
-                this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'Attempting recovery by creating new page', 'warn')
-                const recoveryPage = await browser.newPage()
-                await this.bot.utils.wait(500)
-                return recoveryPage
-            } catch (recoveryError) {
-                const recoveryMsg = recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
-                this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'Recovery failed: ' + recoveryMsg, 'error')
-                throw new Error('Get new tab failed and recovery unsuccessful: ' + errorMessage)
-            }
+        } catch (createError) {
+            const createMsg = createError instanceof Error ? createError.message : String(createError)
+            this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'Failed to create recovery page: ' + createMsg, 'error')
+            throw new Error('Unable to create recovery page: ' + createMsg)
         }
     }
 
