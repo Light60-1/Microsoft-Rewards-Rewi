@@ -257,44 +257,25 @@ function extractStringField(obj: unknown, key: string): string | undefined {
     return undefined
 }
 
-function extractBooleanField(obj: unknown, key: string): boolean | undefined {
-    if (obj && typeof obj === 'object' && key in obj) {
-        const value = (obj as Record<string, unknown>)[key]
-        return typeof value === 'boolean' ? value : undefined
-    }
-    return undefined
-}
-
 function buildSchedulingConfig(raw: unknown): ConfigScheduling | undefined {
     if (!raw || typeof raw !== 'object') return undefined
 
     const source = raw as Record<string, unknown>
     const scheduling: ConfigScheduling = {
-        enabled: source.enabled === true,
-        type: typeof source.type === 'string' ? source.type as ConfigScheduling['type'] : undefined
+        enabled: source.enabled === true
     }
 
+    // Priority 1: Simple time format (recommended)
+    const timeField = extractStringField(source, 'time')
+    if (timeField) {
+        scheduling.time = timeField
+    }
+
+    // Priority 2: Legacy cron format (backwards compatibility)
     const cronRaw = source.cron
     if (cronRaw && typeof cronRaw === 'object') {
         scheduling.cron = {
-            schedule: extractStringField(cronRaw, 'schedule'),
-            workingDirectory: extractStringField(cronRaw, 'workingDirectory'),
-            nodePath: extractStringField(cronRaw, 'nodePath'),
-            logFile: extractStringField(cronRaw, 'logFile'),
-            user: extractStringField(cronRaw, 'user')
-        }
-    }
-
-    const taskRaw = source.taskScheduler
-    if (taskRaw && typeof taskRaw === 'object') {
-        const taskSource = taskRaw as Record<string, unknown>
-        scheduling.taskScheduler = {
-            taskName: extractStringField(taskRaw, 'taskName'),
-            schedule: extractStringField(taskRaw, 'schedule'),
-            frequency: typeof taskSource.frequency === 'string' ? taskSource.frequency as 'daily' | 'weekly' | 'once' : undefined,
-            workingDirectory: extractStringField(taskRaw, 'workingDirectory'),
-            runAsUser: extractBooleanField(taskRaw, 'runAsUser'),
-            highestPrivileges: extractBooleanField(taskRaw, 'highestPrivileges')
+            schedule: extractStringField(cronRaw, 'schedule')
         }
     }
 

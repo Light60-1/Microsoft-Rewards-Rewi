@@ -193,22 +193,10 @@ export interface ConfigDashboard {
 }
 
 export interface ConfigScheduling {
-    enabled?: boolean; // enable automatic schedule configuration
-    type?: 'auto' | 'cron' | 'task-scheduler'; // auto-detect or force specific type
-    cron?: {
-        schedule?: string; // cron expression (default: "0 9 * * *")
-        workingDirectory?: string; // project root path (auto-detected if empty)
-        nodePath?: string; // path to node executable (auto-detected if empty)
-        logFile?: string; // optional log file path
-        user?: string; // optional specific user for crontab
-    };
-    taskScheduler?: {
-        taskName?: string; // task name in Windows Task Scheduler
-        schedule?: string; // time in 24h format (e.g., "09:00")
-        frequency?: 'daily' | 'weekly' | 'once'; // task frequency
-        workingDirectory?: string; // project root path (auto-detected if empty)
-        runAsUser?: boolean; // run under current user
-        highestPrivileges?: boolean; // request highest privileges
+    enabled?: boolean; // Enable automatic daily scheduling
+    time?: string;     // Daily execution time in 24h format (HH:MM) - e.g., "09:00" for 9 AM (RECOMMENDED)
+    cron?: {           // Legacy cron format (for backwards compatibility) - DEPRECATED
+        schedule?: string; // Cron expression - e.g., "0 9 * * *" for 9 AM daily
     };
 }
 

@@ -179,16 +179,6 @@ export class StartupValidator {
   }
 
   private validateConfig(config: Config): void {
-    const maybeSchedule = (config as unknown as { schedule?: unknown }).schedule
-    if (maybeSchedule !== undefined) {
-      this.addWarning(
-        'config',
-        'Legacy schedule settings detected in config.jsonc.',
-        'Remove schedule.* entries and use your operating system scheduler.',
-        'docs/schedule.md'
-      )
-    }
-
     // Headless mode in Docker
     if (process.env.FORCE_HEADLESS === '1' && config.browser?.headless === false) {
       this.addWarning(

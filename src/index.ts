@@ -26,6 +26,8 @@ import { DesktopFlow } from './flows/DesktopFlow'
 import { MobileFlow } from './flows/MobileFlow'
 import { SummaryReporter, type AccountResult } from './flows/SummaryReporter'
 
+import { InternalScheduler } from './scheduler/InternalScheduler'
+
 import { DISCORD, TIMEOUTS } from './constants'
 import { Account } from './interface/Account'
 
@@ -110,9 +112,6 @@ export class MicrosoftRewardsBot {
         if (this.config.jobState?.enabled !== false) {
             this.accountJobState = new JobState(this.config)
         }
-
-        // Note: Legacy SchedulerManager removed - use OS scheduler (cron/Task Scheduler) instead
-        // See docs/schedule.md for configuration
     }
 
     private shouldSkipAccount(email: string, dayKey: string): boolean {
@@ -879,6 +878,9 @@ async function main(): Promise<void> {
     const crashState = { restarts: 0 }
     const config = rewardsBot.config
 
+    // Scheduler instance (initialized in bootstrap if enabled)
+    let scheduler: InternalScheduler | null = null
+
     // Auto-start dashboard if enabled in config
     if (config.dashboard?.enabled) {
         const { DashboardServer } = await import('./dashboard/server')
@@ -908,22 +910,26 @@ async function main(): Promise<void> {
             const errorMsg = reason instanceof Error ? reason.message : String(reason)
             const stack = reason instanceof Error ? reason.stack : undefined
             log('main', 'FATAL', `UnhandledRejection: ${errorMsg}${stack ? `\nStack: ${stack.split('\n').slice(0, 3).join(' | ')}` : ''}`, 'error')
-            stopWebhookCleanup() // CLEANUP FIX: Stop webhook cleanup interval
+            scheduler?.stop() // Stop scheduler before exit
+            stopWebhookCleanup()
             gracefulExit(1)
         })
         process.on('uncaughtException', (err: Error) => {
             log('main', 'FATAL', `UncaughtException: ${err.message}${err.stack ? `\nStack: ${err.stack.split('\n').slice(0, 3).join(' | ')}` : ''}`, 'error')
-            stopWebhookCleanup() // CLEANUP FIX: Stop webhook cleanup interval
+            scheduler?.stop() // Stop scheduler before exit
+            stopWebhookCleanup()
             gracefulExit(1)
         })
         process.on('SIGTERM', () => {
             log('main', 'SHUTDOWN', 'Received SIGTERM, shutting down gracefully...', 'log')
-            stopWebhookCleanup() // CLEANUP FIX: Stop webhook cleanup interval
+            scheduler?.stop() // Stop scheduler before exit
+            stopWebhookCleanup()
             gracefulExit(0)
         })
         process.on('SIGINT', () => {
             log('main', 'SHUTDOWN', 'Received SIGINT (Ctrl+C), shutting down gracefully...', 'log')
-            stopWebhookCleanup() // CLEANUP FIX: Stop webhook cleanup interval
+            scheduler?.stop() // Stop scheduler before exit
+            stopWebhookCleanup()
             gracefulExit(0)
         })
     }
@@ -1025,6 +1031,34 @@ async function main(): Promise<void> {
                 log('main', 'UPDATE', `Update check failed (continuing): ${updateError instanceof Error ? updateError.message : String(updateError)}`, 'warn')
             }
 
+            // Check if scheduling is enabled
+            if (config.scheduling?.enabled) {
+                // Initialize scheduler
+                scheduler = new InternalScheduler(config, async () => {
+                    try {
+                        await rewardsBot.initialize()
+                        await rewardsBot.run()
+                    } catch (error) {
+                        log('main', 'SCHEDULER-TASK', `Scheduled run failed: ${error instanceof Error ? error.message : String(error)}`, 'error')
+                        throw error // Re-throw for scheduler retry logic
+                    }
+                })
+
+                const schedulerStarted = scheduler.start()
+
+                if (schedulerStarted) {
+                    log('main', 'MAIN', 'Bot running in scheduled mode. Process will stay alive.', 'log', 'green')
+                    log('main', 'MAIN', 'Press CTRL+C to stop the scheduler and exit.', 'log', 'cyan')
+                    // Keep process alive - scheduler handles execution
+                    return
+                } else {
+                    log('main', 'MAIN', 'Scheduler failed to start. Running one-time execution instead.', 'warn')
+                    scheduler = null
+                    // Continue with one-time execution below
+                }
+            }
+
+            // One-time execution (scheduling disabled or failed to start)
             await rewardsBot.initialize()
             await rewardsBot.run()
         } catch (e) {
