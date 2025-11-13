@@ -64,33 +64,20 @@ Explore advanced features and customization options:| **[NTFY Alerts](ntfy.md)**
 
 | **[Proxy Setup](proxy.md)** | IP rotation (optional) |
 
-### Core Features| **[Docker](docker.md)** | Container deployment |
+### Core Features
 
-
-
-| Guide | Description |---
-
+| Guide | Description |
 |-------|-------------|
-
-| **[🔔 Notifications](notifications.md)** | Discord webhooks and mobile push alerts |## 🆘 Troubleshooting
-
+| **[🔔 Notifications](notifications.md)** | Discord webhooks and mobile push alerts |
 | **[📊 Dashboard](../src/dashboard/README.md)** | Web interface for monitoring and control |
+| **[🌐 Proxy Setup](proxy.md)** | Configure proxies for privacy |
+| **[🤖 Humanization](humanization.md)** | Anti-detection and natural behavior patterns |
 
-| **[🌐 Proxy Setup](proxy.md)** | Configure proxies for privacy || Issue | Solution |
+### Deployment
 
-| **[🤖 Humanization](humanization.md)** | Anti-detection and natural behavior patterns ||-------|----------|
-
-| **Bot not working?** | [Troubleshooting Guide](diagnostics.md) |
-
-### Deployment| **Login failed?** | [Accounts & 2FA](accounts.md#troubleshooting) |
-
-| **Account banned?** | [Security Guide](security.md) |
-
-| Guide | Description || **Git conflicts?** | [Conflict Resolution](git-conflict-resolution.md) |
-
-|-------|-------------|| **General questions?** | [FAQ](FAQ.md) |
-
-| **[🐳 Docker](docker.md)** | Containerized deployment with Docker Compose |
+| Guide | Description |
+|-------|-------------|
+| **[🐳 Docker](docker-deployment.md)** | Containerized deployment with Docker Compose |
 
 | **[☁️ Cloud Deployment](cloud-deployment.md)** | Deploy to VPS, Raspberry Pi, or cloud services |**Need help?** → [Discord Community](https://discord.gg/k5uHkx9mne)
 
@@ -186,7 +173,7 @@ Technical references and detailed information:
 
 ### For Docker Users
 
-1. [Docker Guide](docker.md) — Setup Docker Compose
+1. [Docker Guide](docker-deployment.md) — Setup Docker Compose
 2. [Environment Variables](environment-variables.md) — Configure via env vars
 3. [Notifications](notifications.md) — Monitor container runs
 

@@ -31,8 +31,9 @@
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "setup": "node ./scripts/installer/setup.mjs",
     "kill-chrome": "node -e \"const { execSync } = require('child_process'); const isWin = process.platform === 'win32'; try { execSync(isWin ? 'taskkill /F /IM chrome.exe 2>nul || exit 0' : 'pkill -f chrome || true', {stdio: 'inherit'}); } catch(e) {}\"",
-    "docker:build": "docker build -t microsoft-rewards-bot .",
-    "docker:run": "docker run -d --name ms-rewards microsoft-rewards-bot"
+    "docker:build": "docker build -f docker/Dockerfile -t microsoft-rewards-bot .",
+    "docker:run": "docker run -d --name ms-rewards microsoft-rewards-bot",
+    "docker:compose": "docker compose -f docker/compose.yaml up -d"
   },
   "keywords": [
     "Bing Rewards",

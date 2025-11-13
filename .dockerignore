@@ -56,8 +56,9 @@ setup/
 docker/
 .dockerignore
 
-# Scripts (organized in scripts/ folder - not needed in Docker)
-scripts/
+# Scripts installer (not needed in Docker, but keep docker/ folder)
+scripts/installer/
+scripts/README.md
 
 # Asset files (not needed for runtime)
 assets/

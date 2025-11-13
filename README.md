@@ -221,13 +221,16 @@ For containerized deployment with built-in scheduling:
 
 ```bash
 # Ensure accounts.jsonc and config.jsonc exist in src/
-docker compose up -d
+npm run docker:compose
+
+# Or use docker compose directly
+docker compose -f docker/compose.yaml up -d
 
 # View logs
-docker logs -f microsoft-rewards-script
+docker logs -f microsoft-rewards-bot
 
 # Check status
-docker compose ps
+docker compose -f docker/compose.yaml ps
 ```
 
 Container includes:
@@ -236,7 +239,7 @@ Container includes:
 - ✅ Random execution delays (anti-detection)
 - ✅ Health checks
 
-**📖 [Full Docker Guide](docs/docker.md)**
+**📖 [Complete Docker Guide →](docs/docker-deployment.md)**
 
 ---
 
