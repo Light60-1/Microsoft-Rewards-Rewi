@@ -728,12 +728,17 @@ export class MicrosoftRewardsBot {
     private async sendConclusion(summaries: AccountSummary[]) {
         if (summaries.length === 0) return
 
-        // Convert AccountSummary to AccountResult format
+        // Convert AccountSummary to AccountResult format with full statistics
         const accountResults: AccountResult[] = summaries.map(s => ({
             email: s.email,
             pointsEarned: s.totalCollected,
             runDuration: s.durationMs,
-            errors: s.errors.length > 0 ? s.errors : undefined
+            initialPoints: s.initialTotal,
+            finalPoints: s.endTotal,
+            desktopPoints: s.desktopCollected,
+            mobilePoints: s.mobileCollected,
+            errors: s.errors.length > 0 ? s.errors : undefined,
+            banned: s.banned?.status ?? false
         }))
 
         const startTime = new Date(Date.now() - summaries.reduce((sum, s) => sum + s.durationMs, 0))
