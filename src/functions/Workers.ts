@@ -261,8 +261,21 @@ export class Workers {
             return // Skip this activity gracefully
         }
 
-        // Click with timeout to prevent indefinite hangs
-        await page.click(selector, { timeout: TIMEOUTS.DASHBOARD_WAIT })
+        // FIXED: Use locator from elementResult to ensure element exists before clicking
+        // This prevents indefinite hanging when element disappears between check and click
+        try {
+            if (elementResult.element) {
+                await elementResult.element.click({ timeout: TIMEOUTS.DASHBOARD_WAIT })
+            } else {
+                // Fallback to page.click with strict check if locator not available
+                await page.click(selector, { timeout: TIMEOUTS.DASHBOARD_WAIT, strict: true })
+            }
+        } catch (clickError) {
+            const errMsg = clickError instanceof Error ? clickError.message : String(clickError)
+            this.bot.log(this.bot.isMobile, 'ACTIVITY', `Failed to click activity: ${errMsg}`, 'error')
+            throw new Error(`Activity click failed: ${errMsg}`)
+        }
+
         page = await this.bot.browser.utils.getLatestTab(page)
 
         // Execute activity with timeout protection using Promise.race

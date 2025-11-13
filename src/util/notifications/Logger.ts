@@ -333,24 +333,20 @@ export function log(isMobile: boolean | 'main', title: string, message: string, 
     if (type === 'error') {
         const errorObj = new Error(cleanStr)
 
-        // Send error report asynchronously without blocking
-        Promise.resolve().then(async () => {
+        // FIXED: Single try-catch with proper error visibility
+        // Fire-and-forget but log failures to stderr for debugging
+        void (async () => {
             try {
                 await sendErrorReport(configData, errorObj, {
                     title,
                     platform: platformText
                 })
             } catch (reportError) {
-                // Silent fail - error reporting should never break the application
-                // But log to stderr for debugging
+                // Log to stderr but don't break application
                 const msg = reportError instanceof Error ? reportError.message : String(reportError)
-                process.stderr.write(`[Logger] Error reporting failed in promise: ${msg}\n`)
+                process.stderr.write(`[Logger] Error reporting failed: ${msg}\n`)
             }
-        }).catch((promiseError) => {
-            // Catch any promise rejection silently but log for debugging
-            const msg = promiseError instanceof Error ? promiseError.message : String(promiseError)
-            process.stderr.write(`[Logger] Error reporting promise rejected: ${msg}\n`)
-        })
+        })()
 
         return errorObj
     }

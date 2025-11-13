@@ -57,7 +57,11 @@ function shouldReportError(errorMessage: string): boolean {
         // Rebrowser-playwright expected errors (benign, non-fatal)
         /rebrowser-patches.*cannot get world/i,
         /session closed.*rebrowser/i,
-        /addScriptToEvaluateOnNewDocument.*session closed/i
+        /addScriptToEvaluateOnNewDocument.*session closed/i,
+        // User auth issues (not bot bugs)
+        /password.*incorrect/i,
+        /email.*not.*found/i,
+        /account.*locked/i
     ]
 
     // Don't report user configuration errors
@@ -114,10 +118,13 @@ export async function sendErrorReport(
     additionalContext?: Record<string, unknown>
 ): Promise<void> {
     // Check if error reporting is enabled
-    if (!config.errorReporting?.enabled) {
+    if (config.errorReporting?.enabled === false) {
         process.stderr.write('[ErrorReporting] Disabled in config (errorReporting.enabled = false)\n')
         return
     }
+
+    // Log that error reporting is enabled
+    process.stderr.write('[ErrorReporting] Enabled, processing error...\n')
 
     try {
         // Deobfuscate webhook URL
