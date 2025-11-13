@@ -79,8 +79,9 @@ export default class BrowserFunc {
             await page.goto(this.bot.config.baseURL)
 
             // IMPROVED: Smart page readiness check after navigation
+            // FIXED: Use timeoutMs parameter with increased timeout for slower networks
             const readyResult = await waitForPageReady(page, {
-                networkIdleMs: 1000,
+                timeoutMs: 15000, // FIXED: 15s timeout to handle slower network conditions
                 logFn: (msg) => this.bot.log(this.bot.isMobile, 'GO-HOME', msg, 'log')
             })
 
@@ -199,8 +200,9 @@ export default class BrowserFunc {
                     await page.goto(this.bot.config.baseURL)
 
                     // IMPROVED: Wait for page ready after redirect
+                    // FIXED: Use timeoutMs parameter with increased timeout
                     await waitForPageReady(page, {
-                        networkIdleMs: 1000,
+                        timeoutMs: 15000, // FIXED: 15s timeout to handle slower network conditions
                         logFn: (msg) => this.bot.log(this.bot.isMobile, 'GO-HOME', msg, 'log')
                     })
                 } else {
@@ -258,8 +260,9 @@ export default class BrowserFunc {
                 await this.goHome(target)
 
                 // IMPROVED: Smart page readiness check instead of fixed wait
+                // FIXED: Use timeoutMs parameter with increased timeout
                 await waitForPageReady(target, {
-                    networkIdleMs: 1000,
+                    timeoutMs: 15000, // FIXED: 15s timeout for dashboard recovery
                     logFn: (msg) => this.bot.log(this.bot.isMobile, 'BROWSER-FUNC', msg, 'log')
                 }).catch((error) => {
                     const errorMsg = error instanceof Error ? error.message : String(error)

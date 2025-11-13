@@ -209,6 +209,7 @@ export default class BrowserUtil {
                 this.bot.log(this.bot.isMobile, 'RELOAD-BAD-PAGE', `Bad page detected (${errorType}), reloading!`)
                 await page.reload({ waitUntil: 'domcontentloaded' })
                 // IMPROVED: Use smart wait instead of fixed 1500ms delay
+                // FIXED: Use default 10s timeout for page reload
                 await waitForPageReady(page)
             }
 

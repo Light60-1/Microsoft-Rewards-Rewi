@@ -484,8 +484,9 @@ export class Login {
     await this.inputEmail(page, email)
 
     // Step 2: Wait for transition to password page (silent - no spam)
+    // FIXED: Use timeoutMs parameter with 10s timeout
     await waitForPageReady(page, {
-      networkIdleMs: 500
+      timeoutMs: 10000
     })
 
     const passwordPageReached = await LoginStateDetector.waitForAnyState(
@@ -544,6 +545,7 @@ export class Login {
   // --------------- Input Steps ---------------
   private async inputEmail(page: Page, email: string) {
     // IMPROVED: Smart page readiness check (silent - no spam logs)
+    // Using default 10s timeout
     const readyResult = await waitForPageReady(page)
 
     // Only log if REALLY slow (>5s indicates a problem)
@@ -586,7 +588,7 @@ export class Login {
       if (content.length < 1000) {
         this.bot.log(this.bot.isMobile, 'LOGIN', 'Reloading page...', 'warn')
         await page.reload({ waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => { })
-        await waitForPageReady(page) // Silent
+        await waitForPageReady(page) // Silent - using default 10s timeout
       }
 
       const totpRetry = await this.tryAutoTotp(page, 'pre-email retry')

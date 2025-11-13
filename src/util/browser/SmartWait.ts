@@ -52,21 +52,23 @@ export async function waitForNetworkIdle(
 /**
  * Wait for page to be truly ready (network idle + DOM ready)
  * Much faster than waitForLoadState with fixed timeouts
+ * 
+ * FIXED: Properly wait for network idle state with adequate timeout
  */
 export async function waitForPageReady(
     page: Page,
     options: {
-        networkIdleMs?: number
+        timeoutMs?: number
         logFn?: (msg: string) => void
     } = {}
 ): Promise<{ ready: boolean; timeMs: number }> {
     const startTime = Date.now()
-    const networkIdleMs = options.networkIdleMs ?? 500 // Network quiet for 500ms
+    const timeoutMs = options.timeoutMs ?? 10000 // FIXED: 10s timeout for network idle
     const logFn = options.logFn ?? (() => { })
 
     try {
         // Step 1: Wait for DOM ready (fast)
-        await page.waitForLoadState('domcontentloaded', { timeout: 3000 }).catch(() => {
+        await page.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => {
             logFn('DOM load timeout, continuing...')
         })
 
@@ -82,9 +84,10 @@ export async function waitForPageReady(
             return { ready: true, timeMs: elapsed }
         }
 
-        // Step 3: Wait for network idle with adaptive polling
-        await page.waitForLoadState('networkidle', { timeout: networkIdleMs }).catch(() => {
-            logFn('Network idle timeout (expected), page may still be usable')
+        // Step 3: Wait for network idle with proper timeout (not duration)
+        // FIXED: Use timeoutMs as the maximum wait time for networkidle state
+        await page.waitForLoadState('networkidle', { timeout: timeoutMs }).catch(() => {
+            logFn(`Network idle timeout after ${timeoutMs}ms (expected), page may still be usable`)
         })
 
         const elapsed = Date.now() - startTime
