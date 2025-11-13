@@ -136,7 +136,14 @@ export class MobileFlow {
                     // Go to homepage on worker page
                     await this.bot.browser.func.goHome(workerPage)
 
-                    await this.bot.activities.doSearch(workerPage, data)
+                    // IMPROVED: Add error handling for mobile search to prevent flow termination
+                    try {
+                        await this.bot.activities.doSearch(workerPage, data)
+                    } catch (searchError) {
+                        const errorMsg = searchError instanceof Error ? searchError.message : String(searchError)
+                        this.bot.log(true, 'MOBILE-FLOW', `Mobile search failed: ${errorMsg}`, 'error')
+                        // Continue execution - let retry logic handle it below
+                    }
 
                     // Fetch current search points
                     const mobileSearchPoints = (await this.bot.browser.func.getSearchPoints()).mobileSearch?.[0]

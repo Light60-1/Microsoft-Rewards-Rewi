@@ -179,18 +179,51 @@ export default class BrowserUtil {
 
             const browser = page.context()
             const pages = browser.pages()
+
+            // IMPROVED: If no pages exist, create a new one instead of throwing error
+            if (pages.length === 0) {
+                this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'No pages found in context, creating new page', 'warn')
+                const newPage = await browser.newPage()
+                await this.bot.utils.wait(500)
+                return newPage
+            }
+
             const newTab = pages[pages.length - 1]
 
-            if (newTab) {
+            // IMPROVED: Verify the page is not closed before returning
+            if (newTab && !newTab.isClosed()) {
                 return newTab
             }
 
-            this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'Unable to get latest tab', 'error')
-            throw new Error('Unable to get latest tab - no pages found in browser context')
+            // IMPROVED: If latest tab is closed, find first non-closed tab or create new one
+            const openPage = pages.find(p => !p.isClosed())
+            if (openPage) {
+                this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'Latest tab was closed, using first available open tab')
+                return openPage
+            }
+
+            // IMPROVED: Last resort - create new page
+            this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'All tabs were closed, creating new page', 'warn')
+            const newPage = await browser.newPage()
+            await this.bot.utils.wait(500)
+            return newPage
+
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error)
-            this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'An error occurred: ' + errorMessage, 'error')
-            throw new Error('Get new tab failed: ' + errorMessage)
+            this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'Critical error in getLatestTab: ' + errorMessage, 'error')
+
+            // IMPROVED: Try one more time to create a new page as absolute last resort
+            try {
+                const browser = page.context()
+                this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'Attempting recovery by creating new page', 'warn')
+                const recoveryPage = await browser.newPage()
+                await this.bot.utils.wait(500)
+                return recoveryPage
+            } catch (recoveryError) {
+                const recoveryMsg = recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
+                this.bot.log(this.bot.isMobile, 'GET-NEW-TAB', 'Recovery failed: ' + recoveryMsg, 'error')
+                throw new Error('Get new tab failed and recovery unsuccessful: ' + errorMessage)
+            }
         }
     }
 

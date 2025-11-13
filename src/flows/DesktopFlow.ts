@@ -124,7 +124,14 @@ export class DesktopFlow {
 
             // Do desktop searches
             if (this.bot.config.workers.doDesktopSearch) {
-                await this.bot.activities.doSearch(workerPage, data)
+                try {
+                    await this.bot.activities.doSearch(workerPage, data)
+                } catch (searchError) {
+                    const errorMsg = searchError instanceof Error ? searchError.message : String(searchError)
+                    this.bot.log(false, 'DESKTOP-FLOW', `Desktop search failed: ${errorMsg}`, 'error')
+                    // IMPROVED: Don't throw - continue with other tasks, just log the error
+                    // User will see reduced points but flow completes
+                }
             }
 
             // Fetch points BEFORE closing (avoid page closed reload error)

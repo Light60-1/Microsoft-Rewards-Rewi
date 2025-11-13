@@ -1,4 +1,6 @@
 import axios from 'axios'
+import fs from 'fs'
+import path from 'path'
 import { DISCORD } from '../../constants'
 import { Config } from '../../interface/Config'
 
@@ -188,40 +190,49 @@ export async function sendErrorReport(
             Object.assign(payload.context, sanitizedContext)
         }
 
-        // Build Discord embed
+        // Build Discord embed with improved formatting
         const embed = {
             title: '🐛 Automatic Error Report',
-            description: `\`\`\`\n${sanitizedMessage.slice(0, 500)}\n\`\`\``,
+            description: `\`\`\`js\n${sanitizedMessage.slice(0, 700)}\n\`\`\``,
             color: DISCORD.COLOR_RED,
             fields: [
                 {
                     name: '📦 Version',
-                    value: payload.context.version,
+                    value: payload.context.version === 'unknown' ? '⚠️ Unknown (check package.json)' : `v${payload.context.version}`,
                     inline: true
                 },
                 {
                     name: '💻 Platform',
-                    value: `${payload.context.platform} (${payload.context.arch})`,
+                    value: `${payload.context.platform} ${payload.context.arch}`,
                     inline: true
                 },
                 {
                     name: '⚙️ Node.js',
                     value: payload.context.nodeVersion,
                     inline: true
+                },
+                {
+                    name: '🕐 Timestamp',
+                    value: new Date(payload.context.timestamp).toLocaleString('en-US', { timeZone: 'UTC', timeZoneName: 'short' }),
+                    inline: false
                 }
             ],
             timestamp: payload.context.timestamp,
             footer: {
-                text: 'Automatic error reporting - Thank you for contributing!',
+                text: 'Automatic error reporting • Non-sensitive data only',
                 icon_url: DISCORD.AVATAR_URL
             }
         }
 
-        // Add stack trace field if available (truncated)
+        // Add stack trace field if available (truncated to fit Discord limits)
         if (sanitizedStack) {
+            // Limit to 900 chars to leave room for backticks and formatting
+            const truncated = sanitizedStack.slice(0, 900)
+            const wasTruncated = sanitizedStack.length > 900
+
             embed.fields.push({
-                name: '📋 Stack Trace (truncated)',
-                value: `\`\`\`\n${sanitizedStack.slice(0, 800)}\n\`\`\``,
+                name: '📋 Stack Trace' + (wasTruncated ? ' (truncated for display)' : ''),
+                value: `\`\`\`js\n${truncated}${wasTruncated ? '\n... (see full trace in logs)' : ''}\n\`\`\``,
                 inline: false
             })
         }
@@ -262,13 +273,33 @@ export async function sendErrorReport(
 
 /**
  * Get project version from package.json
+ * FIXED: Use path.join to correctly resolve package.json location in both dev and production
  */
 function getProjectVersion(): string {
     try {
-        // Dynamic import for package.json
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const packageJson = require('../../package.json') as { version?: string }
-        return packageJson.version || 'unknown'
+        // Try multiple possible paths (dev and compiled)
+        const possiblePaths = [
+            path.join(__dirname, '../../../package.json'),  // From dist/util/notifications/
+            path.join(__dirname, '../../package.json'),     // From src/util/notifications/
+            path.join(process.cwd(), 'package.json')        // From project root
+        ]
+
+        for (const pkgPath of possiblePaths) {
+            try {
+                if (fs.existsSync(pkgPath)) {
+                    const raw = fs.readFileSync(pkgPath, 'utf-8')
+                    const pkg = JSON.parse(raw) as { version?: string }
+                    if (pkg.version) {
+                        return pkg.version
+                    }
+                }
+            } catch {
+                // Try next path
+                continue
+            }
+        }
+
+        return 'unknown'
     } catch {
         return 'unknown'
     }

@@ -28,7 +28,14 @@ export class Search extends Workers {
     public async doSearch(page: Page, data: DashboardData) {
         this.bot.log(this.bot.isMobile, 'SEARCH-BING', 'Starting Bing searches')
 
-        page = await this.bot.browser.utils.getLatestTab(page)
+        // IMPROVED: Add error handling for getLatestTab to prevent early flow failure
+        try {
+            page = await this.bot.browser.utils.getLatestTab(page)
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error)
+            this.bot.log(this.bot.isMobile, 'SEARCH-BING', `Failed to get latest tab: ${errorMsg}`, 'error')
+            throw new Error(`Cannot start search - tab retrieval failed: ${errorMsg}`)
+        }
 
         let searchCounters: Counters = await this.bot.browser.func.getSearchPoints()
         let missingPoints = this.calculatePoints(searchCounters)
