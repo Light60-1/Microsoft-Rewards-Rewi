@@ -212,8 +212,28 @@ export default class BrowserFunc {
                         logFn: (msg) => this.bot.log(this.bot.isMobile, 'GO-HOME', msg, 'log')
                     })
                 } else {
-                    this.bot.log(this.bot.isMobile, 'GO-HOME', 'Visited homepage successfully')
-                    break
+                    // FIXED: We're on the right URL but activities not found - force page reload to trigger DOM re-render
+                    // This fixes the issue where Tyler needs to manually refresh to see activities
+                    this.bot.log(this.bot.isMobile, 'GO-HOME', 'On correct URL but activities missing - forcing page reload to trigger DOM render', 'warn')
+
+                    try {
+                        await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 })
+                        await waitForPageReady(page, {
+                            timeoutMs: 10000,
+                            logFn: (msg) => this.bot.log(this.bot.isMobile, 'GO-HOME', msg, 'log')
+                        })
+
+                        // Try scrolling to force lazy-loaded elements to render
+                        await page.evaluate(() => {
+                            window.scrollTo(0, 200)
+                            window.scrollTo(0, 0)
+                        })
+
+                        await this.bot.utils.wait(1000)
+                    } catch (reloadError) {
+                        const reloadMsg = reloadError instanceof Error ? reloadError.message : String(reloadError)
+                        this.bot.log(this.bot.isMobile, 'GO-HOME', `Page reload failed: ${reloadMsg}`, 'warn')
+                    }
                 }
 
                 await this.bot.utils.wait(2000)
