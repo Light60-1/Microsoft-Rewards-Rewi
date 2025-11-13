@@ -1051,7 +1051,20 @@ async function main(): Promise<void> {
 
             // Check if scheduling is enabled
             if (config.scheduling?.enabled) {
-                // Initialize scheduler
+                // IMPROVED: Run tasks immediately first, THEN start scheduler for future runs
+                // This ensures "npm start" always executes tasks right away instead of waiting until next scheduled time
+                log('main', 'MAIN', 'Scheduling enabled - executing immediate run, then activating scheduler', 'log', 'cyan')
+
+                try {
+                    await rewardsBot.initialize()
+                    await rewardsBot.run()
+                    log('main', 'MAIN', '✓ Initial run completed successfully', 'log', 'green')
+                } catch (error) {
+                    log('main', 'MAIN', `Initial run failed: ${error instanceof Error ? error.message : String(error)}`, 'error')
+                    // Continue to scheduler activation even if initial run fails
+                }
+
+                // Initialize scheduler for future runs
                 scheduler = new InternalScheduler(config, async () => {
                     try {
                         await rewardsBot.initialize()
@@ -1070,13 +1083,14 @@ async function main(): Promise<void> {
                     // Keep process alive - scheduler handles execution
                     return
                 } else {
-                    log('main', 'MAIN', 'Scheduler failed to start. Running one-time execution instead.', 'warn')
+                    log('main', 'MAIN', 'Scheduler failed to start. Exiting after one-time execution.', 'warn')
                     scheduler = null
-                    // Continue with one-time execution below
+                    // Already ran once above, so just exit
+                    return
                 }
             }
 
-            // One-time execution (scheduling disabled or failed to start)
+            // One-time execution (scheduling disabled)
             await rewardsBot.initialize()
             await rewardsBot.run()
         } catch (e) {
