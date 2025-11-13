@@ -677,46 +677,64 @@ export class StartupValidator {
 
   private async displayResults(): Promise<void> {
     if (this.errors.length > 0) {
-      log('main', 'VALIDATION', chalk.red('❌ VALIDATION ERRORS FOUND:'), 'error')
+      console.log('')
+      console.log(chalk.red('  ╔═══════════════════════════════════════════════════════╗'))
+      console.log(chalk.red('  ║            VALIDATION ERRORS FOUND                    ║'))
+      console.log(chalk.red('  ╚═══════════════════════════════════════════════════════╝'))
+      console.log('')
+
       this.errors.forEach((err, index) => {
-        log('main', 'VALIDATION', chalk.red(`${index + 1}. [${err.category.toUpperCase()}] ${err.message}`), 'error')
+        const blocking = err.blocking ? chalk.red.bold(' [BLOCKING]') : ''
+        console.log(chalk.red(`  ${index + 1}. `) + chalk.white(`[${err.category.toUpperCase()}]`) + blocking)
+        console.log(chalk.gray('     ') + err.message)
         if (err.fix) {
-          log('main', 'VALIDATION', chalk.yellow(`   Fix: ${err.fix}`), 'warn')
+          console.log(chalk.yellow('     Fix: ') + chalk.white(err.fix))
         }
         if (err.docsLink) {
-          log('main', 'VALIDATION', `   Docs: ${err.docsLink}`)
+          console.log(chalk.cyan('     Docs: ') + chalk.underline(err.docsLink))
         }
+        console.log('')
       })
     }
 
     if (this.warnings.length > 0) {
-      log('main', 'VALIDATION', chalk.yellow('⚠️ WARNINGS:'), 'warn')
+      console.log('')
+      console.log(chalk.yellow('  ╔═══════════════════════════════════════════════════════╗'))
+      console.log(chalk.yellow('  ║                    WARNINGS                           ║'))
+      console.log(chalk.yellow('  ╚═══════════════════════════════════════════════════════╝'))
+      console.log('')
+
       this.warnings.forEach((warn, index) => {
-        log('main', 'VALIDATION', chalk.yellow(`${index + 1}. [${warn.category.toUpperCase()}] ${warn.message}`), 'warn')
+        console.log(chalk.yellow(`  ${index + 1}. `) + chalk.white(`[${warn.category.toUpperCase()}]`))
+        console.log(chalk.gray('     ') + warn.message)
         if (warn.fix) {
-          log('main', 'VALIDATION', `   Suggestion: ${warn.fix}`)
+          console.log(chalk.cyan('     Suggestion: ') + chalk.white(warn.fix))
         }
         if (warn.docsLink) {
-          log('main', 'VALIDATION', `   Docs: ${warn.docsLink}`)
+          console.log(chalk.cyan('     Docs: ') + chalk.underline(warn.docsLink))
         }
+        console.log('')
       })
     }
 
     if (this.errors.length === 0 && this.warnings.length === 0) {
-      log('main', 'VALIDATION', chalk.green('✅ All validation checks passed!'))
-    } else {
-      const errorLabel = this.errors.length === 1 ? 'error' : 'errors'
-      const warningLabel = this.warnings.length === 1 ? 'warning' : 'warnings'
-      log('main', 'VALIDATION', `[${this.errors.length > 0 ? 'ERROR' : 'OK'}] Found: ${this.errors.length} ${errorLabel} | ${this.warnings.length} ${warningLabel}`)
+      console.log('')
+      console.log(chalk.green('  ╔═══════════════════════════════════════════════════════╗'))
+      console.log(chalk.green('  ║        ✓ All validation checks passed!                ║'))
+      console.log(chalk.green('  ╚═══════════════════════════════════════════════════════╝'))
+      console.log('')
+    }
 
-      if (this.errors.length > 0) {
-        log('main', 'VALIDATION', 'Bot will continue, but issues may cause failures', 'warn')
-        log('main', 'VALIDATION', 'Full documentation: docs/index.md')
-        await new Promise(resolve => setTimeout(resolve, 3000))
-      } else if (this.warnings.length > 0) {
-        log('main', 'VALIDATION', 'Warnings detected - review recommended', 'warn')
-        await new Promise(resolve => setTimeout(resolve, 2000))
-      }
+    // Add delay if errors or warnings were found
+    if (this.errors.length > 0) {
+      console.log(chalk.gray('  → Bot will continue, but issues may cause failures'))
+      console.log(chalk.gray('  → Full documentation: docs/index.md'))
+      console.log('')
+      await new Promise(resolve => setTimeout(resolve, 3000))
+    } else if (this.warnings.length > 0) {
+      console.log(chalk.gray('  → Warnings detected - review recommended'))
+      console.log('')
+      await new Promise(resolve => setTimeout(resolve, 2000))
     }
   }
 }

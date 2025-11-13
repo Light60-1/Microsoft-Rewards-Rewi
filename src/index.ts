@@ -1,4 +1,5 @@
-﻿import { spawn } from 'child_process'
+﻿import chalk from 'chalk'
+import { spawn } from 'child_process'
 import type { Worker } from 'cluster'
 import cluster from 'cluster'
 import fs from 'fs'
@@ -227,8 +228,20 @@ export class MicrosoftRewardsBot {
 
         const version = this.getVersion()
 
-        log('main', 'BANNER', `Microsoft Rewards Bot v${version}`)
-        log('main', 'BANNER', `PID: ${process.pid} | Workers: ${this.config.clusters}`)
+        // ASCII-safe banner for Windows PowerShell compatibility
+        console.log('')
+        console.log(chalk.cyan('  ================================================'))
+        console.log(chalk.cyan('           Microsoft Rewards Bot'))
+        console.log(chalk.cyan('  ================================================'))
+        console.log('')
+        console.log(chalk.gray('  Version:       ') + chalk.white(`v${version}`))
+        console.log(chalk.gray('  Process ID:    ') + chalk.white(process.pid))
+        console.log(chalk.gray('  Workers:       ') + chalk.white(this.config.clusters))
+        console.log(chalk.gray('  Node.js:       ') + chalk.white(process.version))
+        console.log(chalk.gray('  Platform:      ') + chalk.white(`${process.platform} ${process.arch}`))
+        console.log('')
+        console.log(chalk.cyan('  ================================================'))
+        console.log('')
     }
 
     private getVersion(): string {

@@ -60,17 +60,26 @@ export class SummaryReporter {
                     ? `${minutes}m ${seconds}s`
                     : `${seconds}s`
 
-            let description = `**Duration:** ${durationText}\n**Total Points:** ${summary.totalPoints}\n**Success:** ${summary.successCount}/${summary.accounts.length}\n\n`
+            let description = `╔════════════════════════════════════════╗\n`
+            description += `║          Daily Run Summary             ║\n`
+            description += `╚════════════════════════════════════════╝\n\n`
+            description += `⏱️ **Duration:** ${durationText}\n`
+            description += `💰 **Total Points:** ${summary.totalPoints}\n`
+            description += `✅ **Success Rate:** ${summary.successCount}/${summary.accounts.length} accounts\n\n`
 
-            // Add individual account results
-            description += '**Account Results:**\n'
+            // Add individual account results with better formatting
+            description += `📊 **Detailed Results:**\n`
+            description += `${'─'.repeat(45)}\n`
             for (const account of summary.accounts) {
                 const status = account.errors?.length ? '❌' : '✅'
-                description += `${status} ${account.email}: ${account.pointsEarned} points (${Math.round(account.runDuration / 1000)}s)\n`
+                const emailShort = account.email.length > 25 ? account.email.substring(0, 22) + '...' : account.email
+                description += `${status} \`${emailShort}\`\n`
+                description += `   💎 Points: **${account.pointsEarned}** | ⏱️ Time: ${Math.round(account.runDuration / 1000)}s\n`
 
                 if (account.errors?.length) {
-                    description += `   ⚠️ ${account.errors[0]}\n`
+                    description += `   ⚠️ Error: *${account.errors[0]}*\n`
                 }
+                description += `\n`
             }
 
             await ConclusionWebhook(
