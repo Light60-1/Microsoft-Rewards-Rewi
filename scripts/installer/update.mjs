@@ -571,8 +571,9 @@ async function performUpdate() {
   }
   process.stdout.write(' ✓\n')
 
-  process.stdout.write('🔨 Building project...')
-  const buildCode = await run('npm', ['run', 'build'], { stdio: 'ignore' })
+  // FIXED: Show build output to detect TypeScript errors and verify compilation
+  process.stdout.write('🔨 Building project...\n')
+  const buildCode = await run('npm', ['run', 'build'], { stdio: 'inherit' })
 
   if (buildCode !== 0) {
     // Build failed - rollback
@@ -603,7 +604,7 @@ async function performUpdate() {
 
   process.stdout.write(' ✓\n')
 
-  // Step 11: Verify integrity (check if critical files exist)
+  // Step 11: Verify integrity (check if critical files exist AND were recently updated)
   process.stdout.write('🔍 Verifying integrity...')
   const criticalPaths = [
     'dist/index.js',
@@ -612,10 +613,30 @@ async function performUpdate() {
   ]
 
   let integrityOk = true
+  const buildTime = Date.now()
+
   for (const path of criticalPaths) {
-    if (!existsSync(join(process.cwd(), path))) {
+    const fullPath = join(process.cwd(), path)
+    if (!existsSync(fullPath)) {
+      console.log(`\n   ❌ Missing: ${path}`)
       integrityOk = false
       break
+    }
+
+    // IMPROVED: For compiled files, verify they were recently updated (within last 2 minutes)
+    if (path.startsWith('dist/')) {
+      try {
+        const stats = statSync(fullPath)
+        const fileAge = buildTime - stats.mtimeMs
+        if (fileAge > 120000) { // 2 minutes
+          console.log(`\n   ⚠️  ${path} not recently updated (${Math.round(fileAge / 1000)}s old)`)
+          integrityOk = false
+          break
+        }
+      } catch {
+        integrityOk = false
+        break
+      }
     }
   }
 

@@ -2,6 +2,29 @@
 
 This guide explains all available npm commands and when to use them.
 
+## ⚡ **NEW - Ultimate Command** (v2.60.0)
+
+### `npm run go` ⭐
+**THE simplest way to run the bot** - Does EVERYTHING automatically!
+
+```bash
+npm install    # Install dependencies (first time only)
+npm run go     # Does EVERYTHING else!
+```
+
+**What it does:**
+1. ✅ Checks if Chromium browser is installed → Installs if missing
+2. ✅ Checks if project is built (`dist/`) → Builds if missing
+3. ✅ Starts the bot immediately
+
+**When to use:**
+- **First time setup** (after `npm install`)
+- **After git pull** (ensures browser + build are ready)
+- **Daily use** (simplest command)
+- **When unsure** (it checks everything!)
+
+---
+
 ## 🚀 Essential Commands
 
 ### `npm start`

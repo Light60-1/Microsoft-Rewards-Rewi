@@ -8,7 +8,7 @@
 
 [![Discord](https://img.shields.io/badge/💬_Discord-7289DA?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/k5uHkx9mne) 
 [![GitHub](https://img.shields.io/badge/⭐_Star-yellow?style=for-the-badge&logo=github&logoColor=black)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot)
-[![Version](https://img.shields.io/badge/v2.56.3-blue?style=for-the-badge)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/releases)
+[![Version](https://img.shields.io/badge/v2.60.0-blue?style=for-the-badge)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/releases)
 
 </div>
 
@@ -60,6 +60,126 @@ npm run setup
 ```
 
 **That's it!** The wizard will guide you through account setup and start earning points.
+
+---
+
+## 🎮 Essential Commands
+
+Here are the most useful commands for daily usage:
+
+### **🚀 Main Commands**
+
+| Command | Description |
+|---------|-------------|
+| `npm run go` | **⭐ Ultimate command** — Installs browser if needed, builds, and starts the bot |
+| `npm start` | **Quick start** — Runs the bot (builds automatically if needed) |
+| `npm run setup` | **Interactive wizard** — Guides you through initial setup |
+| `npm run dev` | **Development mode** — Watch mode with auto-reload |
+
+### **🔧 Build & Maintenance**
+
+| Command | Description |
+|---------|-------------|
+| `npm run build` | Compile TypeScript to JavaScript (`dist/` folder) |
+| `npm run typecheck` | Check TypeScript errors without building |
+| `npm run clean` | Remove build artifacts (`dist/` folder) |
+| `npm run install:browser` | Install Playwright Chromium (smart: only installs once) |
+
+### **🎯 Specialized Tools**
+
+| Command | Description |
+|---------|-------------|
+| `npm run dashboard` | Start web dashboard on `http://localhost:3000` |
+| `npm run creator` | Launch account creation wizard |
+| `npm run test` | Run test suite |
+
+### **💡 Quick Recipes**
+
+```bash
+# First time setup
+npm run go
+
+# Daily usage (after first setup)
+npm start
+
+# Create new accounts
+npm run creator -- -y backup@gmail.com https://rewards.bing.com/welcome?rh=CODE
+
+# Monitor with dashboard
+npm run dashboard
+# Then open http://localhost:3000 in your browser
+
+# Fix issues / rebuild
+npm run clean ; npm run build
+```
+
+**📖 [Complete Commands Reference →](docs/commands.md)**
+
+---
+
+## 🔄 Typical Workflows
+
+### **First-Time Setup** (New User)
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Run the ultimate setup command
+npm run go
+# This will guide you through account setup, install browser, build, and start!
+```
+
+### **Daily Usage** (Regular User)
+```bash
+# Just start the bot - it builds automatically if needed
+npm start
+```
+
+Or use the ultimate command if you want to be extra safe:
+```bash
+npm run go
+```
+
+### **After Git Pull** (Updating the Bot)
+```bash
+# Quick method (recommended)
+npm run go
+
+# Or manual method
+npm install          # Update dependencies (if package.json changed)
+npm run build       # Rebuild if code changed
+npm start           # Run
+```
+
+### **Creating New Accounts**
+```bash
+# Interactive mode (asks everything)
+npm run creator
+
+# Quick mode with recovery email + referral
+npm run creator -- -y backup@gmail.com https://rewards.bing.com/welcome?rh=CODE
+```
+
+### **Troubleshooting** (When Things Break)
+```bash
+# Clean rebuild
+npm run clean
+npm run build
+
+# Or full reset
+rm -rf node_modules dist
+npm install
+npm run go
+```
+
+### **Monitoring** (Check Status)
+```bash
+# Start web dashboard
+npm run dashboard
+# Then open http://localhost:3000
+```
+
+---
 
 ### 📖 Need Help?
 
@@ -311,6 +431,73 @@ All while maintaining **natural behavior patterns** to minimize detection risk.
 ## ✅ Tests
 
 - `npm run test`: runs the node:test suite with ts-node to validate critical utilities.
+
+---
+
+## 🔧 Common Issues & Quick Fixes
+
+### **"Error: Cannot find module"**
+```bash
+# Solution: Rebuild the project
+npm run clean
+npm run build
+npm start
+```
+
+### **"Browser executable not found"**
+```bash
+# Solution: Install Chromium browser
+npm run install:browser
+# Or use the ultimate command
+npm run go
+```
+
+### **"Account credentials invalid"**
+- ✅ Check `src/accounts.jsonc` has correct email/password
+- ✅ If 2FA enabled, verify `totp` field has correct secret
+- ✅ Test manual login at https://login.live.com/
+
+### **"Bot hangs or freezes"**
+```bash
+# Windows: Kill stuck Chrome processes
+npm run kill-chrome-win
+
+# Then restart
+npm start
+```
+
+### **"TypeScript compilation errors"**
+```bash
+# Check errors without building
+npm run typecheck
+
+# Full rebuild
+npm run clean
+npm install
+npm run build
+```
+
+### **"Chromium keeps reinstalling on every build"**
+This is now fixed in v2.60.0! The bot creates a `.playwright-chromium-installed` marker file to prevent unnecessary reinstallations.
+
+If it still happens:
+```bash
+# Manually create the marker file
+touch .playwright-chromium-installed  # Mac/Linux
+New-Item -Path .playwright-chromium-installed -ItemType File  # Windows PowerShell
+```
+
+### **"Update system not working"**
+```bash
+# Manually check for updates
+npm run build
+# Watch the output for any TypeScript errors
+```
+
+### **"Scheduler not running immediately"**
+This is fixed in v2.60.0! The bot now runs tasks immediately on startup before activating the schedule.
+
+**[📖 Complete Troubleshooting Guide →](docs/troubleshooting.md)**
 
 ---
 

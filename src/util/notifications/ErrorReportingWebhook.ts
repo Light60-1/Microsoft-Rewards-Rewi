@@ -13,6 +13,7 @@ interface ErrorReportPayload {
         arch: string
         nodeVersion: string
         timestamp: string
+        botMode?: string  // DESKTOP, MOBILE, or MAIN
     }
 }
 
@@ -173,7 +174,9 @@ export async function sendErrorReport(
                 platform: process.platform,
                 arch: process.arch,
                 nodeVersion: process.version,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                // IMPROVED: Extract bot mode from additionalContext before sanitization
+                botMode: (additionalContext?.platform as string) || 'UNKNOWN'
             }
         }
 
@@ -190,6 +193,27 @@ export async function sendErrorReport(
             Object.assign(payload.context, sanitizedContext)
         }
 
+        // Detect Docker environment
+        const isDockerEnv = (() => {
+            try {
+                return fs.existsSync('/.dockerenv') ||
+                    (fs.existsSync('/proc/1/cgroup') && fs.readFileSync('/proc/1/cgroup', 'utf8').includes('docker'))
+            } catch {
+                return false
+            }
+        })()
+
+        // Format OS platform display
+        const osPlatform = (() => {
+            if (isDockerEnv) return '🐳 Docker'
+            switch (payload.context.platform) {
+                case 'win32': return '🪟 Windows'
+                case 'darwin': return '🍎 macOS'
+                case 'linux': return '🐧 Linux'
+                default: return payload.context.platform
+            }
+        })()
+
         // Build Discord embed with improved formatting
         const embed = {
             title: '🐛 Automatic Error Report',
@@ -202,8 +226,13 @@ export async function sendErrorReport(
                     inline: true
                 },
                 {
-                    name: '💻 Platform',
-                    value: `${payload.context.platform} ${payload.context.arch}`,
+                    name: '🤖 Bot Mode',
+                    value: payload.context.botMode || 'UNKNOWN',
+                    inline: true
+                },
+                {
+                    name: '💻 OS Platform',
+                    value: `${osPlatform} ${payload.context.arch}`,
                     inline: true
                 },
                 {
