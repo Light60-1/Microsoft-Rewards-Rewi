@@ -89,11 +89,17 @@ export default class BrowserFunc {
                 this.bot.log(this.bot.isMobile, 'GO-HOME', `Page took ${readyResult.timeMs}ms to be ready (slow)`, 'warn')
             }
 
-            // IMPROVED: Wait for Custom Elements to be registered
+            // IMPROVED: Wait for Custom Elements to be registered with proper timeout handling
+            // FIXED: Use Promise.race to enforce actual 5s timeout (Playwright's timeout doesn't work with customElements.whenDefined)
             try {
-                await page.evaluate(() => customElements.whenDefined('mee-card-group'), { timeout: 5000 })
+                await Promise.race([
+                    page.evaluate(() => customElements.whenDefined('mee-card-group')),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Custom element timeout')), 5000))
+                ])
             } catch (error) {
-                this.bot.log(this.bot.isMobile, 'GO-HOME', 'mee-card-group custom element not registered within 5s', 'warn')
+                // FIXED: Silent fallback - custom element registration is best-effort, not critical
+                // If it times out, we proceed with activities detection anyway
+                this.bot.log(this.bot.isMobile, 'GO-HOME', 'mee-card-group custom element not registered within 5s (non-critical)', 'log')
             }
 
             for (let iteration = 1; iteration <= RETRY_LIMITS.GO_HOME_MAX; iteration++) {
