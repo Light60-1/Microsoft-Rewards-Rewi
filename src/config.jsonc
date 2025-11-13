@@ -104,7 +104,7 @@
     // === NOTIFICATIONS ===
     // See docs/notifications.md for details
     "webhook": {
-        "enabled": true,
+        "enabled": false,
         "url": ""
     },
     "conclusionWebhook": {
@@ -142,7 +142,7 @@
     // The bot will run once per day at the time you specify
     // Time is based on YOUR computer/server timezone (automatically detected)
     "scheduling": {
-        "enabled": true, // Set to true to enable automatic daily runs
+        "enabled": false, // Set to true to enable automatic daily runs
         "time": "09:00" // Time in 24h format (HH:MM) - e.g., "09:00" = 9 AM, "21:30" = 9:30 PM
     },
     // === UPDATES ===
