@@ -134,9 +134,7 @@ export async function waitForElementSmart(
         return { found: true, timeMs: elapsed, element }
 
     } catch (firstError) {
-        // Element not found quickly - try extended wait
-        logFn('Element not immediate, extending timeout...')
-
+        // Element not found quickly - try extended wait (silent until result known)
         try {
             const element = page.locator(selector)
             await element.waitFor({ state, timeout: extendedTimeoutMs })
@@ -147,8 +145,8 @@ export async function waitForElementSmart(
 
         } catch (extendedError) {
             const elapsed = Date.now() - startTime
-            const errorMsg = extendedError instanceof Error ? extendedError.message : String(extendedError)
-            logFn(`✗ Element not found after ${elapsed}ms: ${errorMsg}`)
+            // IMPROVED: Concise failure message without full Playwright error stack
+            logFn(`Element not found after ${elapsed}ms (expected if activity unavailable)`)
             return { found: false, timeMs: elapsed, element: null }
         }
     }

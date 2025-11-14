@@ -248,16 +248,16 @@ export class Workers {
     private async executeActivity(page: Page, activity: PromotionalItem | MorePromotion, selector: string, throttle: AdaptiveThrottler, retry: Retry): Promise<void> {
         this.bot.log(this.bot.isMobile, 'ACTIVITY', `Found activity type: "${this.bot.activities.getTypeLabel(activity)}" title: "${activity.title}"`)
 
-        // IMPROVED: Smart wait replaces fixed 5s timeout with adaptive 2s+5s detection
+        // IMPROVED: Fast-fail for unavailable activities (1s+3s instead of 2s+5s)
         const elementResult = await waitForElementSmart(page, selector, {
-            initialTimeoutMs: 2000,
-            extendedTimeoutMs: TIMEOUTS.NETWORK_IDLE,
+            initialTimeoutMs: 1000,
+            extendedTimeoutMs: 3000,
             state: 'attached',
             logFn: (msg) => this.bot.log(this.bot.isMobile, 'ACTIVITY', msg)
         })
 
         if (!elementResult.found) {
-            this.bot.log(this.bot.isMobile, 'ACTIVITY', `Activity selector not found (might be completed or unavailable): ${selector}`, 'warn')
+            this.bot.log(this.bot.isMobile, 'ACTIVITY', `[SKIP] Activity not available: "${activity.title}" (already completed or not offered today)`)
             return // Skip this activity gracefully
         }
 
