@@ -362,9 +362,11 @@ export class Login {
       if (!e || typeof e !== 'object') return false
       const err = e as { response?: { status?: number }; code?: string }
       const status = err.response?.status
-      return status === 502 || status === 503 || status === 504 ||
+      // IMPROVED: More comprehensive retry conditions for OAuth token exchange
+      return status === 502 || status === 503 || status === 504 || status === 429 ||
         err.code === 'ECONNRESET' ||
-        err.code === 'ETIMEDOUT'
+        err.code === 'ETIMEDOUT' ||
+        err.code === 'ECONNREFUSED'
     }
 
     const req: AxiosRequestConfig = {
@@ -374,7 +376,15 @@ export class Login {
       data: form.toString()
     }
 
-    const retry = new Retry(this.bot.config.retryPolicy)
+    // IMPROVED: Use more aggressive retry policy for OAuth token exchange (critical operation)
+    const oauthRetryPolicy = {
+      maxAttempts: 5,           // Increased from default 3
+      baseDelay: 2000,          // Increased from default 1000ms
+      maxDelay: 60000,          // 60 seconds max delay
+      multiplier: 2,
+      jitter: 0.3               // More jitter to avoid thundering herd
+    }
+    const retry = new Retry(oauthRetryPolicy)
     try {
       const resp = await retry.run(
         () => this.bot.axios.request(req),
@@ -390,11 +400,11 @@ export class Login {
       const statusCode = err.response?.status
       const errMsg = err.message || String(error)
       if (statusCode) {
-        this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Token exchange failed with status ${statusCode}: ${errMsg}`, 'error')
+        this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Token exchange failed after ${oauthRetryPolicy.maxAttempts} retries with status ${statusCode}: ${errMsg}`, 'error')
       } else {
-        this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Token exchange failed (network error): ${errMsg}`, 'error')
+        this.bot.log(this.bot.isMobile, 'LOGIN-APP', `Token exchange failed after ${oauthRetryPolicy.maxAttempts} retries (network error): ${errMsg}`, 'error')
       }
-      throw error
+      throw new Error(`OAuth token exchange failed: ${statusCode ? `HTTP ${statusCode}` : 'Network error'} - ${errMsg}`)
     } finally {
       // Always cleanup compromised interval to prevent memory leaks
       this.cleanupCompromisedInterval()

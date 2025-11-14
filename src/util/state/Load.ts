@@ -393,7 +393,7 @@ export function loadAccounts(): Account[] {
         const enabledAccounts = allAccounts.filter(acc => acc.enabled !== false)
         return enabledAccounts
     } catch (error) {
-        throw new Error(error as string)
+        throw new Error(`Failed to load accounts: ${error instanceof Error ? error.message : String(error)}`)
     }
 }
 
@@ -443,7 +443,7 @@ export function loadConfig(): Config {
 
         return normalized
     } catch (error) {
-        throw new Error(error as string)
+        throw new Error(`Failed to load config: ${error instanceof Error ? error.message : String(error)}`)
     }
 }
 
@@ -454,8 +454,8 @@ interface SessionData {
 
 export async function loadSessionData(sessionPath: string, email: string, isMobile: boolean, saveFingerprint: ConfigSaveFingerprint): Promise<SessionData> {
     try {
-        // Fetch cookie file
-        const cookieFile = path.join(__dirname, '../browser/', sessionPath, email, `${isMobile ? 'mobile_cookies' : 'desktop_cookies'}.json`)
+        // FIXED: Use process.cwd() instead of __dirname for sessions (consistent with JobState and SessionLoader)
+        const cookieFile = path.join(process.cwd(), sessionPath, email, `${isMobile ? 'mobile_cookies' : 'desktop_cookies'}.json`)
 
         let cookies: Cookie[] = []
         if (fs.existsSync(cookieFile)) {
@@ -464,7 +464,7 @@ export async function loadSessionData(sessionPath: string, email: string, isMobi
         }
 
         // Fetch fingerprint file
-        const baseDir = path.join(__dirname, '../browser/', sessionPath, email)
+        const baseDir = path.join(process.cwd(), sessionPath, email)
         const fingerprintFile = path.join(baseDir, `${isMobile ? 'mobile_fingerprint' : 'desktop_fingerprint'}.json`)
 
         let fingerprint!: BrowserFingerprintWithHeaders
@@ -480,7 +480,7 @@ export async function loadSessionData(sessionPath: string, email: string, isMobi
         }
 
     } catch (error) {
-        throw new Error(error as string)
+        throw new Error(`Failed to load session data for ${email}: ${error instanceof Error ? error.message : String(error)}`)
     }
 }
 
@@ -488,8 +488,8 @@ export async function saveSessionData(sessionPath: string, browser: BrowserConte
     try {
         const cookies = await browser.cookies()
 
-        // Fetch path
-        const sessionDir = path.join(__dirname, '../browser/', sessionPath, email)
+        // FIXED: Use process.cwd() instead of __dirname for sessions
+        const sessionDir = path.join(process.cwd(), sessionPath, email)
 
         // Create session dir
         if (!fs.existsSync(sessionDir)) {
@@ -504,14 +504,14 @@ export async function saveSessionData(sessionPath: string, browser: BrowserConte
 
         return sessionDir
     } catch (error) {
-        throw new Error(error as string)
+        throw new Error(`Failed to save session data for ${email}: ${error instanceof Error ? error.message : String(error)}`)
     }
 }
 
 export async function saveFingerprintData(sessionPath: string, email: string, isMobile: boolean, fingerprint: BrowserFingerprintWithHeaders): Promise<string> {
     try {
-        // Fetch path
-        const sessionDir = path.join(__dirname, '../browser/', sessionPath, email)
+        // FIXED: Use process.cwd() instead of __dirname for sessions
+        const sessionDir = path.join(process.cwd(), sessionPath, email)
 
         // Create session dir
         if (!fs.existsSync(sessionDir)) {
@@ -525,6 +525,6 @@ export async function saveFingerprintData(sessionPath: string, email: string, is
 
         return sessionDir
     } catch (error) {
-        throw new Error(error as string)
+        throw new Error(`Failed to save fingerprint for ${email}: ${error instanceof Error ? error.message : String(error)}`)
     }
 }
