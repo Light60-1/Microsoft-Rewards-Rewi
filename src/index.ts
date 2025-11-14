@@ -1051,20 +1051,11 @@ async function main(): Promise<void> {
 
             // Check if scheduling is enabled
             if (config.scheduling?.enabled) {
-                // IMPROVED: Run tasks immediately first, THEN start scheduler for future runs
-                // This ensures "npm start" always executes tasks right away instead of waiting until next scheduled time
-                log('main', 'MAIN', 'Scheduling enabled - executing immediate run, then activating scheduler', 'log', 'cyan')
+                // IMPROVED: Start scheduler FIRST to show schedule info immediately, THEN run tasks
+                // This gives users instant confirmation of the cron schedule without waiting for long execution
+                log('main', 'MAIN', 'Scheduling enabled - activating scheduler, then executing immediate run', 'log', 'cyan')
 
-                try {
-                    await rewardsBot.initialize()
-                    await rewardsBot.run()
-                    log('main', 'MAIN', '✓ Initial run completed successfully', 'log', 'green')
-                } catch (error) {
-                    log('main', 'MAIN', `Initial run failed: ${error instanceof Error ? error.message : String(error)}`, 'error')
-                    // Continue to scheduler activation even if initial run fails
-                }
-
-                // Initialize scheduler for future runs
+                // Initialize and start scheduler first
                 scheduler = new InternalScheduler(config, async () => {
                     try {
                         await rewardsBot.initialize()
@@ -1077,17 +1068,27 @@ async function main(): Promise<void> {
 
                 const schedulerStarted = scheduler.start()
 
-                if (schedulerStarted) {
-                    log('main', 'MAIN', 'Bot running in scheduled mode. Process will stay alive.', 'log', 'green')
-                    log('main', 'MAIN', 'Press CTRL+C to stop the scheduler and exit.', 'log', 'cyan')
-                    // Keep process alive - scheduler handles execution
-                    return
-                } else {
-                    log('main', 'MAIN', 'Scheduler failed to start. Exiting after one-time execution.', 'warn')
-                    scheduler = null
-                    // Already ran once above, so just exit
+                if (!schedulerStarted) {
+                    log('main', 'MAIN', 'Scheduler failed to start. Exiting.', 'error')
+                    gracefulExit(1)
                     return
                 }
+
+                log('main', 'MAIN', 'Bot running in scheduled mode. Process will stay alive.', 'log', 'green')
+                log('main', 'MAIN', 'Press CTRL+C to stop the scheduler and exit.', 'log', 'cyan')
+
+                // Now run initial execution (scheduler already active for future runs)
+                try {
+                    await rewardsBot.initialize()
+                    await rewardsBot.run()
+                    log('main', 'MAIN', '✓ Initial run completed successfully', 'log', 'green')
+                } catch (error) {
+                    log('main', 'MAIN', `Initial run failed: ${error instanceof Error ? error.message : String(error)}`, 'error')
+                    // Scheduler still active - will retry at next scheduled time
+                }
+
+                // Keep process alive - scheduler handles future executions
+                return
             }
 
             // One-time execution (scheduling disabled)
