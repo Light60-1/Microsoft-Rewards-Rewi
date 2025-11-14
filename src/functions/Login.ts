@@ -492,7 +492,7 @@ export class Login {
   private async performLoginFlow(page: Page, email: string, password: string) {
     // Step 0: Check if we're already past email entry (TOTP, passkey, or logged in)
     const currentState = await LoginStateDetector.detectState(page)
-    
+
     if (currentState.state === LoginState.TwoFactorRequired) {
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Already at 2FA page, skipping email entry')
       await this.inputPasswordOr2FA(page, password)
@@ -500,7 +500,7 @@ export class Login {
       await this.awaitRewardsPortal(page)
       return
     }
-    
+
     if (currentState.state === LoginState.LoggedIn) {
       this.bot.log(this.bot.isMobile, 'LOGIN', 'Already logged in, skipping login flow')
       return
@@ -596,10 +596,10 @@ export class Login {
       }
     }
 
-            if (state.state === LoginState.LoggedIn) {
-                this.bot.log(this.bot.isMobile, 'LOGIN', 'Already logged in, skipping email entry')
-                return
-            }    // IMPROVED: Smart element waiting (silent)
+    if (state.state === LoginState.LoggedIn) {
+      this.bot.log(this.bot.isMobile, 'LOGIN', 'Already logged in, skipping email entry')
+      return
+    }    // IMPROVED: Smart element waiting (silent)
     let emailResult = await waitForElementSmart(page, SELECTORS.emailInput, {
       initialTimeoutMs: 2000,
       extendedTimeoutMs: 5000,
