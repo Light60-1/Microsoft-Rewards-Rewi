@@ -1399,11 +1399,45 @@ Features:
 
 ### "Browser launch failed"
 
-**Problem**: Chromium not installed
+**Problem**: Chromium not installed or missing system dependencies
 
 **Solution**:
+
+**Windows/Mac:**
 ```bash
 npx playwright install chromium
+```
+
+**Linux (Ubuntu/Debian):**
+```bash
+# Install Chromium + system dependencies
+npx playwright install-deps chromium
+npx playwright install chromium
+
+# Alternative manual installation:
+sudo apt-get install -y \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2
+```
+
+**Linux (Other distributions):**
+```bash
+# Red Hat/CentOS/Fedora
+sudo yum install -y atk cups-libs libXdamage libXrandr libgbm alsa-lib
+
+# Arch
+sudo pacman -S nss atk cups libdrm libxkbcommon libxcomposite libxdamage libxfixes libxrandr alsa-lib
 ```
 
 ### "Module not found" errors

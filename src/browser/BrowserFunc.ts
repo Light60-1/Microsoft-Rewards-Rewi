@@ -144,29 +144,41 @@ export default class BrowserFunc {
                     throw new Error('Account has been suspended!')
                 }
 
-                // IMPROVED: Diagnostic logging to identify DOM structure changes
+                // IMPROVED: Enhanced diagnostic logging to identify DOM structure changes
                 if (iteration <= 2) {
                     try {
                         const diagnosticInfo = await page.evaluate(() => {
                             const elementsWithActivitiesId = document.querySelectorAll('[id*="activit"]')
                             const meeCardGroups = document.querySelectorAll('mee-card-group')
                             const hasRoleList = document.querySelectorAll('[role="list"]')
+                            const dailySets = document.querySelectorAll('.daily-sets, [data-bi-name="daily-set"]')
+                            const rewardsElements = document.querySelectorAll('[class*="rewards"], [id*="rewards"]')
+                            const mainContent = document.querySelector('main')
 
                             return {
                                 activitiesIdCount: elementsWithActivitiesId.length,
                                 activitiesIds: Array.from(elementsWithActivitiesId).map(el => el.id).slice(0, 5),
                                 meeCardGroupCount: meeCardGroups.length,
                                 roleListCount: hasRoleList.length,
+                                dailySetsCount: dailySets.length,
+                                rewardsElementsCount: rewardsElements.length,
+                                hasMainContent: !!mainContent,
                                 pageTitle: document.title,
-                                bodyClasses: document.body.className
+                                bodyClasses: document.body.className,
+                                url: window.location.href
                             }
                         })
 
                         this.bot.log(this.bot.isMobile, 'GO-HOME-DEBUG',
-                            `DOM Diagnostic - Elements with 'activit': ${diagnosticInfo.activitiesIdCount}, ` +
-                            `IDs: [${diagnosticInfo.activitiesIds.join(', ')}], ` +
+                            `DOM Diagnostic - ` +
+                            `URL: ${diagnosticInfo.url}, ` +
+                            `Title: "${diagnosticInfo.pageTitle}", ` +
+                            `Elements with 'activit': ${diagnosticInfo.activitiesIdCount} [${diagnosticInfo.activitiesIds.join(', ')}], ` +
                             `mee-card-group: ${diagnosticInfo.meeCardGroupCount}, ` +
-                            `role=list: ${diagnosticInfo.roleListCount}`, 'warn')
+                            `role=list: ${diagnosticInfo.roleListCount}, ` +
+                            `daily-sets: ${diagnosticInfo.dailySetsCount}, ` +
+                            `rewards elements: ${diagnosticInfo.rewardsElementsCount}, ` +
+                            `main content: ${diagnosticInfo.hasMainContent}`, 'warn')
                     } catch (error) {
                         this.bot.log(this.bot.isMobile, 'GO-HOME-DEBUG', `Diagnostic failed: ${error}`, 'warn')
                     }
@@ -217,7 +229,24 @@ export default class BrowserFunc {
                     this.bot.log(this.bot.isMobile, 'GO-HOME', 'On correct URL but activities missing - forcing page reload to trigger DOM render', 'warn')
 
                     try {
-                        await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 })
+                        // IMPROVED: Try alternative reload strategies based on iteration
+                        if (iteration === 1) {
+                            // First attempt: Simple reload
+                            await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 })
+                        } else if (iteration === 2) {
+                            // Second attempt: Navigate to full dashboard URL (not just base)
+                            this.bot.log(this.bot.isMobile, 'GO-HOME', 'Trying full dashboard URL: /rewards/dashboard', 'log')
+                            await page.goto(`${this.bot.config.baseURL}/rewards/dashboard`, { waitUntil: 'domcontentloaded', timeout: 15000 })
+                        } else if (iteration === 3) {
+                            // Third attempt: Clear localStorage and reload
+                            this.bot.log(this.bot.isMobile, 'GO-HOME', 'Clearing localStorage and reloading', 'log')
+                            await page.evaluate(() => localStorage.clear())
+                            await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 })
+                        } else {
+                            // Final attempts: Hard reload with cache bypass
+                            await page.reload({ waitUntil: 'networkidle', timeout: 20000 })
+                        }
+
                         await waitForPageReady(page, {
                             timeoutMs: 10000,
                             logFn: (msg) => this.bot.log(this.bot.isMobile, 'GO-HOME', msg, 'log')

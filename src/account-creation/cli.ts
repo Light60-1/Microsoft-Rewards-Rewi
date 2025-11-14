@@ -30,15 +30,19 @@ async function main(): Promise<void> {
     }
   }
 
-  // AUTO-FIX: Clean up URL if it contains & parameters that might cause issues
-  // Only keep the part up to the first & to ensure compatibility even without quotes
-  if (referralUrl && referralUrl.includes('&')) {
-    const originalUrl = referralUrl
-    referralUrl = referralUrl.split('&')[0] // Keep only base URL + first parameter (rh=CODE)
-    log(false, 'CREATOR-CLI', '� Auto-cleaned URL (removed optional tracking parameters)', 'log', 'gray')
-    log(false, 'CREATOR-CLI', `   Original: ${originalUrl}`, 'log', 'gray')
-    log(false, 'CREATOR-CLI', `   Using: ${referralUrl}`, 'log', 'cyan')
-    log(false, 'CREATOR-CLI', '', 'log')
+  // AUTO-FIX: Ensure referral URL has &new=1 parameter (REQUIRED for referral to work)
+  if (referralUrl) {
+    // Remove any existing &new=1 to avoid duplication
+    referralUrl = referralUrl.replace(/&new=1/g, '')
+
+    // Add &new=1 at the end (CRITICAL for referral linking)
+    if (!referralUrl.includes('?')) {
+      referralUrl += '?new=1'
+    } else {
+      referralUrl += '&new=1'
+    }
+
+    log(false, 'CREATOR-CLI', '✅ Referral URL configured with &new=1 parameter', 'log', 'green')
   }
 
   // Banner

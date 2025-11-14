@@ -791,6 +791,13 @@ export class AccountCreator {
   private async navigateToSignup(): Promise<void> {
     if (this.referralUrl) {
       log(false, 'CREATOR', '🔗 Navigating to referral link...', 'log', 'cyan')
+
+      // CRITICAL: Verify &new=1 parameter is present
+      if (!this.referralUrl.includes('new=1')) {
+        log(false, 'CREATOR', '⚠️ Warning: Referral URL missing &new=1 parameter', 'warn', 'yellow')
+        log(false, 'CREATOR', '   Referral linking may not work correctly', 'warn', 'yellow')
+      }
+
       await this.page.goto(this.referralUrl, { waitUntil: 'networkidle', timeout: 60000 })
 
       await this.waitForPageStable('REFERRAL_PAGE', 10000)
