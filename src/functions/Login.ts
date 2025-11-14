@@ -485,12 +485,28 @@ export class Login {
       if (currentUrl.includes('login.live.com') || currentUrl.includes('login.microsoftonline.com')) {
         await this.handlePasskeyPrompts(page, 'main')
       }
-    } catch {/* ignore reuse errors and continue with full login */ }
+    } catch { /* Expected: Session reuse attempt may fail if expired/invalid */ }
     return false
   }
 
   private async performLoginFlow(page: Page, email: string, password: string) {
-    // Step 1: Input email
+    // Step 0: Check if we're already past email entry (TOTP, passkey, or logged in)
+    const currentState = await LoginStateDetector.detectState(page)
+    
+    if (currentState.state === LoginState.TwoFactorRequired) {
+      this.bot.log(this.bot.isMobile, 'LOGIN', 'Already at 2FA page, skipping email entry')
+      await this.inputPasswordOr2FA(page, password)
+      await this.checkAccountLocked(page)
+      await this.awaitRewardsPortal(page)
+      return
+    }
+    
+    if (currentState.state === LoginState.LoggedIn) {
+      this.bot.log(this.bot.isMobile, 'LOGIN', 'Already logged in, skipping login flow')
+      return
+    }
+
+    // Step 1: Input email (only if on email page)
     await this.inputEmail(page, email)
 
     // Step 2: Wait for transition to password page (silent - no spam)
@@ -554,6 +570,13 @@ export class Login {
 
   // --------------- Input Steps ---------------
   private async inputEmail(page: Page, email: string) {
+    // CRITICAL FIX: Check if we're actually on the email page first
+    const currentUrl = page.url()
+    if (!currentUrl.includes('login.live.com') && !currentUrl.includes('login.microsoftonline.com')) {
+      this.bot.log(this.bot.isMobile, 'LOGIN', `Not on login page (URL: ${currentUrl}), skipping email entry`, 'warn')
+      return
+    }
+
     // IMPROVED: Smart page readiness check (silent - no spam logs)
     // Using default 10s timeout
     const readyResult = await waitForPageReady(page)
@@ -563,11 +586,20 @@ export class Login {
       this.bot.log(this.bot.isMobile, 'LOGIN', `Page load slow: ${readyResult.timeMs}ms`, 'warn')
     }
 
-    if (await this.tryAutoTotp(page, 'pre-email check')) {
-      await this.bot.utils.wait(500)
+    // CRITICAL FIX: Check for TOTP/Passkey prompts BEFORE looking for email field
+    const state = await LoginStateDetector.detectState(page)
+    if (state.state === LoginState.TwoFactorRequired) {
+      this.bot.log(this.bot.isMobile, 'LOGIN', 'TOTP/2FA detected before email entry, handling...', 'warn')
+      if (await this.tryAutoTotp(page, 'pre-email TOTP')) {
+        await this.bot.utils.wait(500)
+        return // Email already submitted, skip to next step
+      }
     }
 
-    // IMPROVED: Smart element waiting (silent)
+            if (state.state === LoginState.LoggedIn) {
+                this.bot.log(this.bot.isMobile, 'LOGIN', 'Already logged in, skipping email entry')
+                return
+            }    // IMPROVED: Smart element waiting (silent)
     let emailResult = await waitForElementSmart(page, SELECTORS.emailInput, {
       initialTimeoutMs: 2000,
       extendedTimeoutMs: 5000,
@@ -1095,7 +1127,7 @@ export class Login {
                     return true
                   }
                 }
-              } catch {/* ignore */ }
+              } catch { /* DOM query may fail if element structure changes */ }
             }
             return false
           }).catch(() => false),
@@ -1105,7 +1137,7 @@ export class Login {
               try {
                 const el = document.querySelector(sel)
                 if (el && (el as HTMLElement).offsetParent !== null) return true
-              } catch {/* ignore */ }
+              } catch { /* DOM query may fail if element structure changes */ }
             }
             return false
           }).catch(() => false)
@@ -1618,7 +1650,7 @@ export class Login {
           while ((m = generic.exec(html)) !== null) found.add(m[0])
           while ((m = frPhrase.exec(html)) !== null) { const raw = m[1]?.replace(/<[^>]+>/g, '').trim(); if (raw) found.add(raw) }
           if (found.size > 0) masked = Array.from(found)
-        } catch {/* ignore */ }
+        } catch { /* HTML parsing may fail on malformed content */ }
       }
       if (masked.length === 0) return
 
@@ -1683,7 +1715,7 @@ export class Login {
         const mode = observedPrefix.length === 1 ? 'lenient' : 'strict'
         this.bot.log(this.bot.isMobile, 'LOGIN-RECOVERY', `Recovery OK (${mode}): ${extracted} matches ${matchRef.prefix2}**@${matchRef.domain}`)
       }
-    } catch {/* non-fatal */ }
+    } catch { /* Non-critical: Recovery email validation is best-effort */ }
   }
 
   private async switchToPasswordLink(page: Page) {
@@ -1694,7 +1726,7 @@ export class Login {
         await this.bot.utils.wait(800)
         this.bot.log(this.bot.isMobile, 'LOGIN', 'Clicked "Use your password" link')
       }
-    } catch {/* ignore */ }
+    } catch { /* Link may not be present - expected on password-first flows */ }
   }
 
   // --------------- Incident Helpers ---------------
@@ -1720,7 +1752,7 @@ export class Login {
         fields,
         severity === 'critical' ? 0xFF0000 : 0xFFAA00
       )
-    } catch {/* ignore */ }
+    } catch { /* Non-critical: Webhook notification failures don't block login flow */ }
   }
 
   private getDocsUrl(anchor?: string) {
@@ -1760,7 +1792,7 @@ export class Login {
       const ctx = page.context()
       const tab = await ctx.newPage()
       await tab.goto(url, { waitUntil: 'domcontentloaded' })
-    } catch {/* ignore */ }
+    } catch { /* Non-critical: Documentation tab opening is best-effort */ }
   }
 
   // --------------- Infrastructure ---------------
@@ -1770,7 +1802,7 @@ export class Login {
         const body = JSON.parse(route.request().postData() || '{}')
         body.isFidoSupported = false
         route.continue({ postData: JSON.stringify(body) })
-      } catch { route.continue() }
+      } catch { /* Route continue on parse failure */ route.continue() }
     }).catch(logError('LOGIN-FIDO', 'Route interception setup failed', this.bot.isMobile))
   }
 }

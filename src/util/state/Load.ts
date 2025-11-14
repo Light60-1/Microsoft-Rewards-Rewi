@@ -86,7 +86,7 @@ function normalizeConfig(raw: unknown): Config {
         ? true
         : (typeof browserConfig.headless === 'boolean'
             ? browserConfig.headless
-            : (typeof n.headless === 'boolean' ? n.headless : false)) // Legacy fallback
+            : (typeof n.headless === 'boolean' ? n.headless : false)) // COMPATIBILITY: Flat headless field (pre-v2.50)
 
     const globalTimeout = browserConfig.globalTimeout ?? n.globalTimeout ?? '30s'
     const browser: ConfigBrowser = {
@@ -271,7 +271,7 @@ function buildSchedulingConfig(raw: unknown): ConfigScheduling | undefined {
         scheduling.time = timeField
     }
 
-    // Priority 2: Legacy cron format (backwards compatibility)
+    // Priority 2: COMPATIBILITY format (cron.schedule field, pre-v2.58)
     const cronRaw = source.cron
     if (cronRaw && typeof cronRaw === 'object') {
         scheduling.cron = {
@@ -315,7 +315,7 @@ export function loadAccounts(): Account[] {
                 path.join(process.cwd(), file + 'c'),            // cwd/accounts.jsonc
                 path.join(process.cwd(), 'src', file),           // cwd/src/accounts.json
                 path.join(process.cwd(), 'src', file + 'c'),     // cwd/src/accounts.jsonc
-                path.join(__dirname, file),                      // dist/accounts.json (legacy)
+                path.join(__dirname, file),                      // dist/accounts.json (compiled output)
                 path.join(__dirname, file + 'c')                 // dist/accounts.jsonc
             ]
             let chosen: string | null = null

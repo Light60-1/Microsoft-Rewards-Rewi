@@ -106,7 +106,7 @@ class Browser {
                               }
                             `
                             document.documentElement.appendChild(style)
-                        } catch {/* ignore */ }
+                        } catch { /* Non-critical: Style injection may fail if DOM not ready */ }
                     })
                 } catch (e) {
                     this.bot.log(this.bot.isMobile, 'BROWSER', `Page setup warning: ${e instanceof Error ? e.message : String(e)}`, 'warn')

@@ -1,5 +1,6 @@
 import { load } from 'cheerio'
 import { Page } from 'rebrowser-playwright'
+import { DISMISSAL_DELAYS } from '../constants'
 import { MicrosoftRewardsBot } from '../index'
 import { waitForPageReady } from '../util/browser/SmartWait'
 import { logError } from '../util/notifications/Logger'
@@ -70,7 +71,7 @@ export default class BrowserUtil {
             const dismissed = await this.tryClickButton(page, btn)
             if (dismissed) {
                 count++
-                await page.waitForTimeout(150)
+                await page.waitForTimeout(DISMISSAL_DELAYS.BETWEEN_BUTTONS)
             }
         }
         return count
@@ -86,8 +87,8 @@ export default class BrowserUtil {
             this.bot.log(this.bot.isMobile, 'DISMISS-ALL-MESSAGES', `Dismissed: ${btn.label}`)
             return true
         } catch (e) {
-            // Silent catch is intentional: button detection/click failures shouldn't break page flow
-            // Most failures are expected (button not present, timing issues, etc.)
+            // Expected: Button detection/click failures are non-critical (button may not exist, timing issues)
+            // Silent failure is intentional to prevent popup dismissal from breaking page flow
             return false
         }
     }
@@ -161,14 +162,14 @@ export default class BrowserUtil {
             if (await nextBtn.isVisible({ timeout: 500 }).catch(() => false)) {
                 await nextBtn.click({ timeout: 1000 }).catch(logError('BROWSER-UTIL', 'Terms update next button click failed', this.bot.isMobile))
                 this.bot.log(this.bot.isMobile, 'DISMISS-ALL-MESSAGES', 'Dismissed: Terms Update Dialog (Next)')
-                // Wait a bit for navigation
-                await page.waitForTimeout(1000)
+                // Wait for dialog close animation
+                await page.waitForTimeout(DISMISSAL_DELAYS.AFTER_DIALOG_CLOSE)
                 return 1
             }
 
             return 0
         } catch (e) {
-            // Silent catch is intentional: terms dialog detection failures are expected
+            // Expected: Terms dialog detection failures are non-critical (dialog may not be present)
             return 0
         }
     }

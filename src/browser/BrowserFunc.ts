@@ -378,7 +378,7 @@ export default class BrowserFunc {
                 if (msg.includes('has been closed')) {
                     if (attempt === 1) {
                         this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', 'Page appears closed; trying one navigation fallback', 'warn')
-                        try { await this.goHome(page) } catch {/* ignore */ }
+                        try { await this.goHome(page) } catch { /* Final recovery attempt - failure is acceptable */ }
                     } else {
                         break
                     }

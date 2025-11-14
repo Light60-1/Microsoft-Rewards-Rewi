@@ -36,7 +36,7 @@ export class Retry {
     const util = new Util()
     const parse = (v: number | string) => {
       if (typeof v === 'number') return v
-      try { return util.stringToMs(String(v)) } catch { return def.baseDelay }
+      try { return util.stringToMs(String(v)) } catch { /* Invalid time string: fall back to default */ return def.baseDelay }
     }
     this.policy = {
       maxAttempts: (merged.maxAttempts as number) ?? def.maxAttempts,

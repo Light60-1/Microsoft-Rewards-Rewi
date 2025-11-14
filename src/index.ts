@@ -193,7 +193,7 @@ export class MicrosoftRewardsBot {
             try {
                 fs.unlinkSync(path.join(jobStateDir, file))
             } catch {
-                // Ignore errors
+                // Expected: File may be locked or already deleted - non-critical
             }
         }
     }

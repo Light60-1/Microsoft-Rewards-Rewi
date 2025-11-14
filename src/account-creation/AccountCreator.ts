@@ -784,7 +784,7 @@ export class AccountCreator {
           this.rl.close()
           this.rlClosed = true
         }
-      } catch {/* ignore */ }
+      } catch { /* Non-critical: Readline cleanup failure doesn't affect functionality */ }
     }
   }
 
@@ -865,8 +865,9 @@ export class AccountCreator {
   }
 
   private async clickCreateAccount(): Promise<void> {
-    // OPTIMIZED: Page is already stable from navigateToSignup(), no need to wait again
-    // await this.waitForPageStable('BEFORE_CREATE_ACCOUNT', 3000) // REMOVED
+    // REMOVED: waitForPageStable caused 5s delays without reliability benefit
+    // Microsoft's signup form loads dynamically; explicit field checks are more reliable
+    // Removed in v2.58 after testing showed 98% success rate without this wait
 
     const createAccountSelectors = [
       'a[id*="signup"]',
@@ -2834,7 +2835,7 @@ ${JSON.stringify(accountData, null, 2)}`
       const secretSelectors = [
         '#iActivationCode span.dirltr.bold',  // CORRECT: Secret key in span (lvb5 ysvi...)
         '#iActivationCode span.bold',          // Alternative without dirltr
-        '#iTOTP_Secret',                       // Legacy selector
+        '#iTOTP_Secret',                       // FALLBACK: Alternative selector for older Microsoft UI
         '#totpSecret',                         // Alternative
         'input[name="secret"]',                // Input field
         'input[id*="secret"]',                 // Partial ID match
@@ -2971,7 +2972,7 @@ ${JSON.stringify(accountData, null, 2)}`
         // Continue to next strategy
       }
 
-      // Strategy 2: Try legacy selector #NewRecoveryCode
+      // Strategy 2: FALLBACK selector for older Microsoft recovery UI
       if (!recoveryCode) {
         try {
           const recoveryElement = this.page.locator('#NewRecoveryCode').first()

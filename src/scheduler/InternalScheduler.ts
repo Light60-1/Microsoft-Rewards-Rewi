@@ -97,7 +97,7 @@ export class InternalScheduler {
             return null // Invalid time format
         }
 
-        // Priority 2: Legacy cron format (for backwards compatibility)
+        // Priority 2: COMPATIBILITY format (cron.schedule field, pre-v2.58)
         if (scheduleConfig.cron?.schedule) {
             return scheduleConfig.cron.schedule
         }

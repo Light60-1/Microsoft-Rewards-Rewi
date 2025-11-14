@@ -137,3 +137,8 @@ export const LOGGER_CLEANUP = {
     BUFFER_MAX_AGE_MS: TIMEOUTS.ONE_HOUR,
     BUFFER_CLEANUP_INTERVAL_MS: TIMEOUTS.TEN_MINUTES
 } as const
+
+export const DISMISSAL_DELAYS = {
+    BETWEEN_BUTTONS: 150,        // Delay between dismissing multiple popup buttons
+    AFTER_DIALOG_CLOSE: 1000     // Wait for dialog close animation to complete
+} as const

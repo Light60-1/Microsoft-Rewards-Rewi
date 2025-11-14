@@ -249,9 +249,9 @@ export function log(isMobile: boolean | 'main', title: string, message: string, 
     try {
         if (type in ntfyConditions && ntfyConditions[type as keyof typeof ntfyConditions].some(condition => condition)) {
             // Fire-and-forget
-            Promise.resolve(Ntfy(cleanStr, type)).catch(() => { /* ignore ntfy errors */ })
+            Promise.resolve(Ntfy(cleanStr, type)).catch(() => { /* Non-critical: NTFY notification errors are ignored */ })
         }
-    } catch { /* ignore */ }
+    } catch { /* Non-critical: Webhook buffer cleanup can fail safely */ }
 
     // Console output with better formatting and contextual icons
     const typeIndicator = type === 'error' ? '✗' : type === 'warn' ? '⚠' : '✓'

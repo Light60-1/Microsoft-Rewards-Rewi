@@ -25,12 +25,12 @@ export interface Config {
     passesPerRun?: number;
     vacation?: ConfigVacation; // Optional monthly contiguous off-days
     crashRecovery?: ConfigCrashRecovery; // Automatic restart / graceful shutdown
-    riskManagement?: ConfigRiskManagement; // NEW: Risk-aware throttling and ban prediction
-    dryRun?: boolean; // NEW: Dry-run mode (simulate without executing)
-    queryDiversity?: ConfigQueryDiversity; // NEW: Multi-source query generation
-    dashboard?: ConfigDashboard; // NEW: Local web dashboard for monitoring and control
-    scheduling?: ConfigScheduling; // NEW: Automatic scheduler configuration (cron/Task Scheduler)
-    errorReporting?: ConfigErrorReporting; // NEW: Automatic error reporting to community webhook
+    riskManagement?: ConfigRiskManagement; // Risk-aware throttling and ban prediction
+    dryRun?: boolean; // Dry-run mode (simulate without executing)
+    queryDiversity?: ConfigQueryDiversity; // Multi-source query generation
+    dashboard?: ConfigDashboard; // Local web dashboard for monitoring and control
+    scheduling?: ConfigScheduling; // Automatic scheduler configuration (cron/Task Scheduler)
+    errorReporting?: ConfigErrorReporting; // Automatic error reporting to community webhook
 }
 
 export interface ConfigSaveFingerprint {
@@ -86,7 +86,10 @@ export interface ConfigUpdate {
     scriptPath?: string; // optional custom path to update script relative to repo root
     autoUpdateConfig?: boolean; // if true, allow auto-update of config.jsonc when remote changes it (default: false to preserve user settings)
     autoUpdateAccounts?: boolean; // if true, allow auto-update of accounts.json when remote changes it (default: false to preserve credentials)
-    // DEPRECATED (removed in v2.56.2+): method, docker - update.mjs now uses GitHub API only
+    // DEPRECATED (v2.56.2+, remove in v3.0): method, docker fields no longer used
+    // Migration: update.mjs now exclusively uses GitHub API for all update methods
+    // See: scripts/installer/README.md for migration details
+    // TODO(@Obsidian-wtf): Remove deprecated fields in v3.0 major release
 }
 
 export interface ConfigVacation {
