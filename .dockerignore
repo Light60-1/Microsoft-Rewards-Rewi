@@ -3,8 +3,6 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-# Let Docker generate platform-specific lockfile
-package-lock.json
 
 # Build outputs
 dist/
@@ -52,11 +50,11 @@ browser/
 .eslintcache
 setup/
 
-# Docker files (organized in docker/ folder - no recursion needed)
-docker/
+# Docker files - Keep docker/ folder for COPY commands but exclude compose.yaml
+docker/compose.yaml
 .dockerignore
 
-# Scripts installer (not needed in Docker, but keep docker/ folder)
+# Scripts installer (not needed in Docker)
 scripts/installer/
 scripts/README.md
 

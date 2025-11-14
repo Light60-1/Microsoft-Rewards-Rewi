@@ -72,55 +72,32 @@ export class SummaryReporter {
             const totalFinal = summary.accounts.reduce((sum, acc) => sum + acc.finalPoints, 0)
             const bannedCount = summary.accounts.filter(acc => acc.banned).length
 
-            // Build structured embed description
-            let description = `┌${'─'.repeat(48)}┐\n`
-            description += `│ ${' '.repeat(10)}📊 EXECUTION SUMMARY${' '.repeat(11)}│\n`
-            description += `└${'─'.repeat(48)}┘\n\n`
+            // Build clean, Discord-optimized description
+            let description = `**⏱️ Duration:** ${durationText}\n`
+            description += `**💰 Total Earned:** ${summary.totalPoints} points\n`
+            description += `**🖥️ Desktop:** ${totalDesktop} pts | **📱 Mobile:** ${totalMobile} pts\n`
+            description += `**✅ Success:** ${summary.successCount}/${summary.accounts.length}`
 
-            // Global Overview
-            description += `**🌐 GLOBAL STATISTICS**\n`
-            description += `┌${'─'.repeat(48)}┐\n`
-            description += `│ ⏱️ Duration: \`${durationText}\`${' '.repeat(48 - 14 - durationText.length)}│\n`
-            description += `│ 💰 Total Earned: **${summary.totalPoints}** points${' '.repeat(48 - 22 - String(summary.totalPoints).length)}│\n`
-            description += `│ 🖥️ Desktop: **${totalDesktop}** pts | 📱 Mobile: **${totalMobile}** pts${' '.repeat(48 - 28 - String(totalDesktop).length - String(totalMobile).length)}│\n`
-            description += `│ ✅ Success: ${summary.successCount}/${summary.accounts.length} accounts${' '.repeat(48 - 18 - String(summary.successCount).length - String(summary.accounts.length).length)}│\n`
             if (summary.failureCount > 0) {
-                description += `│ ❌ Failed: ${summary.failureCount} accounts${' '.repeat(48 - 14 - String(summary.failureCount).length)}│\n`
+                description += ` | **❌ Failed:** ${summary.failureCount}`
             }
             if (bannedCount > 0) {
-                description += `│ 🚫 Banned: ${bannedCount} accounts${' '.repeat(48 - 14 - String(bannedCount).length)}│\n`
+                description += ` | **🚫 Banned:** ${bannedCount}`
             }
-            description += `└${'─'.repeat(48)}┘\n\n`
 
-            // Account Details
-            description += `**📄 ACCOUNT BREAKDOWN**\n\n`
+            description += `\n\n**📊 Account Details**\n`
 
             const accountsWithErrors: AccountResult[] = []
 
             for (const account of summary.accounts) {
                 const status = account.banned ? '🚫' : (account.errors?.length ? '❌' : '✅')
-                const emailShort = account.email.length > 30 ? account.email.substring(0, 27) + '...' : account.email
+                const emailShort = account.email.length > 35 ? account.email.substring(0, 32) + '...' : account.email
                 const durationSec = Math.round(account.runDuration / 1000)
 
-                description += `${status} **${emailShort}**\n`
-                description += `┌${'─'.repeat(46)}┐\n`
-
-                // Points Earned Breakdown
-                description += `│ 📊 Points Earned: **+${account.pointsEarned}** points${' '.repeat(46 - 23 - String(account.pointsEarned).length)}│\n`
-                description += `│   └─ Desktop: **${account.desktopPoints}** pts${' '.repeat(46 - 20 - String(account.desktopPoints).length)}│\n`
-                description += `│   └─ Mobile: **${account.mobilePoints}** pts${' '.repeat(46 - 19 - String(account.mobilePoints).length)}│\n`
-                description += `├${'─'.repeat(46)}┤\n`
-
-                // Account Total Balance (formula)
-                description += `│ 💳 Account Total Balance${' '.repeat(23)}│\n`
-                description += `│   \`${account.initialPoints}\` + \`${account.pointsEarned}\` = **\`${account.finalPoints}\` pts**${' '.repeat(46 - 17 - String(account.initialPoints).length - String(account.pointsEarned).length - String(account.finalPoints).length)}│\n`
-                description += `│   (Initial + Earned = Final)${' '.repeat(18)}│\n`
-                description += `├${'─'.repeat(46)}┤\n`
-
-                // Duration
-                description += `│ ⏱️ Duration: ${durationSec}s${' '.repeat(46 - 13 - String(durationSec).length)}│\n`
-
-                description += `└${'─'.repeat(46)}┘\n\n`
+                description += `\n${status} **${emailShort}**\n`
+                description += `• Points: **+${account.pointsEarned}** (🖥️ ${account.desktopPoints} | 📱 ${account.mobilePoints})\n`
+                description += `• Balance: ${account.initialPoints} → **${account.finalPoints}** pts\n`
+                description += `• Duration: ${durationSec}s\n`
 
                 // Collect accounts with errors for separate webhook
                 if ((account.errors?.length || account.banned) && account.email) {
@@ -129,13 +106,8 @@ export class SummaryReporter {
             }
 
             // Footer summary
-            description += `┌${'─'.repeat(48)}┐\n`
-            description += `│ 🌐 TOTAL ACROSS ALL ACCOUNTS${' '.repeat(22)}│\n`
-            description += `├${'─'.repeat(48)}┤\n`
-            description += `│ Initial Balance: \`${totalInitial}\` points${' '.repeat(48 - 25 - String(totalInitial).length)}│\n`
-            description += `│ Final Balance: \`${totalFinal}\` points${' '.repeat(48 - 23 - String(totalFinal).length)}│\n`
-            description += `│ Total Earned: **+${summary.totalPoints}** points${' '.repeat(48 - 23 - String(summary.totalPoints).length)}│\n`
-            description += `└${'─'.repeat(48)}┘\n`
+            description += `\n**🌐 Total Balance**\n`
+            description += `${totalInitial} → **${totalFinal}** pts (+${summary.totalPoints})`
 
             const color = bannedCount > 0 ? 0xFF0000 : summary.failureCount > 0 ? 0xFFAA00 : 0x00FF00
 
@@ -162,52 +134,33 @@ export class SummaryReporter {
      */
     private async sendErrorReport(accounts: AccountResult[]): Promise<void> {
         try {
-            let errorDescription = `┌${'─'.repeat(48)}┐\n`
-            errorDescription += `│ ${' '.repeat(10)}⚠️ ERROR REPORT${' '.repeat(16)}│\n`
-            errorDescription += `└${'─'.repeat(48)}┘\n\n`
-
-            errorDescription += `**${accounts.length} account(s) encountered issues:**\n\n`
+            let errorDescription = `**${accounts.length} account(s) encountered issues:**\n\n`
 
             for (const account of accounts) {
                 const status = account.banned ? '🚫 BANNED' : '❌ ERROR'
-                const emailShort = account.email.length > 35 ? account.email.substring(0, 32) + '...' : account.email
+                const emailShort = account.email.length > 40 ? account.email.substring(0, 37) + '...' : account.email
 
-                errorDescription += `${status} | **${emailShort}**\n`
-                errorDescription += `┌${'─'.repeat(46)}┐\n`
-
-                // Show what was attempted
-                errorDescription += `│ 📊 Progress${' '.repeat(35)}│\n`
-                errorDescription += `│   Desktop: ${account.desktopPoints} pts earned${' '.repeat(46 - 21 - String(account.desktopPoints).length)}│\n`
-                errorDescription += `│   Mobile: ${account.mobilePoints} pts earned${' '.repeat(46 - 20 - String(account.mobilePoints).length)}│\n`
-                errorDescription += `│   Total: ${account.pointsEarned} pts${' '.repeat(46 - 13 - String(account.pointsEarned).length)}│\n`
-                errorDescription += `├${'─'.repeat(46)}┤\n`
+                errorDescription += `${status} **${emailShort}**\n`
+                errorDescription += `• Progress: ${account.pointsEarned} pts (🖥️ ${account.desktopPoints} | 📱 ${account.mobilePoints})\n`
 
                 // Error details
                 if (account.banned) {
-                    errorDescription += `│ 🚫 Status: Account Banned/Suspended${' '.repeat(9)}│\n`
+                    errorDescription += `• Status: Account Banned/Suspended\n`
                     if (account.errors?.length && account.errors[0]) {
-                        errorDescription += `│ 💬 Reason:${' '.repeat(36)}│\n`
-                        const lines = this.wrapText(account.errors[0], 42)
-                        for (const line of lines) {
-                            errorDescription += `│   ${line}${' '.repeat(46 - 3 - line.length)}│\n`
-                        }
+                        errorDescription += `• Reason: ${account.errors[0]}\n`
                     }
                 } else if (account.errors?.length && account.errors[0]) {
-                    errorDescription += `│ ❌ Error Details:${' '.repeat(29)}│\n`
-                    const lines = this.wrapText(account.errors[0], 42)
-                    for (const line of lines) {
-                        errorDescription += `│   ${line}${' '.repeat(46 - 3 - line.length)}│\n`
-                    }
+                    errorDescription += `• Error: ${account.errors[0]}\n`
                 }
 
-                errorDescription += `└${'─'.repeat(46)}┘\n\n`
+                errorDescription += `\n`
             }
 
             errorDescription += `**📋 Recommended Actions:**\n`
             errorDescription += `• Check account status manually\n`
             errorDescription += `• Review error messages above\n`
             errorDescription += `• Verify credentials if login failed\n`
-            errorDescription += `• Consider proxy rotation if rate-limited\n`
+            errorDescription += `• Consider proxy rotation if rate-limited`
 
             await ConclusionWebhook(
                 this.config,
@@ -219,27 +172,6 @@ export class SummaryReporter {
         } catch (error) {
             log('main', 'SUMMARY', `Failed to send error report webhook: ${error instanceof Error ? error.message : String(error)}`, 'error')
         }
-    }
-
-    /**
-     * Wrap text to fit within specified width
-     */
-    private wrapText(text: string, maxWidth: number): string[] {
-        const words = text.split(' ')
-        const lines: string[] = []
-        let currentLine = ''
-
-        for (const word of words) {
-            if ((currentLine + word).length > maxWidth) {
-                if (currentLine) lines.push(currentLine.trim())
-                currentLine = word + ' '
-            } else {
-                currentLine += word + ' '
-            }
-        }
-
-        if (currentLine.trim()) lines.push(currentLine.trim())
-        return lines
     }
 
     /**
