@@ -41,9 +41,8 @@ docs/
 .gitlab-ci.yml
 
 # Session and runtime data (mounted as volumes)
-sessions/
+# Note: sessions/ NOT excluded - needed for volume mount in Docker
 reports/
-browser/
 
 # Development files
 *.log

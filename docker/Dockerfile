@@ -79,10 +79,6 @@ COPY --from=builder /usr/src/microsoft-rewards-bot/dist ./dist
 COPY --from=builder /usr/src/microsoft-rewards-bot/package*.json ./
 COPY --from=builder /usr/src/microsoft-rewards-bot/node_modules ./node_modules
 
-# FIXED: Copy Playwright browsers from builder (they're in node_modules with PLAYWRIGHT_BROWSERS_PATH=0)
-# This prevents "Chromium not installed" errors on subsequent runs
-COPY --from=builder /usr/src/microsoft-rewards-bot/node_modules/@playwright ./node_modules/@playwright
-
 # Copy runtime scripts with proper permissions and normalize line endings for non-Unix users
 # IMPROVED: Scripts now organized in docker/ folder
 COPY --chmod=755 docker/run_daily.sh ./docker/run_daily.sh
