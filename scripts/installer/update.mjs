@@ -419,7 +419,8 @@ async function performUpdate() {
   }
 
   // Backup critical files for potential rollback
-  const criticalFiles = ['package.json', 'package-lock.json', 'dist']
+  // FIXED: Don't backup dist/ - it must be rebuilt from new source code
+  const criticalFiles = ['package.json', 'package-lock.json']
   for (const file of criticalFiles) {
     const srcPath = join(process.cwd(), file)
     if (!existsSync(srcPath)) continue
@@ -432,6 +433,16 @@ async function performUpdate() {
       }
     } catch {
       // Continue
+    }
+  }
+
+  // CRITICAL FIX: Delete old dist/ before update to force clean rebuild
+  const oldDistPath = join(process.cwd(), 'dist')
+  if (existsSync(oldDistPath)) {
+    try {
+      rmSync(oldDistPath, { recursive: true, force: true })
+    } catch {
+      // Continue - build will overwrite anyway
     }
   }
 
