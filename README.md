@@ -55,66 +55,47 @@ A **TypeScript bot** that automatically earns Microsoft Rewards points by comple
 git clone https://github.com/LightZirconite/Microsoft-Rewards-Bot.git
 cd Microsoft-Rewards-Bot
 
-# 2. Install dependencies
-npm install
-
-# 3. Setup and run
-npm run setup
+# 2. Start the bot (does EVERYTHING automatically!)
+npm start
 ```
 
-**That's it!** The wizard will guide you through account setup and start earning points.
+**That's literally it!** 🎉
+
+The `npm start` command will automatically:
+- ✅ Install dependencies if needed
+- ✅ Install Chromium browser if needed
+- ✅ Build TypeScript if needed
+- ✅ Launch the bot
+
+On first run, you'll be prompted to configure your accounts interactively.
 
 ---
 
 ## 🎮 Essential Commands
 
-Here are the most useful commands for daily usage:
-
-### **🚀 Main Commands**
-
-| Command | Description |
-|---------|-------------|
-| `npm run go` | **⭐ Ultimate command** — Installs browser if needed, builds, and starts the bot |
-| `npm start` | **Quick start** — Runs the bot (builds automatically if needed) |
-| `npm run setup` | **Interactive wizard** — Guides you through initial setup |
-| `npm run dev` | **Development mode** — Watch mode with auto-reload |
-
-### **🔧 Build & Maintenance**
-
-| Command | Description |
-|---------|-------------|
-| `npm run build` | Compile TypeScript to JavaScript (`dist/` folder) |
-| `npm run typecheck` | Check TypeScript errors without building |
-| `npm run clean` | Remove build artifacts (`dist/` folder) |
-| `npm run install:browser` | Install Playwright Chromium (smart: only installs once) |
-
-### **🎯 Specialized Tools**
-
-| Command | Description |
-|---------|-------------|
-| `npm run dashboard` | Start web dashboard on `http://localhost:3000` |
-| `npm run creator` | Launch account creation wizard |
-| `npm run test` | Run test suite |
-
-### **💡 Quick Recipes**
+### **🚀 Main Command**
 
 ```bash
-# First time setup
-npm run go
-
-# Daily usage (after first setup)
 npm start
-
-# Create new accounts
-npm run creator -- -y backup@gmail.com https://rewards.bing.com/welcome?rh=CODE
-
-# Monitor with dashboard
-npm run dashboard
-# Then open http://localhost:3000 in your browser
-
-# Fix issues / rebuild
-npm run clean ; npm run build
 ```
+**The ONLY command you need!** Automatically handles:
+- 📦 Dependencies installation (if missing)
+- 🌐 Browser installation (if missing)
+- 🔨 TypeScript compilation (if missing)
+- ▶️ Bot execution
+
+### **🔧 Optional Commands**
+
+| Command | Use When |
+|---------|----------|
+| `npm run build` | Force rebuild TypeScript |
+| `npm run clean` | Clean build artifacts before rebuild |
+| `npm run dev` | Development mode (hot reload) |
+| `npm run creator` | Create new Microsoft accounts |
+| `npm run dashboard` | Start web dashboard on port 3000 |
+| `npm test` | Run test suite |
+
+**💡 Pro Tip:** For 99% of use cases, just use `npm start` — it's smart enough to figure out what needs to be done!
 
 **📖 [Complete Commands Reference →](docs/commands.md)**
 
@@ -124,62 +105,53 @@ npm run clean ; npm run build
 
 ### **First-Time Setup** (New User)
 ```bash
-# 1. Install dependencies
-npm install
-
-# 2. Run the ultimate setup command
-npm run go
-# This will guide you through account setup, install browser, build, and start!
-```
-
-### **Daily Usage** (Regular User)
-```bash
-# Just start the bot - it builds automatically if needed
+# Just run this - it does EVERYTHING!
 npm start
 ```
 
-Or use the ultimate command if you want to be extra safe:
+On first run:
+1. ✅ Installs all dependencies automatically
+2. ✅ Installs Chromium browser automatically
+3. ✅ Builds the TypeScript project automatically
+4. ✅ Prompts you to configure accounts
+5. ✅ Starts earning points!
+
+### **Daily Usage** (Regular User)
 ```bash
-npm run go
+# Same command - but skips already-done steps!
+npm start
 ```
 
-### **After Git Pull** (Updating the Bot)
+### **After Git Pull** (Updating)
 ```bash
-# Quick method (recommended)
-npm run go
-
-# Or manual method
-npm install          # Update dependencies (if package.json changed)
-npm run build       # Rebuild if code changed
-npm start           # Run
+# Just this - it checks and updates what's needed
+npm start
 ```
 
 ### **Creating New Accounts**
 ```bash
-# Interactive mode (asks everything)
+# Interactive mode
 npm run creator
 
-# Quick mode with recovery email + referral
+# Quick mode with referral
 npm run creator -- -y backup@gmail.com https://rewards.bing.com/welcome?rh=CODE
 ```
 
-### **Troubleshooting** (When Things Break)
+### **Troubleshooting** (Issues)
 ```bash
 # Clean rebuild
 npm run clean
-npm run build
+npm start
 
-# Or full reset
-rm -rf node_modules dist
-npm install
-npm run go
+# Full reset (nuclear option)
+rm -rf node_modules dist .playwright-chromium-installed
+npm start
 ```
 
-### **Monitoring** (Check Status)
+### **Monitoring**
 ```bash
-# Start web dashboard
 npm run dashboard
-# Then open http://localhost:3000
+# Open http://localhost:3000
 ```
 
 ---
