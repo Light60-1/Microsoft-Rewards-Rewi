@@ -9,6 +9,7 @@ import { Counters, DashboardData, MorePromotion, PromotionalItem } from '../inte
 import { EarnablePoints } from '../interface/Points'
 import { QuizData } from '../interface/QuizData'
 import { waitForElementSmart, waitForPageReady } from '../util/browser/SmartWait'
+import { extractBalancedObject } from '../util/core/Utils'
 import { saveSessionData } from '../util/state/Load'
 
 
@@ -414,48 +415,37 @@ export default class BrowserFunc {
      * IMPROVED: Enhanced validation with structure checks
      */
     private async parseDashboardFromScript(page: Page, scriptContent: string): Promise<DashboardData | null> {
-        return await page.evaluate((scriptContent: string) => {
-            const patterns = [
-                /var\s+dashboard\s*=\s*(\{[\s\S]*?\});/,
-                /dashboard\s*=\s*(\{[\s\S]*?\});/,
-                /var\s+dashboard\s*:\s*(\{[\s\S]*?\})\s*[,;]/
+        try {
+            const anchors: (string | RegExp)[] = [
+                /var\s+dashboard\s*=\s*/,
+                /dashboard\s*=\s*/,
+                /var\s+dashboard\s*:\s*/
             ]
 
-            for (const regex of patterns) {
-                const match = regex.exec(scriptContent)
-                if (match && match[1]) {
-                    try {
-                        const jsonStr = match[1]
-                        // Validate basic JSON structure before parsing
-                        const trimmed = jsonStr.trim()
-                        if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
-                            continue
-                        }
+            for (const anchor of anchors) {
+                const objStr = extractBalancedObject(scriptContent, anchor, 1000000)
+                if (!objStr) continue
 
-                        const parsed = JSON.parse(jsonStr)
+                const trimmed = objStr.trim()
+                if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) continue
 
-                        // Enhanced validation: check structure and type
-                        if (typeof parsed !== 'object' || parsed === null) {
-                            continue
-                        }
-
-                        // Validate essential dashboard properties exist
-                        if (!parsed.userStatus || typeof parsed.userStatus !== 'object') {
-                            continue
-                        }
-
-                        // Successfully validated dashboard structure
-                        return parsed
-                    } catch (e) {
-                        // JSON.parse failed or validation error - try next pattern
-                        continue
-                    }
+                try {
+                    const parsed = JSON.parse(trimmed)
+                    if (typeof parsed !== 'object' || parsed === null) continue
+                    if (!parsed.userStatus || typeof parsed.userStatus !== 'object') continue
+                    return parsed as DashboardData
+                } catch {
+                    // Try next anchor
+                    continue
                 }
             }
 
             return null
-
-        }, scriptContent)
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error)
+            this.bot.log(this.bot.isMobile, 'GET-DASHBOARD-DATA', `Dashboard parse error: ${errorMessage}`, 'error')
+            return null
+        }
     }
 
     /**
@@ -639,19 +629,22 @@ export default class BrowserFunc {
             }
 
             if (scriptContent && foundVariable) {
-                // Escape dots in variable name for regex
-                const escapedVar = foundVariable.replace(/\./g, '\\.')
-                const regex = new RegExp(`${escapedVar}\\s*=\\s*({.*?});`, 's')
-                const match = regex.exec(scriptContent)
-
-                if (match && match[1]) {
-                    const quizData = JSON.parse(match[1])
-                    this.bot.log(this.bot.isMobile, 'GET-QUIZ-DATA', `Found quiz data using variable: ${foundVariable}`, 'log')
-                    return quizData
-                } else {
-                    this.bot.log(this.bot.isMobile, 'GET-QUIZ-DATA', `Variable ${foundVariable} found but could not extract JSON data`, 'error')
-                    throw new Error(`Quiz data variable ${foundVariable} found but JSON extraction failed`)
+                const anchor = new RegExp(foundVariable.replace(/\./g, '\\.') + "\\s*=\\s*")
+                const objStr = extractBalancedObject(scriptContent, anchor, 500000)
+                if (objStr) {
+                    try {
+                        const quizData = JSON.parse(objStr)
+                        this.bot.log(this.bot.isMobile, 'GET-QUIZ-DATA', `Found quiz data using variable: ${foundVariable}`, 'log')
+                        return quizData
+                    } catch (e) {
+                        const msg = e instanceof Error ? e.message : String(e)
+                        this.bot.log(this.bot.isMobile, 'GET-QUIZ-DATA', `Quiz JSON parse failed for ${foundVariable}: ${msg}`, 'error')
+                        throw new Error(`Quiz data JSON parse failed: ${msg}`)
+                    }
                 }
+
+                this.bot.log(this.bot.isMobile, 'GET-QUIZ-DATA', `Variable ${foundVariable} found but could not extract JSON data`, 'error')
+                throw new Error(`Quiz data variable ${foundVariable} found but JSON extraction failed`)
             } else {
                 // Log available scripts for debugging
                 const allScripts = $('script')

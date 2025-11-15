@@ -225,3 +225,116 @@ export function normalizeRecoveryEmail(recoveryEmail: unknown): string | undefin
     const trimmed = recoveryEmail.trim()
     return trimmed === '' ? undefined : trimmed
 }
+
+/**
+ * Apply a global regex replacement repeatedly until the string stops changing.
+ * Ensures effective sanitization when single-pass replacement can reveal new matches.
+ *
+ * IMPORTANT: Provide a safe, bounded pattern. A too-broad pattern can still be expensive.
+ *
+ * @param input Source string
+ * @param pattern Regular expression to apply (global flag enforced)
+ * @param replacement Replacement string or function
+ * @param maxPasses Safety cap to prevent infinite loops (default 1000)
+ * @returns Final stabilized string
+ */
+export function replaceUntilStable(
+    input: string,
+    pattern: RegExp,
+    replacement: string | ((substring: string, ...args: any[]) => string),
+    maxPasses: number = 1000
+): string {
+    if (!(pattern instanceof RegExp)) {
+        throw new Error('pattern must be a RegExp')
+    }
+
+    // Ensure global flag to replace all occurrences each pass
+    const flags = pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g'
+    const globalPattern = new RegExp(pattern.source, flags)
+
+    let previous = input
+    for (let i = 0; i < maxPasses; i++) {
+        const next = previous.replace(globalPattern, replacement as any)
+        if (next === previous) return next
+        previous = next
+    }
+    return previous
+}
+
+/**
+ * Safely extract a balanced JavaScript/JSON object starting at the first '{' after an anchor.
+ * Linear-time scan with brace depth counting and string handling to avoid catastrophic backtracking.
+ *
+ * @param text Full source text to scan
+ * @param anchor String or RegExp indicating where the assignment occurs (scan starts at first '{' after anchor)
+ * @param maxScan Maximum characters to scan from the first '{' (prevents excessive work on malformed inputs)
+ * @returns Object text including outer braces, or null if not found/imbalanced/exceeded limits
+ */
+export function extractBalancedObject(text: string, anchor: string | RegExp, maxScan: number = 500000): string | null {
+    try {
+        let startIdx = -1
+
+        if (typeof anchor === 'string') {
+            const pos = text.indexOf(anchor)
+            if (pos === -1) return null
+            startIdx = pos + anchor.length
+        } else {
+            const match = anchor.exec(text)
+            if (!match || match.index == null) return null
+            startIdx = match.index + match[0].length
+        }
+
+        // Find the first '{' after the anchor
+        const braceStart = text.indexOf('{', startIdx)
+        if (braceStart === -1) return null
+
+        let depth = 0
+        let inString = false
+        let stringQuote: '"' | "'" | '`' | null = null
+        let escaped = false
+
+        const endLimit = Math.min(text.length, braceStart + maxScan)
+
+        for (let i = braceStart; i < endLimit; i++) {
+            const ch = text[i]
+
+            if (inString) {
+                if (escaped) {
+                    escaped = false
+                    continue
+                }
+                if (ch === '\\') {
+                    escaped = true
+                    continue
+                }
+                if (ch === stringQuote) {
+                    inString = false
+                    stringQuote = null
+                }
+                continue
+            }
+
+            // Not inside a string
+            if (ch === '"' || ch === "'" || ch === '`') {
+                inString = true
+                stringQuote = ch as '"' | "'" | '`'
+                escaped = false
+                continue
+            }
+
+            if (ch === '{') {
+                depth++
+            } else if (ch === '}') {
+                depth--
+                if (depth === 0) {
+                    return text.slice(braceStart, i + 1)
+                }
+            }
+        }
+
+        // If we exit the loop without returning, either imbalanced or exceeded limit
+        return null
+    } catch {
+        return null
+    }
+}
