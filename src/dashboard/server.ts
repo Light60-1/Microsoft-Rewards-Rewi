@@ -3,6 +3,7 @@ import fs from 'fs'
 import { createServer } from 'http'
 import path from 'path'
 import { WebSocket, WebSocketServer } from 'ws'
+import rateLimit from 'express-rate-limit'
 import { log as botLog } from '../util/notifications/Logger'
 import { apiRouter } from './routes'
 import { DashboardLog, dashboardState } from './state'
@@ -20,7 +21,12 @@ export class DashboardServer {
   private server: ReturnType<typeof createServer>
   private wss: WebSocketServer
   private clients: Set<WebSocket> = new Set()
-
+  private dashboardLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs for dashboard UI
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
   constructor() {
     this.app = express()
     this.server = createServer(this.app)
@@ -69,7 +75,7 @@ export class DashboardServer {
     })
 
     // Serve dashboard UI
-    this.app.get('/', (_req, res) => {
+    this.app.get('/', this.dashboardLimiter, (_req, res) => {
       const indexPath = path.join(__dirname, '../../public/index.html')
 
       // Force no cache on HTML files
