@@ -7,6 +7,8 @@ export interface Account {
     totp?: string;
     /** Recovery email used during security challenge verification. Leave empty if not needed. */
     recoveryEmail?: string;
+    /** Phone number associated with account (required for redeeming free rewards/gift cards) */
+    phoneNumber?: string;
     proxy: AccountProxy;
 }
 

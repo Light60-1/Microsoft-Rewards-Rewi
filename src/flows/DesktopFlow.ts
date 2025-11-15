@@ -134,6 +134,17 @@ export class DesktopFlow {
                 }
             }
 
+            // Do free rewards redemption
+            if (this.bot.config.workers.doFreeRewards) {
+                try {
+                    await this.bot.workers.doFreeRewards(workerPage)
+                } catch (rewardsError) {
+                    const errorMsg = rewardsError instanceof Error ? rewardsError.message : String(rewardsError)
+                    this.bot.log(false, 'DESKTOP-FLOW', `Free rewards redemption failed: ${errorMsg}`, 'error')
+                    // Don't throw - continue flow
+                }
+            }
+
             // Fetch points BEFORE closing (avoid page closed reload error)
             const after = await this.bot.browser.func.getCurrentPoints().catch(() => initial)
 

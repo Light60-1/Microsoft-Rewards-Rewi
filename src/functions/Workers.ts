@@ -165,6 +165,27 @@ export class Workers {
         this.bot.log(this.bot.isMobile, 'MORE-PROMOTIONS', 'All "More Promotion" items have been completed')
     }
 
+    // Free Rewards
+    async doFreeRewards(page: Page) {
+        // Check if account has phone number configured
+        if (!this.bot.currentAccountPhoneNumber) {
+            this.bot.log(this.bot.isMobile, 'FREE-REWARDS', 'Skipped: No phone number configured for this account. Add "phoneNumber" field in accounts.jsonc to enable free rewards redemption.', 'warn')
+            return
+        }
+
+        this.bot.log(this.bot.isMobile, 'FREE-REWARDS', 'Starting free rewards redemption (0-point gift cards)')
+
+        try {
+            const { FreeRewards } = await import('./activities/FreeRewards')
+            const freeRewards = new FreeRewards(this.bot)
+            await freeRewards.doFreeRewards(page)
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error)
+            this.bot.log(this.bot.isMobile, 'FREE-REWARDS', `Free rewards flow failed: ${errorMessage}`, 'error')
+            throw new Error(`Free rewards redemption failed: ${errorMessage}`)
+        }
+    }
+
     // Solve all the different types of activities
     private async solveActivities(activityPage: Page, activities: PromotionalItem[] | MorePromotion[], punchCard?: PunchCard) {
         const activityInitial = activityPage.url()

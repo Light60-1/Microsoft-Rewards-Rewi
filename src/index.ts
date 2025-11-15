@@ -49,6 +49,7 @@ export class MicrosoftRewardsBot {
     public homePage!: Page
     public currentAccountEmail?: string
     public currentAccountRecoveryEmail?: string
+    public currentAccountPhoneNumber?: string
     public queryEngine?: QueryDiversityEngine
     public compromisedModeActive: boolean = false
     public compromisedReason?: string
@@ -487,6 +488,7 @@ export class MicrosoftRewardsBot {
             this.currentAccountEmail = account.email
             // IMPROVED: Use centralized recovery email validation utility
             this.currentAccountRecoveryEmail = normalizeRecoveryEmail(account.recoveryEmail)
+            this.currentAccountPhoneNumber = account.phoneNumber
             const runNumber = (this.accountRunCounts.get(account.email) ?? 0) + 1
             this.accountRunCounts.set(account.email, runNumber)
             log('main', 'MAIN-WORKER', `Started tasks for account ${account.email}`)

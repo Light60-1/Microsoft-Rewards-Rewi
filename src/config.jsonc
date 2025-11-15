@@ -24,6 +24,7 @@
         "doMobileSearch": true,
         "doDailyCheckIn": true,
         "doReadToEarn": true,
+        "doFreeRewards": false,
         "bundleDailySetWithSearch": true
     },
     // === SEARCH ===

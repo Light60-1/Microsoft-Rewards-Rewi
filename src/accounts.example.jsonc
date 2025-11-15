@@ -8,6 +8,7 @@
       "password": "",
       "totp": "",
       "recoveryEmail": "",
+      "phoneNumber": "",
       "proxy": {
         "proxyAxios": false,
         "url": "",
@@ -22,6 +23,7 @@
       "password": "",
       "totp": "",
       "recoveryEmail": "",
+      "phoneNumber": "",
       "proxy": {
         "proxyAxios": false,
         "url": "",
@@ -36,6 +38,7 @@
       "password": "",
       "totp": "",
       "recoveryEmail": "",
+      "phoneNumber": "",
       "proxy": {
         "proxyAxios": false,
         "url": "",
@@ -50,6 +53,7 @@
       "password": "",
       "totp": "",
       "recoveryEmail": "",
+      "phoneNumber": "",
       "proxy": {
         "proxyAxios": false,
         "url": "",
@@ -64,6 +68,7 @@
       "password": "",
       "totp": "",
       "recoveryEmail": "",
+      "phoneNumber": "",
       "proxy": {
         "proxyAxios": false,
         "url": "",

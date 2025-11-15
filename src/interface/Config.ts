@@ -114,6 +114,7 @@ export interface ConfigWorkers {
     doMobileSearch: boolean;
     doDailyCheckIn: boolean;
     doReadToEarn: boolean;
+    doFreeRewards: boolean; // Automatically redeem 0-point gift cards (requires phoneNumber in account config)
     bundleDailySetWithSearch?: boolean; // If true, run desktop search right after Daily Set
 }
 
