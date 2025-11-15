@@ -25,9 +25,16 @@ export function obfuscateWebhookUrl(url: string): string {
     return Buffer.from(url).toString('base64')
 }
 
+const BASE64_REGEX = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
+
 export function deobfuscateWebhookUrl(encoded: string): string {
+    const trimmed = encoded.trim()
+    if (!trimmed || !BASE64_REGEX.test(trimmed)) {
+        return ''
+    }
+
     try {
-        return Buffer.from(encoded, 'base64').toString('utf-8')
+        return Buffer.from(trimmed, 'base64').toString('utf-8')
     } catch {
         return ''
     }

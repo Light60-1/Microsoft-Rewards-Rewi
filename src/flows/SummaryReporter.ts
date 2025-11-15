@@ -19,10 +19,10 @@ export interface AccountResult {
     email: string
     pointsEarned: number
     runDuration: number
-    initialPoints: number       // Points avant l'exécution
-    finalPoints: number         // Points après l'exécution
-    desktopPoints: number       // Points gagnés sur Desktop
-    mobilePoints: number        // Points gagnés sur Mobile
+    initialPoints: number       // Points before execution
+    finalPoints: number         // Points after execution
+    desktopPoints: number       // Points earned on desktop
+    mobilePoints: number        // Points earned on mobile
     errors?: string[]
     banned?: boolean
 }
@@ -38,11 +38,13 @@ export interface SummaryData {
 
 export class SummaryReporter {
     private config: Config
-    private jobState: JobState
+    private jobState?: JobState
 
     constructor(config: Config) {
         this.config = config
-        this.jobState = new JobState(config)
+        if (config.jobState?.enabled !== false) {
+            this.jobState = new JobState(config)
+        }
     }
 
     /**
@@ -85,7 +87,7 @@ export class SummaryReporter {
                 description += ` | **🚫 Banned:** ${bannedCount}`
             }
 
-            description += `\n\n**📊 Account Details**\n`
+            description += '\n\n**📊 Account Details**\n'
 
             const accountsWithErrors: AccountResult[] = []
 
@@ -100,13 +102,13 @@ export class SummaryReporter {
                 description += `• Duration: ${durationSec}s\n`
 
                 // Collect accounts with errors for separate webhook
-                if ((account.errors?.length || account.banned) && account.email) {
+                if (this.hasAccountFailure(account)) {
                     accountsWithErrors.push(account)
                 }
             }
 
             // Footer summary
-            description += `\n**🌐 Total Balance**\n`
+            description += '\n**🌐 Total Balance**\n'
             description += `${totalInitial} → **${totalFinal}** pts (+${summary.totalPoints})`
 
             const color = bannedCount > 0 ? 0xFF0000 : summary.failureCount > 0 ? 0xFFAA00 : 0x00FF00
@@ -145,7 +147,7 @@ export class SummaryReporter {
 
                 // Error details
                 if (account.banned) {
-                    errorDescription += `• Status: Account Banned/Suspended\n`
+                    errorDescription += '• Status: Account Banned/Suspended\n'
                     if (account.errors?.length && account.errors[0]) {
                         errorDescription += `• Reason: ${account.errors[0]}\n`
                     }
@@ -153,14 +155,14 @@ export class SummaryReporter {
                     errorDescription += `• Error: ${account.errors[0]}\n`
                 }
 
-                errorDescription += `\n`
+                errorDescription += '\n'
             }
 
-            errorDescription += `**📋 Recommended Actions:**\n`
-            errorDescription += `• Check account status manually\n`
-            errorDescription += `• Review error messages above\n`
-            errorDescription += `• Verify credentials if login failed\n`
-            errorDescription += `• Consider proxy rotation if rate-limited`
+            errorDescription += '**📋 Recommended Actions:**\n'
+            errorDescription += '• Check account status manually\n'
+            errorDescription += '• Review error messages above\n'
+            errorDescription += '• Verify credentials if login failed\n'
+            errorDescription += '• Consider proxy rotation if rate-limited'
 
             await ConclusionWebhook(
                 this.config,
@@ -195,6 +197,10 @@ export class SummaryReporter {
      * Update job state with completion status
      */
     async updateJobState(summary: SummaryData): Promise<void> {
+        if (!this.jobState) {
+            return
+        }
+
         try {
             const day = summary.endTime.toISOString().split('T')?.[0]
             if (!day) return
@@ -205,7 +211,7 @@ export class SummaryReporter {
                     day,
                     {
                         totalCollected: account.pointsEarned,
-                        banned: false,
+                        banned: account.banned ?? false,
                         errors: account.errors?.length ?? 0
                     }
                 )
@@ -237,13 +243,15 @@ export class SummaryReporter {
         log('main', 'SUMMARY', '─'.repeat(80))
 
         for (const account of summary.accounts) {
-            const status = account.errors?.length ? '❌ FAILED' : '✅ SUCCESS'
+            const status = this.hasAccountFailure(account) ? (account.banned ? '🚫 BANNED' : '❌ FAILED') : '✅ SUCCESS'
             const duration = Math.round(account.runDuration / 1000)
 
             log('main', 'SUMMARY', `${status} | ${account.email}`)
             log('main', 'SUMMARY', `   Points: ${account.pointsEarned} | Duration: ${duration}s`)
 
-            if (account.errors?.length) {
+            if (account.banned) {
+                log('main', 'SUMMARY', '   Status: Account flagged as banned/suspended', 'error')
+            } else if (account.errors?.length) {
                 log('main', 'SUMMARY', `   Error: ${account.errors[0]}`, 'error')
             }
         }
@@ -267,8 +275,8 @@ export class SummaryReporter {
         endTime: Date
     ): SummaryData {
         const totalPoints = accounts.reduce((sum, acc) => sum + acc.pointsEarned, 0)
-        const successCount = accounts.filter(acc => !acc.errors?.length).length
-        const failureCount = accounts.length - successCount
+        const failureCount = accounts.filter(acc => this.hasAccountFailure(acc)).length
+        const successCount = accounts.length - failureCount
 
         return {
             accounts,
@@ -278,5 +286,9 @@ export class SummaryReporter {
             successCount,
             failureCount
         }
+    }
+
+    private hasAccountFailure(account: AccountResult): boolean {
+        return Boolean(account.errors?.length) || account.banned === true
     }
 }

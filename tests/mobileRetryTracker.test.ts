@@ -1,7 +1,7 @@
-import test from 'node:test'
 import assert from 'node:assert/strict'
+import test from 'node:test'
 
-import { MobileRetryTracker } from '../src/util/MobileRetryTracker'
+import { MobileRetryTracker } from '../src/util/state/MobileRetryTracker'
 
 test('MobileRetryTracker stops retries after configured limit', () => {
   const tracker = new MobileRetryTracker(2)

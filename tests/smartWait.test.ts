@@ -3,18 +3,8 @@
  * Tests intelligent page readiness and element detection
  */
 
-import assert from 'node:assert'
-import { describe, it } from 'node:test'
-
-// Mock Playwright types for testing
-type MockPage = {
-    url: () => string
-    content: () => Promise<string>
-    waitForLoadState: (state: string, options?: { timeout: number }) => Promise<void>
-    waitForTimeout: (ms: number) => Promise<void>
-    locator: (selector: string) => MockLocator
-    evaluate: <T>(fn: () => T) => Promise<T>
-}
+import assert from 'node:assert';
+import { describe, it } from 'node:test';
 
 type MockLocator = {
     waitFor: (options: { state: string; timeout: number }) => Promise<void>
@@ -94,7 +84,7 @@ describe('SmartWait', () => {
             mockLogFn('✓ Element found quickly (567ms)')
 
             assert.strictEqual(logs.length, 2, 'Should capture log messages')
-            assert.ok(logs[0].includes('1234ms'), 'Should include timing data')
+            assert.ok(logs[0]?.includes('1234ms'), 'Should include timing data')
         })
 
         it('should extract performance metrics from logs', () => {
@@ -102,8 +92,8 @@ describe('SmartWait', () => {
             const timeMatch = logMessage.match(/(\d+)ms/)
 
             assert.ok(timeMatch, 'Should include parseable timing')
-            if (timeMatch) {
-                const time = parseInt(timeMatch[1])
+            if (timeMatch && timeMatch[1]) {
+                const time = parseInt(timeMatch[1], 10)
                 assert.ok(time > 0, 'Should extract valid timing')
             }
         })

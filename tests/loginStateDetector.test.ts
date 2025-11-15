@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { LoginState, LoginStateDetector } from '../src/util/LoginStateDetector'
+import { LoginState, LoginStateDetector } from '../src/util/validation/LoginStateDetector'
 
 /**
  * Tests for LoginStateDetector - login flow state machine
@@ -9,6 +9,8 @@ import { LoginState, LoginStateDetector } from '../src/util/LoginStateDetector'
 
 // Type helper for mock Page objects in tests
 type MockPage = Parameters<typeof LoginStateDetector.detectState>[0]
+
+const asMockPage = <T>(page: T): MockPage => page as unknown as MockPage
 
 test('LoginState enum contains expected states', () => {
   assert.ok(LoginState.EmailPage, 'Should have EmailPage state')
@@ -60,7 +62,7 @@ test('detectState identifies LoggedIn state on rewards domain', async () => {
     evaluate: () => Promise.resolve(200)
   }
 
-  const detection = await LoginStateDetector.detectState(mockPage as MockPage)
+  const detection = await LoginStateDetector.detectState(asMockPage(mockPage))
 
   assert.equal(detection.state, LoginState.LoggedIn, 'Should detect LoggedIn state')
   assert.equal(detection.confidence, 'high', 'Should have high confidence')
@@ -88,7 +90,7 @@ test('detectState identifies EmailPage state on login.live.com', async () => {
     evaluate: () => Promise.resolve(100)
   }
 
-  const detection = await LoginStateDetector.detectState(mockPage as MockPage)
+  const detection = await LoginStateDetector.detectState(asMockPage(mockPage))
 
   assert.equal(detection.state, LoginState.EmailPage, 'Should detect EmailPage state')
   assert.equal(detection.confidence, 'high', 'Should have high confidence')
@@ -115,7 +117,7 @@ test('detectState identifies PasswordPage state', async () => {
     evaluate: () => Promise.resolve(100)
   }
 
-  const detection = await LoginStateDetector.detectState(mockPage as MockPage)
+  const detection = await LoginStateDetector.detectState(asMockPage(mockPage))
 
   assert.equal(detection.state, LoginState.PasswordPage, 'Should detect PasswordPage state')
   assert.equal(detection.confidence, 'high', 'Should have high confidence')
@@ -142,7 +144,7 @@ test('detectState identifies TwoFactorRequired state', async () => {
     evaluate: () => Promise.resolve(100)
   }
 
-  const detection = await LoginStateDetector.detectState(mockPage as MockPage)
+  const detection = await LoginStateDetector.detectState(asMockPage(mockPage))
 
   assert.equal(detection.state, LoginState.TwoFactorRequired, 'Should detect TwoFactorRequired state')
   assert.equal(detection.confidence, 'high', 'Should have high confidence')
@@ -170,7 +172,7 @@ test('detectState identifies PasskeyPrompt state', async () => {
     evaluate: () => Promise.resolve(100)
   }
 
-  const detection = await LoginStateDetector.detectState(mockPage as MockPage)
+  const detection = await LoginStateDetector.detectState(asMockPage(mockPage))
 
   assert.equal(detection.state, LoginState.PasskeyPrompt, 'Should detect PasskeyPrompt state')
   assert.equal(detection.confidence, 'high', 'Should have high confidence')
@@ -198,7 +200,7 @@ test('detectState identifies Blocked state', async () => {
     evaluate: () => Promise.resolve(100)
   }
 
-  const detection = await LoginStateDetector.detectState(mockPage as MockPage)
+  const detection = await LoginStateDetector.detectState(asMockPage(mockPage))
 
   assert.equal(detection.state, LoginState.Blocked, 'Should detect Blocked state')
   assert.equal(detection.confidence, 'high', 'Should have high confidence')
@@ -216,7 +218,7 @@ test('detectState returns Unknown for ambiguous pages', async () => {
     evaluate: () => Promise.resolve(50)
   }
 
-  const detection = await LoginStateDetector.detectState(mockPage as MockPage)
+  const detection = await LoginStateDetector.detectState(asMockPage(mockPage))
 
   assert.equal(detection.state, LoginState.Unknown, 'Should return Unknown for ambiguous pages')
   assert.equal(detection.confidence, 'low', 'Should have low confidence')
@@ -234,7 +236,7 @@ test('detectState handles errors gracefully', async () => {
   }
 
   try {
-    await LoginStateDetector.detectState(mockPage as MockPage)
+    await LoginStateDetector.detectState(asMockPage(mockPage))
     assert.fail('Should throw error')
   } catch (e) {
     assert.ok(e instanceof Error, 'Should throw Error instance')
