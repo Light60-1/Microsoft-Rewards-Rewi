@@ -4,10 +4,12 @@ import * as readline from 'readline'
 import type { BrowserContext, Page } from 'rebrowser-playwright'
 import { log } from '../util/notifications/Logger'
 import { DataGenerator } from './DataGenerator'
+import { HumanBehavior } from './HumanBehavior'
 import { CreatedAccount } from './types'
 
 export class AccountCreator {
   private page!: Page
+  private human!: HumanBehavior
   private dataGenerator: DataGenerator
   private referralUrl?: string
   private recoveryEmail?: string
@@ -27,10 +29,10 @@ export class AccountCreator {
     this.rlClosed = false
   }
 
-  // Human-like delay helper
+  // Human-like delay helper (DEPRECATED - use this.human.humanDelay() instead)
+  // Kept for backward compatibility during migration
   private async humanDelay(minMs: number, maxMs: number): Promise<void> {
-    const delay = Math.random() * (maxMs - minMs) + minMs
-    await this.page.waitForTimeout(Math.floor(delay))
+    await this.human.humanDelay(minMs, maxMs)
   }
 
   /**
@@ -618,13 +620,24 @@ export class AccountCreator {
     try {
       this.page = await context.newPage()
 
-      log(false, 'CREATOR', '🚀 Starting account creation...', 'log', 'cyan')
+      // CRITICAL: Initialize human behavior simulator
+      this.human = new HumanBehavior(this.page)
+
+      log(false, 'CREATOR', '🚀 Starting account creation with enhanced anti-detection...', 'log', 'cyan')
 
       // Navigate to signup page
       await this.navigateToSignup()
 
+      // CRITICAL: Simulate human reading the signup page
+      await this.human.microGestures('SIGNUP_PAGE')
+      await this.humanDelay(500, 1500)
+
       // Click "Create account" button
       await this.clickCreateAccount()
+
+      // CRITICAL: Simulate human inspecting the email field
+      await this.human.microGestures('EMAIL_FIELD')
+      await this.humanDelay(300, 800)
 
       // Generate email and fill it (handles suggestions automatically)
       const emailResult = await this.generateAndFillEmail(this.autoAccept)
@@ -634,6 +647,10 @@ export class AccountCreator {
       }
 
       log(false, 'CREATOR', `✅ Email: ${emailResult}`, 'log', 'green')
+
+      // CRITICAL: Simulate human reading password requirements
+      await this.human.microGestures('PASSWORD_PAGE')
+      await this.humanDelay(500, 1200)
 
       // Wait for password page and fill it
       const password = await this.fillPassword()
@@ -653,6 +670,10 @@ export class AccountCreator {
       const finalEmail = await this.extractEmail()
       const confirmedEmail = finalEmail || emailResult
 
+      // CRITICAL: Simulate human inspecting birthdate fields
+      await this.human.microGestures('BIRTHDATE_PAGE')
+      await this.humanDelay(400, 1000)
+
       // Fill birthdate
       const birthdate = await this.fillBirthdate()
       if (!birthdate) {
@@ -666,6 +687,10 @@ export class AccountCreator {
         log(false, 'CREATOR', '❌ Failed to proceed after birthdate step', 'error')
         return null
       }
+
+      // CRITICAL: Simulate human inspecting name fields
+      await this.human.microGestures('NAMES_PAGE')
+      await this.humanDelay(400, 1000)
 
       // Fill name fields
       const names = await this.fillNames(confirmedEmail)
@@ -942,10 +967,8 @@ export class AccountCreator {
     // Microsoft separates username from domain for outlook.com/hotmail.com addresses
     const emailFillSuccess = await this.retryOperation(
       async () => {
-        await emailInput.clear()
-        await this.humanDelay(800, 1500)
-        await emailInput.fill(email)
-        await this.humanDelay(1200, 2500)
+        // CRITICAL FIX: Use humanType() instead of .fill() to avoid detection
+        await this.human.humanType(emailInput, email, 'EMAIL_INPUT')
 
         // SMART VERIFICATION: Check if Microsoft separated the domain
         const inputValue = await emailInput.inputValue().catch(() => '')
@@ -1080,10 +1103,8 @@ export class AccountCreator {
     // CRITICAL: Retry fill with SMART verification (handles domain separation)
     const retryFillSuccess = await this.retryOperation(
       async () => {
-        await emailInput.clear()
-        await this.humanDelay(800, 1500)
-        await emailInput.fill(newEmail)
-        await this.humanDelay(1200, 2500)
+        // CRITICAL FIX: Use humanType() instead of .fill() to avoid detection
+        await this.human.humanType(emailInput, newEmail, 'EMAIL_RETRY')
 
         // SMART VERIFICATION: Microsoft may separate domain for managed email providers
         const inputValue = await emailInput.inputValue().catch(() => '')
@@ -1158,10 +1179,8 @@ export class AccountCreator {
 
       const retryFillSuccess = await this.retryOperation(
         async () => {
-          await emailInput.clear()
-          await this.humanDelay(800, 1500)
-          await emailInput.fill(newEmail)
-          await this.humanDelay(1200, 2500)
+          // CRITICAL FIX: Use humanType() instead of .fill() to avoid detection
+          await this.human.humanType(emailInput, newEmail, 'EMAIL_AUTO_RETRY')
 
           // SMART VERIFICATION: Microsoft may separate domain for managed email providers
           const inputValue = await emailInput.inputValue().catch(() => '')
@@ -1380,10 +1399,8 @@ export class AccountCreator {
     // CRITICAL: Retry fill with verification
     const passwordFillSuccess = await this.retryOperation(
       async () => {
-        await passwordInput.clear()
-        await this.humanDelay(800, 1500) // INCREASED from 500-1000
-        await passwordInput.fill(password)
-        await this.humanDelay(1200, 2500) // INCREASED from 800-2000
+        // CRITICAL FIX: Use humanType() instead of .fill() to avoid detection
+        await this.human.humanType(passwordInput, password, 'PASSWORD_INPUT')
 
         // Verify value was filled correctly
         const verified = await this.verifyInputValue('input[type="password"]', password)
@@ -1461,7 +1478,8 @@ export class AccountCreator {
       // CRITICAL: Retry click if it fails
       const dayClickSuccess = await this.retryOperation(
         async () => {
-          await dayButton.click({ force: true })
+          // CRITICAL FIX: Use normal click (no force) to avoid bot detection
+          await dayButton.click({ timeout: 5000 })
           await this.humanDelay(1500, 2500) // INCREASED delay
 
           // Verify dropdown opened
@@ -1506,7 +1524,8 @@ export class AccountCreator {
       // CRITICAL: Retry click if it fails
       const monthClickSuccess = await this.retryOperation(
         async () => {
-          await monthButton.click({ force: true })
+          // CRITICAL FIX: Use normal click (no force) to avoid bot detection
+          await monthButton.click({ timeout: 5000 })
           await this.humanDelay(1500, 2500) // INCREASED delay
 
           // Verify dropdown opened
@@ -1560,10 +1579,8 @@ export class AccountCreator {
       // CRITICAL: Retry fill with verification
       const yearFillSuccess = await this.retryOperation(
         async () => {
-          await yearInput.clear()
-          await this.humanDelay(500, 1000)
-          await yearInput.fill(birthdate.year.toString())
-          await this.humanDelay(1000, 2000)
+          // CRITICAL FIX: Use humanType() instead of .fill() to avoid detection
+          await this.human.humanType(yearInput, birthdate.year.toString(), 'YEAR_INPUT')
 
           // Verify value was filled correctly
           const verified = await this.verifyInputValue(
@@ -1667,10 +1684,8 @@ export class AccountCreator {
       // CRITICAL: Retry fill with verification
       const firstNameFillSuccess = await this.retryOperation(
         async () => {
-          await firstNameInput.clear()
-          await this.humanDelay(800, 1500) // INCREASED from 500-1000
-          await firstNameInput.fill(names.firstName)
-          await this.humanDelay(1200, 2500) // INCREASED from 800-2000
+          // CRITICAL FIX: Use humanType() instead of .fill() to avoid detection
+          await this.human.humanType(firstNameInput, names.firstName, 'FIRSTNAME_INPUT')
 
           return true
         },
@@ -1712,10 +1727,8 @@ export class AccountCreator {
       // CRITICAL: Retry fill with verification
       const lastNameFillSuccess = await this.retryOperation(
         async () => {
-          await lastNameInput.clear()
-          await this.humanDelay(800, 1500) // INCREASED from 500-1000
-          await lastNameInput.fill(names.lastName)
-          await this.humanDelay(1200, 2500) // INCREASED from 800-2000
+          // CRITICAL FIX: Use humanType() instead of .fill() to avoid detection
+          await this.human.humanType(lastNameInput, names.lastName, 'LASTNAME_INPUT')
 
           return true
         },
@@ -2701,8 +2714,7 @@ ${JSON.stringify(accountData, null, 2)}`
 
       // Fill email input
       const emailInput = this.page.locator('#EmailAddress').first()
-      await emailInput.fill(recoveryEmailToUse)
-      await this.humanDelay(500, 1000)
+      await this.human.humanType(emailInput, recoveryEmailToUse, 'RECOVERY_EMAIL')
 
       // Click Next
       const nextButton = this.page.locator('#iNext').first()
