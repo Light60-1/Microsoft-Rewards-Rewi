@@ -105,6 +105,8 @@ export class HumanBehavior {
      */
     async microGestures(context: string): Promise<void> {
         try {
+            const gestureNotes: string[] = []
+
             // 60% chance of mouse movement (humans move mouse A LOT)
             if (Math.random() < 0.6) {
                 const x = Math.floor(Math.random() * 200) + 50 // Random x: 50-250px
@@ -115,8 +117,7 @@ export class HumanBehavior {
                     // Mouse move failed - page may be closed or unavailable
                 })
 
-                // VERBOSE logging disabled - too noisy
-                // log(false, 'CREATOR', `[${context}] 🖱️ Mouse moved to (${x}, ${y})`, 'log', 'gray')
+                gestureNotes.push(`mouse→(${x},${y})`)
             }
 
             // 30% chance of scroll (humans scroll to read content)
@@ -129,8 +130,11 @@ export class HumanBehavior {
                     // Scroll failed - page may be closed or unavailable
                 })
 
-                // VERBOSE logging disabled - too noisy
-                // log(false, 'CREATOR', `[${context}] 📜 Scrolled ${direction > 0 ? 'down' : 'up'} ${distance}px`, 'log', 'gray')
+                gestureNotes.push(`scroll ${direction > 0 ? '↓' : '↑'} ${distance}px`)
+            }
+
+            if (gestureNotes.length > 0) {
+                log(false, 'CREATOR', `[${context}] micro gestures: ${gestureNotes.join(', ')}`, 'log', 'gray')
             }
         } catch {
             // Gesture execution failed - not critical for operation

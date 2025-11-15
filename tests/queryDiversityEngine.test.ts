@@ -1,7 +1,7 @@
-import test from 'node:test'
 import assert from 'node:assert/strict'
+import test from 'node:test'
 
-import { QueryDiversityEngine } from '../src/util/QueryDiversityEngine'
+import { QueryDiversityEngine } from '../src/util/network/QueryDiversityEngine'
 
 test('QueryDiversityEngine fetches and limits queries', async () => {
   const engine = new QueryDiversityEngine({
@@ -13,7 +13,7 @@ test('QueryDiversityEngine fetches and limits queries', async () => {
 
   assert.ok(queries.length > 0, 'Should return at least one query')
   assert.ok(queries.length <= 10, 'Should respect count limit')
-  assert.ok(queries.every(q => typeof q === 'string' && q.length > 0), 'All queries should be non-empty strings')
+  assert.ok(queries.every((q: string) => typeof q === 'string' && q.length > 0), 'All queries should be non-empty strings')
 })
 
 test('QueryDiversityEngine deduplicates queries', async () => {

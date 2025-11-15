@@ -210,7 +210,7 @@ export class MicrosoftRewardsBot {
                 await this.runWorker()
             } else {
                 // Neither primary nor worker - something's wrong with clustering
-                log('main', 'MAIN', `ERROR: Cluster mode failed - neither primary nor worker! Falling back to single-process mode.`, 'error')
+                log('main', 'MAIN', 'ERROR: Cluster mode failed - neither primary nor worker! Falling back to single-process mode.', 'error')
                 const passes = this.config.passesPerRun ?? 1
                 for (let pass = 1; pass <= passes; pass++) {
                     if (passes > 1) {
@@ -382,11 +382,21 @@ export class MicrosoftRewardsBot {
 
         // Wait for chunk (either already received during init, or will arrive soon)
         const chunk = await new Promise<Account[]>((resolve) => {
-            if ((global as any).__workerChunk) {
-                resolve((global as any).__workerChunk)
-            } else {
-                (process as unknown as { on: (ev: 'message', cb: (m: { chunk: Account[] }) => void) => void }).on('message', ({ chunk: c }: { chunk: Account[] }) => resolve(c))
+            if (global.__workerChunk) {
+                const bufferedChunk = global.__workerChunk
+                global.__workerChunk = undefined
+                resolve(bufferedChunk)
+                return
             }
+
+            const handleMessage = (message: unknown): void => {
+                if (isWorkerChunkMessage(message)) {
+                    process.off('message', handleMessage)
+                    resolve(message.chunk)
+                }
+            }
+
+            process.on('message', handleMessage)
         })
 
         if (!chunk || chunk.length === 0) {
@@ -896,6 +906,20 @@ function isWorkerMessage(msg: unknown): msg is WorkerMessage {
     return m.type === 'summary' && Array.isArray(m.data)
 }
 
+interface WorkerChunkMessage {
+    chunk: Account[]
+}
+
+function isWorkerChunkMessage(message: unknown): message is WorkerChunkMessage {
+    if (!message || typeof message !== 'object') return false
+    return Array.isArray((message as WorkerChunkMessage).chunk)
+}
+
+declare global {
+    // eslint-disable-next-line no-var
+    var __workerChunk: Account[] | undefined
+}
+
 // Use utility functions from Utils.ts
 const shortErr = shortErrorMessage
 const formatFullError = formatDetailedError
@@ -905,9 +929,14 @@ async function main(): Promise<void> {
     // Workers initialize for ~2 seconds before reaching runWorker(), so messages
     // sent by primary during initialization would be lost without this early listener
     if (!cluster.isPrimary && cluster.worker) {
-        (process as unknown as { on: (ev: 'message', cb: (m: { chunk: Account[] }) => void) => void }).on('message', ({ chunk }: { chunk: Account[] }) => {
-            (global as any).__workerChunk = chunk
-        })
+        const bufferChunk = (message: unknown): void => {
+            if (isWorkerChunkMessage(message)) {
+                global.__workerChunk = message.chunk
+                process.off('message', bufferChunk)
+            }
+        }
+
+        process.on('message', bufferChunk)
     }
 
     // Check for dashboard mode flag (standalone dashboard)

@@ -170,7 +170,7 @@ export default class BrowserFunc {
                         })
 
                         this.bot.log(this.bot.isMobile, 'GO-HOME-DEBUG',
-                            `DOM Diagnostic - ` +
+                            'DOM Diagnostic - ' +
                             `URL: ${diagnosticInfo.url}, ` +
                             `Title: "${diagnosticInfo.pageTitle}", ` +
                             `Elements with 'activit': ${diagnosticInfo.activitiesIdCount} [${diagnosticInfo.activitiesIds.join(', ')}], ` +
