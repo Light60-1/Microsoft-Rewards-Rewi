@@ -796,7 +796,7 @@ npm run creator             # Account creation wizard
 ## 📞 Support & Resources
 
 - **Discord:** https://discord.gg/k5uHkx9mne (community support)
-- **GitHub Issues:** https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues
+- **GitHub Issues:** https://github.com/LightZirconite/Microsoft-Rewards-Bot/issues
 - **Documentation:** `/docs/index.md` (full guide index)
 - **License:** CC BY-NC-SA 4.0 (non-commercial use)
 
@@ -1145,7 +1145,7 @@ private combinedDeduplication(queries: string[], threshold = 0.65): string[] {
 
 **Last Updated:** 2025-11-09  
 **Version:** See `package.json` for current version  
-**Maintainer:** Obsidian-wtf + Community Contributors
+**Maintainer:** LightZirconite + Community Contributors
 
 ---
 

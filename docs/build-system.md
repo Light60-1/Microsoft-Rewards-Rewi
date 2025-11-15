@@ -279,7 +279,7 @@ Microsoft-Rewards-Bot/
 ## 🆘 Getting Help
 
 - **Discord:** https://discord.gg/k5uHkx9mne
-- **GitHub Issues:** https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues
+- **GitHub Issues:** https://github.com/LightZirconite/Microsoft-Rewards-Bot/issues
 - **Documentation:** [docs/index.md](index.md)
 
 ---

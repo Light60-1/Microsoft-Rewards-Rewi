@@ -347,7 +347,7 @@ If sending too many notifications:
 
 - 💬 **[Discord Community](https://discord.gg/k5uHkx9mne)** — Get support
 - 📖 **[Configuration Guide](config.md)** — All config options
-- 🐛 **[Report Issue](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)** — Found a bug?
+- 🐛 **[Report Issue](https://github.com/LightZirconite/Microsoft-Rewards-Bot/issues)** — Found a bug?
 
 ---
 

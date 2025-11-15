@@ -1,9 +1,9 @@
-import type { Page } from 'playwright'
 import * as fs from 'fs'
 import path from 'path'
+import type { Page } from 'playwright'
 
-import { Workers } from '../Workers'
 import { DELAYS } from '../../constants'
+import { Workers } from '../Workers'
 
 import { MorePromotion, PromotionalItem } from '../../interface/DashboardData'
 
@@ -62,7 +62,7 @@ export class SearchOnBing extends Workers {
                 // Fetch from the repo directly so the user doesn't need to redownload the script for the new activities
                 const response = await this.bot.axios.request({
                     method: 'GET',
-                    url: 'https://raw.githubusercontent.com/Obsidian-wtf/Microsoft-Rewards-Bot/refs/heads/main/src/functions/queries.json'
+                    url: 'https://raw.githubusercontent.com/LightZirconite/Microsoft-Rewards-Bot/refs/heads/main/src/functions/queries.json'
                 })
                 queries = response.data
             }

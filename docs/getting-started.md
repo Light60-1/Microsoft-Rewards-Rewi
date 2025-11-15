@@ -110,7 +110,7 @@ Before starting, you need:5. [First Run](#-first-run)*Complete setup guide for b
 
 ```bash
 
-git clone https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot.git  ```bash
+git clone https://github.com/LightZirconite/Microsoft-Rewards-Bot.git  ```bash
 
 cd Microsoft-Rewards-Bot
 
@@ -124,7 +124,7 @@ npm install  node --version
 
   Should show `v20.x.x` or higher
 
-1. Go to: https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot
+1. Go to: https://github.com/LightZirconite/Microsoft-Rewards-Bot
 
 2. Click **Code** → **Download ZIP**- **Microsoft accounts** with email + password
 
@@ -210,7 +210,7 @@ The wizard will:---   - Verify: `node --version` should show v20 or higher<div a
 
    # Linux/Mac
 
-   cp src/accounts.example.jsonc src/accounts.jsoncgit clone https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot.git
+  cp src/accounts.example.jsonc src/accounts.jsoncgit clone https://github.com/LightZirconite/Microsoft-Rewards-Bot.git
 
    ```
 
@@ -234,7 +234,7 @@ cd Microsoft-Rewards-Bot   - Or download project as ZIP</div>
 
          "totp": "",                            // Leave empty for now
 
-         "enabled": true1. Visit: https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot
+         "enabled": true1. Visit: https://github.com/LightZirconite/Microsoft-Rewards-Bot
 
        }
 
@@ -326,7 +326,7 @@ npm run creator https://rewards.bing.com/welcome?rh=YOUR_CODE -y backup@gmail.co
 
 
 
-During creation:- ✅ Saves all account details for yougit clone https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot.git- ✅ Help you create `src/accounts.json` with your Microsoft credentials
+During creation:- ✅ Saves all account details for yougit clone https://github.com/LightZirconite/Microsoft-Rewards-Bot.git- ✅ Help you create `src/accounts.json` with your Microsoft credentials
 
 1. **CAPTCHA**: Browser will pause - solve it manually
 
@@ -374,7 +374,7 @@ Example content:
 
     "year": 1995
 
-  },1. Go to: https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot
+  },1. Go to: https://github.com/LightZirconite/Microsoft-Rewards-Bot
 
   "referralUrl": "https://rewards.bing.com/welcome?rh=YOUR_CODE",
 
@@ -780,7 +780,7 @@ bash setup/setup.sh
 
 - 📖 **[Documentation Hub](index.md)** — All guides
 
-- 🐛 **[Report Issue](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)** — Found a bug?
+- 🐛 **[Report Issue](https://github.com/LightZirconite/Microsoft-Rewards-Bot/issues)** — Found a bug?
 
 1. **Copy the template:**4. **Complete**: Account details saved automaticallydocker compose up -d
 
@@ -908,7 +908,7 @@ Open `src/config.jsonc`:
 
 - Run `npm start` once
 
-- Bot automatically schedules itself**⚠️ IMPORTANT: Keep this file safe!****Found a bug?** [Report it here](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)  
+- Bot automatically schedules itself**⚠️ IMPORTANT: Keep this file safe!****Found a bug?** [Report it here](https://github.com/LightZirconite/Microsoft-Rewards-Bot/issues)  
 
 - Runs every day at your chosen time
 

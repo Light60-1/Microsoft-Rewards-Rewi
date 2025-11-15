@@ -7,8 +7,8 @@
 **Automate your Microsoft Rewards points collection**
 
 [![Discord](https://img.shields.io/badge/💬_Discord-7289DA?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/k5uHkx9mne) 
-[![GitHub](https://img.shields.io/badge/⭐_Star-yellow?style=for-the-badge&logo=github&logoColor=black)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot)
-[![Version](https://img.shields.io/badge/v2.60.0-blue?style=for-the-badge)](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/releases)
+[![GitHub](https://img.shields.io/badge/⭐_Star-yellow?style=for-the-badge&logo=github&logoColor=black)](https://github.com/LightZirconite/Microsoft-Rewards-Bot)
+[![Version](https://img.shields.io/badge/v2.60.0-blue?style=for-the-badge)](https://github.com/LightZirconite/Microsoft-Rewards-Bot/releases)
 
 </div>
 
@@ -49,7 +49,7 @@ A **TypeScript bot** that automatically earns Microsoft Rewards points by comple
 
 ```bash
 # 1. Download the project
-git clone https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot.git
+git clone https://github.com/LightZirconite/Microsoft-Rewards-Bot.git
 cd Microsoft-Rewards-Bot
 
 # 2. Install dependencies
@@ -505,7 +505,7 @@ This is fixed in v2.60.0! The bot now runs tasks immediately on startup before a
 
 - 💬 **[Discord Community](https://discord.gg/k5uHkx9mne)** — Get support & updates
 - 📖 **[Documentation](docs/index.md)** — Complete guides
-- 🐛 **[Report Bug](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)** — Found an issue?
+- 🐛 **[Report Bug](https://github.com/LightZirconite/Microsoft-Rewards-Bot/issues)** — Found an issue?
 - � **[Troubleshooting](docs/troubleshooting.md)** — Fix common problems
 
 ---

@@ -127,7 +127,7 @@ Having issues? Check these resources:
 ### Support Resources
 
 - 💬 **[Discord Community](https://discord.gg/k5uHkx9mne)** — Get help from the community
-- 🐛 **[GitHub Issues](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)** — Report bugs
+- 🐛 **[GitHub Issues](https://github.com/LightZirconite/Microsoft-Rewards-Bot/issues)** — Report bugs
 - 📖 **[FAQ](FAQ.md)** — Frequently asked questions
 - 🔍 **[Diagnostics Guide](diagnostics.md)** — Debug and capture logs
 
@@ -200,9 +200,9 @@ Technical references and detailed information:
 Want to help improve the bot?
 
 - 📖 **[Contributing Guide](../CONTRIBUTING.md)** — How to contribute
-- 🐛 **[Report Bugs](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)** — Found an issue?
-- 💡 **[Feature Requests](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/issues)** — Suggest new features
-- 📝 **[Improve Docs](https://github.com/Obsidian-wtf/Microsoft-Rewards-Bot/tree/main/docs)** — Help with documentation
+- 🐛 **[Report Bugs](https://github.com/LightZirconite/Microsoft-Rewards-Bot/issues)** — Found an issue?
+- 💡 **[Feature Requests](https://github.com/LightZirconite/Microsoft-Rewards-Bot/issues)** — Suggest new features
+- 📝 **[Improve Docs](https://github.com/LightZirconite/Microsoft-Rewards-Bot/tree/main/docs)** — Help with documentation
 
 ---
 

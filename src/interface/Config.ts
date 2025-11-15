@@ -89,7 +89,7 @@ export interface ConfigUpdate {
     // DEPRECATED (v2.56.2+, remove in v3.0): method, docker fields no longer used
     // Migration: update.mjs now exclusively uses GitHub API for all update methods
     // See: scripts/installer/README.md for migration details
-    // TODO(@Obsidian-wtf): Remove deprecated fields in v3.0 major release
+    // TODO(@LightZirconite): Remove deprecated fields in v3.0 major release
 }
 
 export interface ConfigVacation {
