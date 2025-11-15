@@ -145,67 +145,6 @@ export default class BrowserFunc {
                     throw new Error('Account has been suspended!')
                 }
 
-                // IMPROVED: Enhanced diagnostic logging to identify DOM structure changes
-                if (iteration <= 2) {
-                    try {
-                        const diagnosticInfo = await page.evaluate(() => {
-                            const elementsWithActivitiesId = document.querySelectorAll('[id*="activit"]')
-                            const meeCardGroups = document.querySelectorAll('mee-card-group')
-                            const hasRoleList = document.querySelectorAll('[role="list"]')
-                            const dailySets = document.querySelectorAll('.daily-sets, [data-bi-name="daily-set"]')
-                            const rewardsElements = document.querySelectorAll('[class*="rewards"], [id*="rewards"]')
-                            const mainContent = document.querySelector('main')
-
-                            return {
-                                activitiesIdCount: elementsWithActivitiesId.length,
-                                activitiesIds: Array.from(elementsWithActivitiesId).map(el => el.id).slice(0, 5),
-                                meeCardGroupCount: meeCardGroups.length,
-                                roleListCount: hasRoleList.length,
-                                dailySetsCount: dailySets.length,
-                                rewardsElementsCount: rewardsElements.length,
-                                hasMainContent: !!mainContent,
-                                pageTitle: document.title,
-                                bodyClasses: document.body.className,
-                                url: window.location.href
-                            }
-                        })
-
-                        this.bot.log(this.bot.isMobile, 'GO-HOME-DEBUG',
-                            'DOM Diagnostic - ' +
-                            `URL: ${diagnosticInfo.url}, ` +
-                            `Title: "${diagnosticInfo.pageTitle}", ` +
-                            `Elements with 'activit': ${diagnosticInfo.activitiesIdCount} [${diagnosticInfo.activitiesIds.join(', ')}], ` +
-                            `mee-card-group: ${diagnosticInfo.meeCardGroupCount}, ` +
-                            `role=list: ${diagnosticInfo.roleListCount}, ` +
-                            `daily-sets: ${diagnosticInfo.dailySetsCount}, ` +
-                            `rewards elements: ${diagnosticInfo.rewardsElementsCount}, ` +
-                            `main content: ${diagnosticInfo.hasMainContent}`, 'warn')
-                    } catch (error) {
-                        this.bot.log(this.bot.isMobile, 'GO-HOME-DEBUG', `Diagnostic failed: ${error}`, 'warn')
-                    }
-                }
-
-                // IMPROVED: Capture screenshot on final iteration for debugging
-                if (iteration === RETRY_LIMITS.GO_HOME_MAX) {
-                    try {
-                        const fs = await import('fs')
-                        const path = await import('path')
-                        const debugDir = path.join(process.cwd(), 'debug-screenshots')
-
-                        if (!fs.existsSync(debugDir)) {
-                            fs.mkdirSync(debugDir, { recursive: true })
-                        }
-
-                        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-                        const screenshotPath = path.join(debugDir, `goHome-${this.bot.currentAccountEmail}-${timestamp}.png`)
-                        await page.screenshot({ path: screenshotPath, fullPage: true })
-
-                        this.bot.log(this.bot.isMobile, 'GO-HOME', `Debug screenshot saved: ${screenshotPath}`, 'warn')
-                    } catch (error) {
-                        this.bot.log(this.bot.isMobile, 'GO-HOME', `Screenshot capture failed: ${error}`, 'warn')
-                    }
-                }
-
                 // Not suspended, just activities not loaded yet - continue to next iteration
                 this.bot.log(this.bot.isMobile, 'GO-HOME', `Activities not found yet (iteration ${iteration}/${RETRY_LIMITS.GO_HOME_MAX}), retrying...`, 'warn')
 

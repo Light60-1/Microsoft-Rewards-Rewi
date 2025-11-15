@@ -1,6 +1,9 @@
 <div align="center">
 
-<img src="assets/logo.png" alt="Microsoft Rewards Bot Logo" width="200"/>
+<video width="200" autoplay loop muted playsinline>
+  <source src="assets/logo-video.mp4" type="video/mp4">
+  <img src="assets/logo.png" alt="Microsoft Rewards Bot Logo" width="200"/>
+</video>
 
 # Microsoft Rewards Bot
 
