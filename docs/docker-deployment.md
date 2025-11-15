@@ -73,21 +73,21 @@ The container needs access to your configuration files via volume mounts:
 ```yaml
 volumes:
   # Read-only mounts for configuration (prevents accidental container edits)
-  - ./src/accounts.jsonc:/usr/src/microsoft-rewards-bot/dist/accounts.jsonc:ro
-  - ./src/config.jsonc:/usr/src/microsoft-rewards-bot/dist/config.jsonc:ro
+  - ../src/accounts.jsonc:/usr/src/microsoft-rewards-bot/accounts.jsonc:ro
+  - ../src/config.jsonc:/usr/src/microsoft-rewards-bot/config.jsonc:ro
   
   # Read-write mount for persistent login sessions
-  - ./sessions:/usr/src/microsoft-rewards-bot/dist/browser/sessions
+  - ../sessions:/usr/src/microsoft-rewards-bot/sessions
 ```
 
 **Paths explained:**
-- `./src/accounts.jsonc` = `docker/../src/accounts.jsonc` (relative from compose.yaml location)
-- `./sessions` = `docker/sessions/` (local to docker folder)
+- `../src/accounts.jsonc` = `docker/../src/accounts.jsonc` (relative from compose.yaml location, goes to project root)
+- `../sessions` = `docker/../sessions/` (project root sessions folder)
 
 **Before starting:**
 1. Create `src/accounts.jsonc` (copy from `src/accounts.example.jsonc`)
 2. Edit `src/config.jsonc` with your settings
-3. (Optional) Create `docker/sessions/` directory for persistent login
+3. (Optional) Create `sessions/` directory at project root for persistent login
 
 ---
 
@@ -334,8 +334,9 @@ docker inspect microsoft-rewards-bot | grep -A 10 Mounts
 ```yaml
 # Paths are relative to compose.yaml location (docker/)
 volumes:
-  - ./src/accounts.jsonc:/usr/src/microsoft-rewards-bot/dist/accounts.jsonc:ro
+  - ../src/accounts.jsonc:/usr/src/microsoft-rewards-bot/accounts.jsonc:ro
   # This resolves to: docker/../src/accounts.jsonc (project root)
+  # Note: Files mount to project root, NOT dist/ (Load.ts searches multiple locations)
 ```
 
 ---
