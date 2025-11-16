@@ -707,7 +707,7 @@ export class MicrosoftRewardsBot {
             const h = this.config?.humanization
             // Only send immediate alert if explicitly enabled (default: false to avoid duplicates)
             if (!h || h.immediateBanAlert !== true) return
-            
+
             const { ConclusionWebhook } = await import('./util/notifications/ConclusionWebhook')
             await ConclusionWebhook(
                 this.config,
