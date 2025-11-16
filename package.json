@@ -71,6 +71,7 @@
     "chalk": "^4.1.2",
     "cheerio": "^1.0.0",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.2.1",
     "fingerprint-generator": "^2.1.66",
     "fingerprint-injector": "^2.1.66",
     "http-proxy-agent": "^7.0.2",
@@ -82,7 +83,6 @@
     "rebrowser-playwright": "1.52.0",
     "socks-proxy-agent": "^8.0.5",
     "ts-node": "^10.9.2",
-    "ws": "^8.18.3",
-    "express-rate-limit": "^8.2.1"
+    "ws": "^8.18.3"
   }
 }

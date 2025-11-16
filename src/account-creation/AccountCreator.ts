@@ -84,7 +84,8 @@ export class AccountCreator {
     operation: () => Promise<T>,
     context: string,
     maxRetries: number = 3,
-    initialDelayMs: number = 1000
+    initialDelayMs: number = 1000,
+    enableMicroGestures: boolean = true
   ): Promise<T | null> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -102,7 +103,8 @@ export class AccountCreator {
           await this.page.waitForTimeout(Math.floor(humanDelay))
 
           // IMPROVED: Random micro-gesture during retry (human frustration pattern)
-          if (Math.random() < 0.4) {
+          // CRITICAL: Can be disabled for sensitive operations (e.g., dropdowns) where scroll would break state
+          if (enableMicroGestures && Math.random() < 0.4) {
             await this.human.microGestures(`${context}_RETRY_${attempt}`)
           }
         } else {
@@ -112,6 +114,30 @@ export class AccountCreator {
     }
 
     return null
+  }
+
+  /**
+   * IMPROVED: Fluent UI-compatible interaction method
+   * Uses focus + Enter (keyboard) which works better than mouse clicks for Fluent UI components
+   * Falls back to direct click if focus fails
+   * 
+   * @param locator - Playwright locator for the element
+   * @param context - Context name for logging
+   * @returns Promise<void>
+   */
+  private async fluentUIClick(locator: ReturnType<typeof this.page.locator>, context: string): Promise<void> {
+    try {
+      // STRATEGY 1: Focus + Enter (most compatible with Fluent UI)
+      await locator.focus()
+      await this.humanDelay(300, 600)
+      await this.page.keyboard.press('Enter')
+      log(false, 'CREATOR', `[${context}] ✓ Pressed Enter on focused element`, 'log', 'cyan')
+    } catch (focusError) {
+      // STRATEGY 2: Fallback to direct click
+      log(false, 'CREATOR', `[${context}] ⚠️ Focus+Enter failed, using direct click`, 'warn', 'yellow')
+      await locator.click({ timeout: 5000 })
+      log(false, 'CREATOR', `[${context}] ✓ Direct click executed`, 'log', 'cyan')
+    }
   }
 
   /**
@@ -1050,7 +1076,7 @@ export class AccountCreator {
     // CRITICAL: Get current URL before clicking
     const urlBeforeClick = this.page.url()
 
-    await nextBtn.click()
+    await this.fluentUIClick(nextBtn, 'EMAIL_NEXT')
     // OPTIMIZED: Reduced delay after clicking Next
     await this.humanDelay(1000, 1500)
     await this.waitForPageStable('AFTER_EMAIL_SUBMIT', 10000)
@@ -1175,7 +1201,7 @@ export class AccountCreator {
     }
 
     const nextBtn = this.page.locator('button[data-testid="primaryButton"], button[type="submit"]').first()
-    await nextBtn.click()
+    await this.fluentUIClick(nextBtn, 'RETRY_EMAIL_NEXT')
     await this.humanDelay(2000, 3000)
     await this.waitForPageStable('RETRY_EMAIL', 15000)
 
@@ -1298,8 +1324,8 @@ export class AccountCreator {
 
     log(false, 'CREATOR', `Selecting suggestion: ${cleanEmail}`, 'log', 'cyan')
 
-    // Click the suggestion
-    await firstButton.click()
+    // Click the suggestion using Fluent UI compatible method
+    await this.fluentUIClick(firstButton, 'EMAIL_SUGGESTION')
     await this.humanDelay(500, 1000) // REDUCED: Faster suggestion click (was 1500-2500)
 
     // Verify the email input was updated
@@ -1378,7 +1404,7 @@ export class AccountCreator {
     // Get current URL and page state before clicking
     const urlBefore = this.page.url()
 
-    await nextBtn.click()
+    await this.fluentUIClick(nextBtn, `NEXT_${step.toUpperCase()}`)
     log(false, 'CREATOR', `✅ Clicked Next (${step})`, 'log', 'green')
 
     // CRITICAL: Wait for page to process the click
@@ -1512,29 +1538,50 @@ export class AccountCreator {
     try {
       await this.humanDelay(2000, 3000)
 
-      // CRITICAL: Microsoft changed order - MONTH must be filled BEFORE DAY
-      // Detect order by checking which dropdown appears first in DOM
-      const monthFirst = await this.page.locator('button#BirthMonthDropdown').first().boundingBox().then(box => box?.y ?? 0).catch(() => 0)
-      const dayFirst = await this.page.locator('button#BirthDayDropdown').first().boundingBox().then(box => box?.y ?? 0).catch(() => 0)
+      // CRITICAL FIX: Microsoft UI has Month and Day side-by-side (same Y position)
+      // Cannot detect order by Y position. Checking DOM order instead.
+      // According to HTML structure analysis: Month ALWAYS comes before Day in DOM
 
-      const monthBeforeDay = monthFirst > 0 && monthFirst < dayFirst
+      const monthBox = await this.page.locator('button#BirthMonthDropdown').first().boundingBox().catch(() => null)
+      const dayBox = await this.page.locator('button#BirthDayDropdown').first().boundingBox().catch(() => null)
+
+      const monthX = monthBox?.x ?? 0
+      const dayX = dayBox?.x ?? 0
+      const monthY = monthBox?.y ?? 0
+      const dayY = dayBox?.y ?? 0
+
+      log(false, 'CREATOR', `[LAYOUT_DETECTION] Month (${monthX}, ${monthY}), Day (${dayX}, ${dayY})`, 'log', 'cyan')
+
+      // Check if buttons are on same horizontal line (difference < 10px)
+      const sameLine = Math.abs(monthY - dayY) < 10
+
+      let monthBeforeDay = false
+      if (sameLine) {
+        // Horizontal layout - check X position (left-to-right)
+        monthBeforeDay = monthX > 0 && dayX > 0 && monthX < dayX
+        log(false, 'CREATOR', `[LAYOUT_DETECTION] Horizontal layout detected (Month X < Day X: ${monthBeforeDay})`, 'log', 'cyan')
+      } else {
+        // Vertical layout - check Y position (top-to-bottom)
+        monthBeforeDay = monthY > 0 && dayY > 0 && monthY < dayY
+        log(false, 'CREATOR', `[LAYOUT_DETECTION] Vertical layout detected (Month Y < Day Y: ${monthBeforeDay})`, 'log', 'cyan')
+      }
 
       if (monthBeforeDay) {
-        log(false, 'CREATOR', '🔄 Detected MONTH-FIRST layout (new Microsoft UI)', 'log', 'cyan')
+        log(false, 'CREATOR', '🔄 Detected MONTH-FIRST layout', 'log', 'cyan')
       } else {
-        log(false, 'CREATOR', '📅 Detected DAY-FIRST layout (old Microsoft UI)', 'log', 'cyan')
+        log(false, 'CREATOR', '📅 Detected DAY-FIRST layout', 'log', 'cyan')
       }
 
       // === FILL IN CORRECT ORDER ===
       if (monthBeforeDay) {
-        // NEW ORDER: MONTH → DAY → YEAR
+        // MONTH → DAY → YEAR
         const monthResult = await this.fillMonthDropdown(birthdate.month)
         if (!monthResult) return null
 
         const dayResult = await this.fillDayDropdown(birthdate.day)
         if (!dayResult) return null
       } else {
-        // OLD ORDER: DAY → MONTH → YEAR
+        // DAY → MONTH → YEAR
         const dayResult = await this.fillDayDropdown(birthdate.day)
         if (!dayResult) return null
 
@@ -1592,25 +1639,44 @@ export class AccountCreator {
   private async fillDayDropdown(day: number): Promise<boolean> {
     try {
       // === DAY DROPDOWN ===
-      // UPDATED: Microsoft changed HTML - new Fluent UI classes (___w2njya0, etc.)
-      const dayButton = this.page.locator('button#BirthDayDropdown, button[name="BirthDay"], button.fui-Dropdown__button[aria-label*="day"]').first()
+      // STRATEGY: Prioritize stable attributes (ID, name, aria-label) over volatile atomic classes
+      // Multiple fallbacks for Microsoft's frequent UI changes
+      const dayButton = this.page.locator('button#BirthDayDropdown, button[name="BirthDay"], button[aria-label*="Birth day"], button[aria-label*="day"][role="combobox"]').first()
       await dayButton.waitFor({ timeout: 15000, state: 'visible' })
+
+      // Ensure button is in viewport
+      await dayButton.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => { })
+      await this.humanDelay(500, 1000)
+
+      // CRITICAL: Wait for page to be fully interactive
+      await this.page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => { })
+      await this.humanDelay(500, 1000)
 
       log(false, 'CREATOR', 'Clicking day dropdown...', 'log')
 
-      // CRITICAL: Retry click if it fails
+      // CRITICAL: Retry click with better diagnostics
       const dayClickSuccess = await this.retryOperation(
         async () => {
-          // CRITICAL FIX: Use normal click (no force) to avoid bot detection
-          await dayButton.click({ timeout: 5000 })
-          await this.humanDelay(1500, 2500) // INCREASED delay
+          // Verify button state before clicking
+          const visible = await dayButton.isVisible().catch(() => false)
+          const enabled = await dayButton.isEnabled().catch(() => false)
 
-          // Verify dropdown opened
-          // UPDATED: Check for Fluent UI dropdown container
+          if (!visible || !enabled) {
+            throw new Error(`Day button not ready (visible: ${visible}, enabled: ${enabled})`)
+          }
+
+          // Use Fluent UI compatible click method
+          await this.fluentUIClick(dayButton, 'DAY_CLICK')
+          await this.humanDelay(1500, 2500)
+
+          // Verify dropdown opened with multiple checks
           const dayOptionsContainer = this.page.locator('div[role="listbox"], ul[role="listbox"], div.fui-Listbox').first()
           const isOpen = await dayOptionsContainer.isVisible().catch(() => false)
 
-          if (!isOpen) {
+          const ariaExpanded = await dayButton.getAttribute('aria-expanded').catch(() => 'false')
+          const buttonExpanded = ariaExpanded === 'true'
+
+          if (!isOpen && !buttonExpanded) {
             throw new Error('Day dropdown did not open')
           }
 
@@ -1618,7 +1684,8 @@ export class AccountCreator {
         },
         'DAY_DROPDOWN_OPEN',
         3,
-        1000
+        1000,
+        false // Disable micro-gestures to avoid scroll interfering with dropdown
       )
 
       if (!dayClickSuccess) {
@@ -1633,16 +1700,18 @@ export class AccountCreator {
       // UPDATED: Fluent UI uses div[role="option"] with exact text matching
       const dayOption = this.page.locator(`div[role="option"]:text-is("${day}"), div[role="option"]:has-text("${day}"), li[role="option"]:has-text("${day}")`).first()
       await dayOption.waitFor({ timeout: 5000, state: 'visible' })
-      await dayOption.click()
+
+      // Try fluentUIClick for option selection (may fallback to direct click)
+      await this.fluentUIClick(dayOption, 'DAY_OPTION')
       await this.humanDelay(1500, 2500) // INCREASED delay
 
       // CRITICAL: Wait for dropdown to FULLY close
       await this.waitForDropdownClosed('DAY_DROPDOWN', 8000)
-      await this.humanDelay(3500, 5500) // IMPROVED: Longer delay (humans take time between dropdowns)
+      await this.humanDelay(2000, 3000) // Human-like pause between interactions
 
       // CRITICAL: Verify page is interactive (not animating)
       await this.waitForPageStable('AFTER_DAY_DROPDOWN', 5000)
-      await this.humanDelay(1500, 2500) // Additional reading pause
+      await this.humanDelay(800, 1500) // Brief reading pause
 
       return true
     } catch (error) {
@@ -1658,47 +1727,104 @@ export class AccountCreator {
   private async fillMonthDropdown(month: number): Promise<boolean> {
     try {
       // === MONTH DROPDOWN ===
-      // UPDATED: Microsoft changed HTML - new Fluent UI classes
-      const monthButton = this.page.locator('button#BirthMonthDropdown, button[name="BirthMonth"], button.fui-Dropdown__button[aria-label*="month"]').first()
+      // STRATEGY: Prioritize stable attributes (ID, name, aria-label) over volatile atomic classes
+      // Multiple fallbacks for Microsoft's frequent UI changes
+      const monthButton = this.page.locator('button#BirthMonthDropdown, button[name="BirthMonth"], button[aria-label*="Birth month"], button[aria-label*="month"][role="combobox"]').first()
       await monthButton.waitFor({ timeout: 10000, state: 'visible' })
+
+      // CRITICAL: Ensure button is visible and in viewport
+      await monthButton.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => { })
+      await this.humanDelay(500, 1000)
+
+      // CRITICAL: Wait for any animations or JavaScript to complete
+      await this.page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => { })
+      await this.humanDelay(800, 1500)
 
       // CRITICAL: Verify button is actually clickable (not disabled, not covered)
       const monthEnabled = await monthButton.isEnabled().catch(() => false)
       if (!monthEnabled) {
-        log(false, 'CREATOR', 'Month button not enabled yet, waiting...', 'warn', 'yellow')
-        await this.humanDelay(3000, 5000)
+        log(false, 'CREATOR', '⚠️ Month button disabled, waiting for page to update...', 'warn', 'yellow')
+        await this.humanDelay(2000, 3000)
+
+        // Re-check after waiting
+        const retryEnabled = await monthButton.isEnabled().catch(() => false)
+        if (!retryEnabled) {
+          log(false, 'CREATOR', '❌ Month button still disabled after wait', 'error')
+          return false
+        }
       }
 
       log(false, 'CREATOR', 'Clicking month dropdown...', 'log')
 
-      // CRITICAL: Retry click with RANDOMIZED delays (avoid pattern detection)
+      // CRITICAL: Retry click with better diagnostics
       const monthClickSuccess = await this.retryOperation(
         async () => {
-          // IMPROVED: Random micro-gesture before click (human-like)
-          await this.human.microGestures('MONTH_DROPDOWN_PRE_CLICK')
-          await this.humanDelay(500, 1200)
+          // Verify button is still visible and enabled before each attempt
+          const visible = await monthButton.isVisible().catch(() => false)
+          const enabled = await monthButton.isEnabled().catch(() => false)
 
-          // CRITICAL FIX: Use normal click (no force) to avoid bot detection
-          await monthButton.click({ timeout: 5000 })
+          if (!visible) {
+            log(false, 'CREATOR', '[MONTH_CLICK] ❌ Button not visible', 'warn', 'yellow')
+            throw new Error('Month button not visible')
+          }
+          if (!enabled) {
+            log(false, 'CREATOR', '[MONTH_CLICK] ❌ Button not enabled', 'warn', 'yellow')
+            throw new Error('Month button not enabled')
+          }
 
-          // IMPROVED: Variable delay after click (avoid predictability)
-          const postClickDelay: [number, number] = Math.random() < 0.3 ? [2500, 4000] : [1500, 2500]
-          await this.humanDelay(postClickDelay[0], postClickDelay[1])
+          // Get button position and log it
+          const box = await monthButton.boundingBox()
+          if (!box) {
+            log(false, 'CREATOR', '[MONTH_CLICK] ❌ Cannot get button position', 'warn', 'yellow')
+            throw new Error('Cannot get month button position')
+          }
 
-          // Verify dropdown opened
-          // UPDATED: Fluent UI listbox detection
+          log(false, 'CREATOR', `[MONTH_CLICK] Button at (${Math.round(box.x)}, ${Math.round(box.y)})`, 'log', 'cyan')
+
+          // DIAGNOSTIC: Check if element is truly interactive
+          const computedStyle = await monthButton.evaluate((el) => {
+            const style = window.getComputedStyle(el)
+            return {
+              pointerEvents: style.pointerEvents,
+              opacity: style.opacity,
+              display: style.display,
+              visibility: style.visibility
+            }
+          }).catch(() => null)
+
+          if (computedStyle) {
+            log(false, 'CREATOR', `[MONTH_CLICK] Style: ${JSON.stringify(computedStyle)}`, 'log', 'cyan')
+          }
+
+          // Use Fluent UI compatible click method
+          await this.fluentUIClick(monthButton, 'MONTH_CLICK')
+          await this.humanDelay(1500, 2500)
+
+          // Verify dropdown opened with multiple detection strategies
           const monthOptionsContainer = this.page.locator('div[role="listbox"], ul[role="listbox"], div.fui-Listbox').first()
           const isOpen = await monthOptionsContainer.isVisible().catch(() => false)
 
-          if (!isOpen) {
+          // Also check if button aria-expanded changed to true
+          const ariaExpanded = await monthButton.getAttribute('aria-expanded').catch(() => 'false')
+          const buttonExpanded = ariaExpanded === 'true'
+
+          if (!isOpen && !buttonExpanded) {
+            log(false, 'CREATOR', '[MONTH_CLICK] ❌ Dropdown did not open (listbox not visible, aria-expanded=false)', 'warn', 'yellow')
             throw new Error('Month dropdown did not open')
+          }
+
+          if (isOpen) {
+            log(false, 'CREATOR', '[MONTH_CLICK] ✓ Dropdown opened (listbox visible)', 'log', 'green')
+          } else if (buttonExpanded) {
+            log(false, 'CREATOR', '[MONTH_CLICK] ✓ Dropdown opened (aria-expanded=true)', 'log', 'green')
           }
 
           return true
         },
         'MONTH_DROPDOWN_OPEN',
         3,
-        1000
+        1200,
+        false // CRITICAL: Disable micro-gestures (scroll would lose button position)
       )
 
       if (!monthClickSuccess) {
@@ -1716,18 +1842,22 @@ export class AccountCreator {
       // Fallback: if data-value doesn't work, try by index
       const monthVisible = await monthOption.isVisible().catch(() => false)
       if (monthVisible) {
-        await monthOption.click()
+        await this.fluentUIClick(monthOption, 'MONTH_OPTION')
         log(false, 'CREATOR', '✅ Month selected', 'log', 'green')
       } else {
         log(false, 'CREATOR', `Fallback: selecting month by nth-child(${month})`, 'warn', 'yellow')
         const monthOptionByIndex = this.page.locator(`div[role="option"]:nth-child(${month}), li[role="option"]:nth-child(${month})`).first()
-        await monthOptionByIndex.click()
+        await this.fluentUIClick(monthOptionByIndex, 'MONTH_OPTION_INDEX')
       }
       await this.humanDelay(1500, 2500) // INCREASED delay
 
       // CRITICAL: Wait for dropdown to FULLY close
       await this.waitForDropdownClosed('MONTH_DROPDOWN', 8000)
       await this.humanDelay(2000, 3000) // INCREASED safety delay
+
+      // CRITICAL: Verify page is interactive (not animating) - CONSISTENCY with day dropdown
+      await this.waitForPageStable('AFTER_MONTH_DROPDOWN', 5000)
+      await this.humanDelay(1500, 2500) // Additional reading pause
 
       return true
     } catch (error) {
@@ -1743,8 +1873,9 @@ export class AccountCreator {
   private async fillYearInput(year: number): Promise<boolean> {
     try {
       // === YEAR INPUT ===
-      // UPDATED: Fluent UI year input (class fui-Input__input)
-      const yearInput = this.page.locator('input[name="BirthYear"], input[type="number"], input.fui-Input__input[aria-label*="year"]').first()
+      // STRATEGY: Prioritize stable attributes (name, type, aria-label) over volatile atomic classes
+      // Multiple fallbacks for Microsoft's frequent UI changes
+      const yearInput = this.page.locator('input[name="BirthYear"], input[type="number"][aria-label*="Birth year"], input[aria-label*="year"][inputmode="numeric"]').first()
       await yearInput.waitFor({ timeout: 10000, state: 'visible' })
 
       log(false, 'CREATOR', `Filling year: ${year}`, 'log')
@@ -1757,7 +1888,7 @@ export class AccountCreator {
 
           // Verify value was filled correctly
           const verified = await this.verifyInputValue(
-            'input[name="BirthYear"], input[type="number"], input.fui-Input__input[aria-label*="year"]',
+            'input[name="BirthYear"], input[type="number"][aria-label*="Birth year"], input[aria-label*="year"][inputmode="numeric"]',
             year.toString()
           )
 
