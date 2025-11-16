@@ -61,30 +61,43 @@ export class HumanBehavior {
 
         log(false, 'CREATOR', `[${context}] ⌨️ Typing: "${text.substring(0, 20)}${text.length > 20 ? '...' : ''}"`, 'log', 'cyan')
 
+        // IMPROVED: Generate per-session typing personality (consistent across field)
+        const typingSpeed = 0.7 + Math.random() * 0.6 // 0.7-1.3x speed multiplier
+        const errorRate = Math.random() * 0.08 // 0-8% error rate
+        const burstTyping = Math.random() < 0.3 // 30% chance of burst typing
+
         for (let i = 0; i < text.length; i++) {
             const char: string = text[i] as string
 
             // CRITICAL: Skip if char is somehow undefined (defensive programming)
             if (!char) continue
 
-            // NATURAL VARIANCE:
-            // - Fast keys: common letters (e, a, t, i, o, n) = 80-150ms
-            // - Slow keys: numbers, symbols, shift combos = 200-400ms
-            // - Occasional typos: 5% chance of longer pause (user correcting)
-
+            // IMPROVED: More realistic variance based on typing personality
             let charDelay: number
             const isFastKey = /[eatino]/i.test(char)
             const isSlowKey = /[^a-z]/i.test(char) // Numbers, symbols, etc.
-            const hasTyro = Math.random() < 0.05 // 5% typo simulation
+            const hasTypo = Math.random() < errorRate // Dynamic typo rate
+            const isBurst = burstTyping && i > 0 && Math.random() < 0.4 // Burst typing pattern
 
-            if (hasTyro) {
-                charDelay = Math.random() * 400 + 300 // 300-700ms (correcting typo)
+            if (hasTypo) {
+                // Typo: pause, backspace, retype
+                charDelay = Math.random() * 500 + 400 // 400-900ms (correcting)
+                log(false, 'CREATOR', `[${context}] 🔄 Typo correction simulation`, 'log', 'gray')
+            } else if (isBurst) {
+                // Burst typing: very fast
+                charDelay = (Math.random() * 50 + 40) * typingSpeed // 40-90ms * speed
             } else if (isFastKey) {
-                charDelay = Math.random() * 70 + 80 // 80-150ms
+                charDelay = (Math.random() * 80 + 70) * typingSpeed // 70-150ms * speed
             } else if (isSlowKey) {
-                charDelay = Math.random() * 200 + 200 // 200-400ms
+                charDelay = (Math.random() * 250 + 180) * typingSpeed // 180-430ms * speed
             } else {
-                charDelay = Math.random() * 100 + 120 // 120-220ms
+                charDelay = (Math.random() * 120 + 100) * typingSpeed // 100-220ms * speed
+            }
+
+            // IMPROVED: Random micro-pauses (thinking)
+            if (Math.random() < 0.05 && i > 0) {
+                const thinkPause = Math.random() * 800 + 500 // 500-1300ms
+                await this.page.waitForTimeout(Math.floor(thinkPause))
             }
 
             await locator.type(char, { delay: 0 }) // Type instantly
@@ -101,29 +114,45 @@ export class HumanBehavior {
      * CRITICAL: Simulate micro mouse movements and scrolls
      * Real humans constantly move mouse and scroll while reading/thinking
      * 
+     * IMPROVED: Natural variance per session (not every gesture is identical)
+     * 
      * @param context Description for logging
      */
     async microGestures(context: string): Promise<void> {
         try {
             const gestureNotes: string[] = []
 
-            // 60% chance of mouse movement (humans move mouse A LOT)
-            if (Math.random() < 0.6) {
-                const x = Math.floor(Math.random() * 200) + 50 // Random x: 50-250px
-                const y = Math.floor(Math.random() * 150) + 30 // Random y: 30-180px
-                const steps = Math.floor(Math.random() * 5) + 3 // 3-8 steps (smooth movement)
+            // IMPROVED: Variable mouse movement probability (not always 60%)
+            const mouseMoveProb = 0.45 + Math.random() * 0.3 // 45-75% chance
+
+            if (Math.random() < mouseMoveProb) {
+                // IMPROVED: Wider movement range (more natural)
+                const x = Math.floor(Math.random() * 400) + 30 // Random x: 30-430px
+                const y = Math.floor(Math.random() * 300) + 20 // Random y: 20-320px
+                const steps = Math.floor(Math.random() * 8) + 2 // 2-10 steps (variable smoothness)
 
                 await this.page.mouse.move(x, y, { steps }).catch(() => {
                     // Mouse move failed - page may be closed or unavailable
                 })
 
                 gestureNotes.push(`mouse→(${x},${y})`)
+
+                // IMPROVED: Sometimes double-move (human overshoots then corrects)
+                if (Math.random() < 0.15) {
+                    await this.humanDelay(100, 300, context)
+                    const x2 = x + (Math.random() * 40 - 20) // ±20px correction
+                    const y2 = y + (Math.random() * 40 - 20)
+                    await this.page.mouse.move(x2, y2, { steps: 2 }).catch(() => { })
+                    gestureNotes.push(`correct→(${x2},${y2})`)
+                }
             }
 
-            // 30% chance of scroll (humans scroll to read content)
-            if (Math.random() < 0.3) {
-                const direction = Math.random() < 0.7 ? 1 : -1 // 70% down, 30% up
-                const distance = Math.floor(Math.random() * 200) + 50 // 50-250px
+            // IMPROVED: Variable scroll probability (not always 30%)
+            const scrollProb = 0.2 + Math.random() * 0.25 // 20-45% chance
+
+            if (Math.random() < scrollProb) {
+                const direction = Math.random() < 0.65 ? 1 : -1 // 65% down, 35% up
+                const distance = Math.floor(Math.random() * 300) + 40 // 40-340px (more variance)
                 const dy = direction * distance
 
                 await this.page.mouse.wheel(0, dy).catch(() => {
@@ -133,8 +162,11 @@ export class HumanBehavior {
                 gestureNotes.push(`scroll ${direction > 0 ? '↓' : '↑'} ${distance}px`)
             }
 
+            // IMPROVED: Sometimes NO gesture at all (humans sometimes just stare)
+            // Already handled by caller's random probability
+
             if (gestureNotes.length > 0) {
-                log(false, 'CREATOR', `[${context}] micro gestures: ${gestureNotes.join(', ')}`, 'log', 'gray')
+                log(false, 'CREATOR', `[${context}] ${gestureNotes.join(', ')}`, 'log', 'gray')
             }
         } catch {
             // Gesture execution failed - not critical for operation
