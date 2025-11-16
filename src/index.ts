@@ -642,11 +642,11 @@ export class MicrosoftRewardsBot {
             this.accountSummaries.push(summary)
             this.persistAccountCompletion(account.email, accountDayKey, summary)
 
+            // Track banned accounts for later security alert (after conclusion webhook)
             if (banned.status) {
                 this.bannedTriggered = { email: account.email, reason: banned.reason }
-                // Enter global standby: do not proceed to next accounts
+                // Enter global standby mode flag (will be processed after sending conclusion)
                 this.globalStandby = { active: true, reason: `banned:${banned.reason}` }
-                await this.sendGlobalSecurityStandbyAlert(account.email, `Ban detected: ${banned.reason || 'unknown'}`)
             }
 
             await log('main', 'MAIN-WORKER', `Completed tasks for account ${account.email}`, 'log', 'green')
@@ -659,8 +659,29 @@ export class MicrosoftRewardsBot {
                 log('main', 'SUMMARY-DEBUG', `Account ${summary.email} collected D:${summary.desktopCollected} M:${summary.mobileCollected} TOTAL:${summary.totalCollected} ERRORS:${summary.errors.length ? summary.errors.join(';') : 'none'}`)
             }
         }
-        // If any account is flagged compromised, do NOT exit; keep the process alive so the browser stays open
+
+        // IMPROVED: Always send conclusion webhook first (with results), then handle security alerts
+        // This ensures we get the summary even if bans are detected
+        if (this.config.clusters > 1 && !cluster.isPrimary) {
+            // Worker mode: send summaries to primary
+            if (process.send) {
+                process.send({ type: 'summary', data: this.accountSummaries })
+            }
+        } else {
+            // Single process mode: send conclusion with all results (including banned accounts)
+            await this.sendConclusion(this.accountSummaries)
+        }
+
+        // After sending conclusion, handle security standby if needed
         if (this.compromisedModeActive || this.globalStandby.active) {
+            // Send security alert AFTER conclusion webhook
+            if (this.bannedTriggered) {
+                await this.sendGlobalSecurityStandbyAlert(
+                    this.bannedTriggered.email,
+                    `Ban detected: ${this.bannedTriggered.reason || 'unknown'}`
+                )
+            }
+
             log('main', 'SECURITY', 'Security alert active. Process kept alive for manual review. Press CTRL+C to exit when done.', 'warn', 'yellow')
             // Periodic heartbeat with cleanup on exit
             const standbyInterval = setInterval(() => {
@@ -672,33 +693,31 @@ export class MicrosoftRewardsBot {
             process.once('SIGTERM', () => { clearInterval(standbyInterval); process.exit(0) })
             return
         }
-        // If in worker mode (clusters>1) send summaries to primary
-        if (this.config.clusters > 1 && !cluster.isPrimary) {
-            if (process.send) {
-                process.send({ type: 'summary', data: this.accountSummaries })
-            }
-        } else {
-            // Single process mode -> build and send conclusion directly (update check moved to startup)
-            await this.sendConclusion(this.accountSummaries)
-        }
+
         process.exit()
     }
 
-    /** Send immediate ban alert if configured. */
+    /** 
+     * Send immediate ban alert if configured (deprecated in favor of conclusion webhook)
+     * IMPROVED: This is now only used for real-time alerts during execution
+     * The main security alert is sent AFTER conclusion webhook to avoid missing results
+     */
     private async handleImmediateBanAlert(email: string, reason: string): Promise<void> {
         try {
             const h = this.config?.humanization
-            if (!h || h.immediateBanAlert === false) return
+            // Only send immediate alert if explicitly enabled (default: false to avoid duplicates)
+            if (!h || h.immediateBanAlert !== true) return
+            
             const { ConclusionWebhook } = await import('./util/notifications/ConclusionWebhook')
             await ConclusionWebhook(
                 this.config,
-                '🚫 Ban Detected',
-                `**Account:** ${email}\n**Reason:** ${reason || 'detected by heuristics'}`,
+                '🚫 Ban Detected (Real-time)',
+                `**Account:** ${email}\n**Reason:** ${reason || 'detected by heuristics'}\n\n*Full summary will be sent after completion*`,
                 undefined,
                 DISCORD.COLOR_RED
             )
         } catch (e) {
-            log('main', 'ALERT', `Failed to send ban alert: ${e instanceof Error ? e.message : e}`, 'warn')
+            log('main', 'ALERT', `Failed to send immediate ban alert: ${e instanceof Error ? e.message : e}`, 'warn')
         }
     }
 
